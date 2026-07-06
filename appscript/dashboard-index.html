@@ -1,0 +1,3959 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Master Analytics Workspace</title>
+
+  <!-- External Resources -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: linear-gradient(135deg, #e0e7ff 0%, #f0f9ff 40%, #fdf4ff 100%);
+      background-attachment: fixed;
+      color: #1e293b;
+      min-height: 100vh;
+      font-size: 15px;
+      /* Increased base size for better readability */
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 10px;
+    }
+
+    /* ── HEADER ── */
+    header {
+      background: rgba(255, 255, 255, 0.75) !important;
+      backdrop-filter: blur(20px) !important;
+      -webkit-backdrop-filter: blur(20px) !important;
+      border-bottom: 1px solid rgba(99, 102, 241, 0.12) !important;
+      box-shadow: 0 1px 20px rgba(99, 102, 241, 0.08) !important;
+    }
+
+    header .font-extrabold {
+      color: #1e293b !important;
+      font-size: 20px !important;
+    }
+
+    /* ── NAV TABS ── */
+    .tab-btn {
+      font-size: 14px !important;
+      padding: 10px 18px !important;
+      border-radius: 8px !important;
+      transition: all 0.2s !important;
+      color: #64748b !important;
+      border-bottom: none !important;
+    }
+
+    .tab-btn.text-blue-600 {
+      color: #4f46e5 !important;
+      background: rgba(99, 102, 241, 0.08) !important;
+      border-bottom: 2px solid #6366f1 !important;
+    }
+
+    /* ── ALL CARDS → GLASS ── */
+    .bg-white {
+      background: rgba(255, 255, 255, 0.65) !important;
+      backdrop-filter: blur(20px) !important;
+      -webkit-backdrop-filter: blur(20px) !important;
+      border-color: rgba(255, 255, 255, 0.8) !important;
+      box-shadow: 0 4px 24px rgba(99, 102, 241, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+    }
+
+    /* ── FILTER BAR ── */
+    .bg-slate-100.p-1.rounded-lg {
+      background: rgba(241, 245, 249, 0.8) !important;
+      border: 1px solid rgba(226, 232, 240, 0.8) !important;
+    }
+
+    .filter-btn {
+      color: #64748b !important;
+      font-size: 14px !important;
+      padding: 8px 16px !important;
+      font-weight: 500 !important;
+      transition: all 0.2s !important;
+    }
+
+    .filter-btn.active {
+      background: rgba(255, 255, 255, 0.9) !important;
+      color: #4f46e5 !important;
+      box-shadow: 0 1px 8px rgba(99, 102, 241, 0.15) !important;
+      border-radius: 8px !important;
+      font-weight: 700 !important;
+    }
+
+    /* ── FONT SIZES — BIGGER ── */
+    .text-\[10px\] {
+      font-size: 13px !important;
+    }
+
+    .text-\[11px\] {
+      font-size: 14px !important;
+    }
+
+    .text-\[9px\] {
+      font-size: 12px !important;
+    }
+
+    .text-xs {
+      font-size: 14px !important;
+    }
+
+    .text-sm {
+      font-size: 15px !important;
+    }
+
+    .text-md {
+      font-size: 17px !important;
+    }
+
+    /* ── KPI VALUES — BIGGER ── */
+    .text-3xl {
+      font-size: 2.5rem !important;
+      line-height: 1.1 !important;
+    }
+
+    .text-2xl {
+      font-size: 1.8rem !important;
+      line-height: 1.2 !important;
+    }
+
+    .text-xl {
+      font-size: 1.45rem !important;
+    }
+
+    .text-lg {
+      font-size: 1.25rem !important;
+    }
+
+    /* ── HEADINGS ── */
+    h2.font-extrabold,
+    h3.font-extrabold {
+      font-size: 17px !important;
+      color: #1e293b !important;
+    }
+
+    /* ── SPACING ── */
+    .p-5 {
+      padding: 1.5rem !important;
+    }
+
+    .p-6 {
+      padding: 1.75rem !important;
+    }
+
+    .gap-4 {
+      gap: 1.25rem !important;
+    }
+
+    .gap-6 {
+      gap: 1.5rem !important;
+    }
+
+    .space-y-6>*+* {
+      margin-top: 1.5rem !important;
+    }
+
+    .mb-4 {
+      margin-bottom: 1.25rem !important;
+    }
+
+    /* ── LOGO BOX ── */
+    .bg-blue-600.text-white.p-2.rounded-xl {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35) !important;
+    }
+
+    /* ── ICON COLORED BOXES ── */
+    .bg-blue-100.text-blue-600 {
+      background: rgba(99, 102, 241, 0.12) !important;
+      color: #4f46e5 !important;
+      border-radius: 10px !important;
+    }
+
+    .bg-teal-100.text-teal-600 {
+      background: rgba(20, 184, 166, 0.12) !important;
+      color: #0f766e !important;
+      border-radius: 10px !important;
+    }
+
+    .bg-indigo-100.text-indigo-600 {
+      background: rgba(99, 102, 241, 0.12) !important;
+      color: #4338ca !important;
+      border-radius: 10px !important;
+    }
+
+    .bg-purple-100.text-purple-600 {
+      background: rgba(168, 85, 247, 0.12) !important;
+      color: #7c3aed !important;
+      border-radius: 10px !important;
+    }
+
+    .bg-red-100.text-red-600 {
+      background: rgba(239, 68, 68, 0.12) !important;
+      color: #dc2626 !important;
+      border-radius: 10px !important;
+    }
+
+    /* ── DATATABLES ── */
+    table.dataTable thead th {
+      background: rgba(248, 250, 252, 0.9) !important;
+      border-bottom: 2px solid rgba(226, 232, 240, 0.8) !important;
+      color: #64748b !important;
+      font-size: 13px !important;
+      font-weight: 700 !important;
+      text-transform: uppercase !important;
+      padding: 14px 12px !important;
+      letter-spacing: 0.05em !important;
+    }
+
+    table.dataTable tbody td {
+      padding: 14px 12px !important;
+      border-bottom: 1px solid rgba(241, 245, 249, 0.9) !important;
+      color: #334155 !important;
+      font-size: 14px !important;
+      vertical-align: middle !important;
+    }
+
+    table.dataTable tbody tr:hover td {
+      background: rgba(99, 102, 241, 0.04) !important;
+    }
+
+    /* ── INNER TABLES ── */
+    .w-full.text-left.text-xs th {
+      color: #94a3b8 !important;
+      font-size: 13px !important;
+      border-bottom: 1px solid rgba(226, 232, 240, 0.6) !important;
+    }
+
+    .w-full.text-left.text-xs td {
+      color: #475569 !important;
+      font-size: 14px !important;
+    }
+
+    /* ── PERFORMANCE ROWS ── */
+    .row-poor-performance {
+      border-left: 3px solid #ef4444 !important;
+      background: rgba(254, 242, 242, 0.8) !important;
+    }
+
+    .row-good-performance {
+      border-left: 3px solid #10b981 !important;
+      background: rgba(240, 253, 244, 0.6) !important;
+    }
+
+    .row-neutral {
+      border-left: 3px solid transparent !important;
+    }
+
+    /* ── BADGES ── */
+    .badge-soft {
+      padding: 5px 10px !important;
+      border-radius: 8px !important;
+      font-size: 13px !important;
+      font-weight: 700 !important;
+    }
+
+    /* ── INPUTS & SELECTS ── */
+    input[type="text"],
+    input[type="date"],
+    input[type="number"],
+    select,
+    textarea {
+      background: rgba(255, 255, 255, 0.8) !important;
+      border: 1px solid rgba(203, 213, 225, 0.8) !important;
+      color: #1e293b !important;
+      border-radius: 10px !important;
+      font-size: 14px !important;
+    }
+
+    input:focus,
+    select:focus {
+      outline: none !important;
+      border-color: rgba(99, 102, 241, 0.5) !important;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
+      background: rgba(255, 255, 255, 0.95) !important;
+    }
+
+    /* ── BUTTONS ── */
+    button.bg-blue-600,
+    .bg-blue-600.text-white {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+      border: none !important;
+      font-size: 14px !important;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
+    }
+
+    button.bg-blue-50 {
+      background: rgba(99, 102, 241, 0.08) !important;
+      border: 1px solid rgba(99, 102, 241, 0.2) !important;
+      color: #4f46e5 !important;
+    }
+
+    button.bg-indigo-50 {
+      background: rgba(99, 102, 241, 0.08) !important;
+      border: 1px solid rgba(99, 102, 241, 0.18) !important;
+      color: #4338ca !important;
+    }
+
+    button.bg-slate-100 {
+      background: rgba(241, 245, 249, 0.9) !important;
+      border: 1px solid rgba(226, 232, 240, 0.8) !important;
+      color: #475569 !important;
+    }
+
+    /* ── SLATE BACKGROUNDS ── */
+    .bg-slate-50 {
+      background: rgba(248, 250, 252, 0.7) !important;
+    }
+
+    .bg-slate-100 {
+      background: rgba(241, 245, 249, 0.8) !important;
+    }
+
+    /* ── BORDERS ── */
+    .border-slate-200 {
+      border-color: rgba(226, 232, 240, 0.7) !important;
+    }
+
+    .border-slate-100 {
+      border-color: rgba(241, 245, 249, 0.9) !important;
+    }
+
+    .divide-slate-100>*+* {
+      border-color: rgba(241, 245, 249, 0.9) !important;
+    }
+
+    /* ── ALERTS BACKGROUNDS ── */
+    .bg-red-50 {
+      background: rgba(254, 242, 242, 0.8) !important;
+    }
+
+    .bg-amber-50 {
+      background: rgba(255, 251, 235, 0.8) !important;
+    }
+
+    .bg-emerald-50 {
+      background: rgba(240, 253, 244, 0.8) !important;
+    }
+
+    .bg-purple-50 {
+      background: rgba(250, 245, 255, 0.8) !important;
+    }
+
+    /* ── KPI MINI CARDS ── */
+    .rounded-xl.p-3.text-center.border {
+      background: rgba(255, 255, 255, 0.7) !important;
+      border-color: rgba(226, 232, 240, 0.6) !important;
+      backdrop-filter: blur(10px) !important;
+    }
+
+    .bg-emerald-50.rounded-xl {
+      background: rgba(240, 253, 244, 0.8) !important;
+    }
+
+    .bg-rose-50.rounded-xl {
+      background: rgba(255, 241, 242, 0.8) !important;
+    }
+
+    .bg-amber-50.rounded-xl {
+      background: rgba(255, 251, 235, 0.8) !important;
+    }
+
+    /* ── CHILD ROW ── */
+    .bg-slate-50.border-l-4 {
+      background: rgba(248, 250, 252, 0.8) !important;
+      border-left-color: #6366f1 !important;
+    }
+
+    /* ── COLLAPSIBLE HEADER HOVER ── */
+    .card-collapsible-header:hover {
+      background: rgba(99, 102, 241, 0.03) !important;
+    }
+
+    /* ── MODAL ── */
+    #batch-modal .bg-white {
+      background: rgba(255, 255, 255, 0.92) !important;
+      backdrop-filter: blur(24px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.9) !important;
+      box-shadow: 0 25px 60px rgba(99, 102, 241, 0.15) !important;
+    }
+
+    /* ── STATUS DROPDOWN ── */
+    #status-list {
+      background: rgba(255, 255, 255, 0.95) !important;
+      backdrop-filter: blur(20px) !important;
+      border: 1px solid rgba(226, 232, 240, 0.8) !important;
+      box-shadow: 0 10px 40px rgba(99, 102, 241, 0.12) !important;
+    }
+
+    /* ── SWEETALERT ── */
+    .swal2-popup {
+      background: rgba(255, 255, 255, 0.95) !important;
+      backdrop-filter: blur(20px) !important;
+      border: 1px solid rgba(226, 232, 240, 0.8) !important;
+      box-shadow: 0 20px 60px rgba(99, 102, 241, 0.15) !important;
+      border-radius: 20px !important;
+    }
+
+    /* ── MOBILE NAV ── */
+    .md\:hidden.flex.bg-white {
+      background: rgba(255, 255, 255, 0.85) !important;
+      backdrop-filter: blur(20px) !important;
+      border-bottom: 1px solid rgba(226, 232, 240, 0.6) !important;
+    }
+
+    /* ── EXPAND ICONS ── */
+    .expand-icon,
+    .sub-expand-icon {
+      transition: transform 0.2s ease, color 0.2s ease;
+      display: inline-block;
+    }
+
+    /* ── PROGRESS BARS ── */
+    .bg-slate-200.rounded-full {
+      background: rgba(226, 232, 240, 0.8) !important;
+    }
+
+    .bg-slate-100.rounded-full {
+      background: rgba(241, 245, 249, 0.9) !important;
+    }
+
+    /* ── MODERN GLASSMORPHIC LOADING OVERLAY ── */
+    .custom-loader-popup {
+      background: rgba(255, 255, 255, 0.85) !important;
+      backdrop-filter: blur(20px) !important;
+      -webkit-backdrop-filter: blur(20px) !important;
+      border: 1px solid rgba(99, 102, 241, 0.2) !important;
+      box-shadow: 0 25px 60px -15px rgba(99, 102, 241, 0.25) !important;
+      border-radius: 28px !important;
+      padding: 2.5rem 2rem !important;
+    }
+
+    .custom-loader-title {
+      font-family: 'Plus Jakarta Sans', sans-serif !important;
+      font-weight: 800 !important;
+      color: #1e293b !important;
+      font-size: 1.5rem !important;
+      letter-spacing: -0.025em !important;
+      margin-top: 0.5rem !important;
+    }
+
+    @keyframes spin-slow {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .animate-spin-custom {
+      animation: spin-slow 1s linear infinite;
+    }
+  </style>
+</head>
+
+<body class="flex flex-col min-h-screen">
+
+  <!-- HEADER NAVIGATION -->
+  <header class="bg-white shadow-sm sticky top-0 z-40 border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16 items-center">
+        <div class="flex items-center gap-6">
+          <div class="flex items-center gap-2">
+            <div class="bg-blue-600 text-white p-2 rounded-xl shadow-md">
+              <i class="fas fa-cubes-stacked text-lg"></i>
+            </div>
+            <span class="font-extrabold text-lg tracking-tight text-slate-800">Workspace Master</span>
+          </div>
+          <nav class="hidden md:flex space-x-1">
+            <button onclick="switchTab('tab-overview')" id="btn-tab-overview" class="tab-btn px-4 py-2 text-sm font-bold text-blue-600 border-b-2 border-blue-600">Overview Dashboard</button>
+            <button onclick="switchTab('tab-user-explorer')" id="btn-tab-user-explorer" class="tab-btn px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800">User Explorer</button>
+            <button onclick="switchTab('tab-client-explorer')" id="btn-tab-client-explorer" class="tab-btn px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800">Client Explorer</button>
+          </nav>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <button onclick="refreshData()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 p-2 rounded-full transition-all flex items-center justify-center w-9 h-9">
+            <i class="fas fa-sync-alt text-sm"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- SUB-BAR SYSTEM MOBILE -->
+  <div class="md:hidden flex bg-white justify-around border-b py-2 text-xs">
+    <button onclick="switchTab('tab-overview')" class="mobile-tab-btn font-bold text-blue-600">Overview</button>
+    <button onclick="switchTab('tab-user-explorer')" class="mobile-tab-btn text-slate-500">User</button>
+    <button onclick="switchTab('tab-client-explorer')" class="mobile-tab-btn text-slate-500">Client</button>
+  </div>
+
+  <main class="p-4 md:p-8 max-w-7xl mx-auto w-full space-y-6 flex-1">
+
+    <!-- FILTERS AND DATE SLIDER BAR -->
+    <div
+      class="bg-white p-4 rounded-2xl border border-slate-200 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 relative z-30">
+      <div class="flex flex-col gap-2 w-full lg:w-auto">
+        <div class="inline-flex bg-slate-100 p-1 rounded-lg border border-slate-200" id="date-filters">
+          <button data-range="today" class="filter-btn active px-4 py-1.5 text-xs">Today</button>
+          <button data-range="yesterday" class="filter-btn px-4 py-1.5 text-xs">Yesterday</button>
+          <button data-range="last_15" class="filter-btn px-4 py-1.5 text-xs">Last 15 Days</button>
+          <button data-range="this_month" class="filter-btn px-4 py-1.5 text-xs">This Month</button>
+          <button data-range="custom" class="filter-btn px-4 py-1.5 text-xs">Custom Range</button>
+        </div>
+
+        <div id="custom-date-picker"
+          class="hidden items-center gap-2 mt-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
+          <input type="date" id="start-date" class="border bg-white rounded-md px-3 py-1 text-xs text-slate-700">
+          <span class="text-slate-400 text-xs font-medium">to</span>
+          <input type="date" id="end-date" class="border bg-white rounded-md px-3 py-1 text-xs text-slate-700">
+          <button onclick="refreshData('custom')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-xs font-bold">Go</button>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-3 w-full lg:w-auto items-center">
+        <!-- REAL-TIME UNIFIED SEARCH ENGINE [1] -->
+        <div class="relative w-64">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-3">
+            <i class="fas fa-search text-slate-400 text-xs"></i>
+          </span>
+          <input type="text" id="global-search" onkeyup="filterOverviewTables()" placeholder="Search Employee or Client..." class="bg-slate-50 border rounded-lg pl-9 pr-4 py-2 text-xs font-semibold outline-none w-full text-slate-700 placeholder-slate-400 focus:bg-white focus:border-blue-500 transition-all">
+        </div>
+
+        <div class="relative group">
+          <button id="statusDropdownBtn" onclick="$('#status-list').toggleClass('hidden')" class="bg-white border rounded-lg px-4 py-2 text-xs font-semibold flex items-center gap-3 justify-between w-48">
+              <span class="truncate text-slate-600">Select Statuses</span>
+              <i class="fas fa-chevron-down text-slate-400"></i>
+          </button>
+          <div id="status-list"
+            class="hidden absolute top-full right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-xl p-4 z-50">
+            <div class="text-[10px] font-bold text-slate-400 uppercase mb-3 border-b pb-2 flex justify-between">
+              <span>Filter Status</span>
+              <span class="text-blue-600 cursor-pointer" onclick="toggleAllStatuses()">Toggle All</span>
+            </div>
+            <div class="space-y-1.5 max-h-48 overflow-y-auto" id="status-checkboxes"></div>
+            <div class="pt-3 mt-3 border-t border-slate-100">
+              <button onclick="$('#status-list').addClass('hidden');" class="bg-slate-800 text-white text-xs px-5 py-2 rounded-lg font-bold w-full">Apply</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ==================== TAB 1: OVERVIEW DASHBOARD ==================== -->
+    <div id="tab-overview" class="tab-content space-y-6">
+
+      <!-- Primary Core KPI -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+          <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Attendance Today</p>
+          <div class="text-3xl font-extrabold text-blue-600" id="kpi-attendance-pct">0%</div>
+          <p class="text-[10px] text-slate-400 mt-1" id="kpi-attendance-count">0 of 0 Present</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+          <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Total Work Planned Time</p>
+          <div class="text-3xl font-extrabold text-purple-600" id="kpi-planned-time">0h 0m</div>
+          <p class="text-[10px] text-slate-400 mt-1">Sum of all planned tasks</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+          <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Outstanding Receivables</p>
+          <div class="text-3xl font-extrabold text-emerald-600" id="kpi-outstanding-total">₹0</div>
+          <p class="text-[10px] text-slate-400 mt-1" id="kpi-invoice-overdue">0 Pending Overdue</p>
+        </div>
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+          <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Completed Tasks Today</p>
+          <div class="text-3xl font-extrabold text-teal-600" id="kpi-completed-today">0 Tasks</div>
+          <p class="text-[10px] text-slate-400 mt-1" id="kpi-completed-rate">0% Output rate</p>
+        </div>
+      </div>
+
+      <!-- Quick Stats & Chart Row -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- System Task Doughnut -->
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm lg:col-span-1">
+          <h3 class="font-extrabold text-slate-800 text-sm mb-4">Task Allocation Distribution</h3>
+          <div class="h-56 relative flex justify-center">
+            <canvas id="ovStatusChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Overdue Alerts Grid -->
+        <div
+          class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm lg:col-span-2 flex flex-col justify-between">
+          <div>
+            <h3 class="font-extrabold text-slate-800 text-sm mb-3">Critical Alerts Center</h3>
+            <div class="space-y-2 max-h-60 overflow-y-auto" id="dashboard-alerts-container">
+              <!-- Alerts dynamically loaded here -->
+            </div>
+          </div>
+          <div class="pt-4 border-t mt-4 flex justify-between items-center text-xs">
+            <span class="text-slate-500 font-medium">To edit tasks, go to Client or User explorer tabs.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Overview Chart Section -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <h3 class="text-sm font-extrabold text-slate-800 mb-2">Team Efficiency</h3>
+          <p class="text-[11px] text-slate-400 font-medium mb-4">Planned Hours vs Actual Logged Hours</p>
+          <div class="h-72 w-full"><canvas id="ovUserChart"></canvas></div>
+        </div>
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <h3 class="text-sm font-extrabold text-slate-800 mb-2">Billing Aging & Accounts Aging</h3>
+          <p class="text-[11px] text-slate-400 font-medium mb-4">Outstanding Payments Buckets</p>
+          <div class="h-72 w-full"><canvas id="ovAgingChart"></canvas></div>
+        </div>
+      </div>
+      <!-- ==================== NEW: WORKING HOURS & CLOSURE ANALYTICS ==================== -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-6 border-t border-slate-200">
+
+        <!-- WORKING HOURS ANALYSIS CARD -->
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <div class="flex items-center gap-3 mb-1">
+            <div class="bg-blue-100 text-blue-600 p-2 rounded-lg"><i class="fas fa-clock"></i></div>
+            <div>
+              <h3 class="font-extrabold text-slate-800 text-sm">Working Hours Analysis</h3>
+              <p class="text-[11px] text-slate-400 font-medium">Kaun fast hai, kaun slow — planned vs actual logged</p>
+            </div>
+          </div>
+          <div class="h-72 w-full mt-4"><canvas id="newHoursChart"></canvas></div>
+        </div>
+
+        <!-- EMPLOYEE TIME BALANCE CARD -->
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="bg-indigo-100 text-indigo-600 p-2 rounded-lg"><i class="fas fa-balance-scale"></i></div>
+            <div>
+              <h3 class="font-extrabold text-slate-800 text-sm">Employee Time Balance</h3>
+              <p class="text-[11px] text-slate-400 font-medium">Kitna time bacha ya kitna overtime hua</p>
+            </div>
+          </div>
+          <div class="space-y-3 max-h-64 overflow-y-auto" id="new-time-balance-list">
+            <div class="text-center text-slate-400 text-xs py-4">Loading...</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TICKET + FMS CLOSURE RATE ROW -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-6 border-t border-slate-200 mt-6">
+
+        <!-- TICKET CLOSURE RATE CARD -->
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-3">
+              <div class="bg-teal-100 text-teal-600 p-2 rounded-lg"><i class="fas fa-ticket-alt"></i></div>
+              <div>
+                <h3 class="font-extrabold text-slate-800 text-sm">Ticket Closure Rate</h3>
+                <p class="text-[11px] text-slate-400 font-medium">Kitni tickets close ho rahi hain</p>
+              </div>
+            </div>
+            <div id="new-tkt-rate-badge" class="text-lg font-extrabold text-teal-600">0%</div>
+          </div>
+
+          <!-- KPI Mini Row -->
+          <div class="grid grid-cols-4 gap-2 mb-4">
+            <div class="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+              <div class="text-xl font-extrabold text-slate-700" id="new-tkt-total">0</div>
+              <div class="text-[10px] text-slate-400 font-semibold mt-0.5">Total</div>
+            </div>
+            <div class="bg-emerald-50 rounded-xl p-3 text-center border border-emerald-100">
+              <div class="text-xl font-extrabold text-emerald-600" id="new-tkt-closed">0</div>
+              <div class="text-[10px] text-emerald-500 font-semibold mt-0.5">Closed</div>
+            </div>
+            <div class="bg-rose-50 rounded-xl p-3 text-center border border-rose-100">
+              <div class="text-xl font-extrabold text-rose-500" id="new-tkt-open">0</div>
+              <div class="text-[10px] text-rose-400 font-semibold mt-0.5">Open</div>
+            </div>
+            <div class="bg-amber-50 rounded-xl p-3 text-center border border-amber-100">
+              <div class="text-xl font-extrabold text-amber-500" id="new-tkt-overdue">0</div>
+              <div class="text-[10px] text-amber-400 font-semibold mt-0.5">Overdue</div>
+            </div>
+          </div>
+
+          <!-- Per Employee Ticket Rows -->
+          <div class="space-y-2 max-h-56 overflow-y-auto" id="new-ticket-emp-rows">
+            <div class="text-center text-slate-400 text-xs py-4">Loading...</div>
+          </div>
+        </div>
+
+        <!-- FMS COMPLETION RATE CARD -->
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-3">
+              <div class="bg-purple-100 text-purple-600 p-2 rounded-lg"><i class="fas fa-tasks"></i></div>
+              <div>
+                <h3 class="font-extrabold text-slate-800 text-sm">FMS Completion Rate</h3>
+                <p class="text-[11px] text-slate-400 font-medium">FMS tasks kitne complete ho rahe hain</p>
+              </div>
+            </div>
+            <div id="new-fms-rate-badge" class="text-lg font-extrabold text-purple-600">0%</div>
+          </div>
+
+          <!-- KPI Mini Row -->
+          <div class="grid grid-cols-3 gap-2 mb-4">
+            <div class="bg-slate-50 rounded-xl p-3 text-center border border-slate-100">
+              <div class="text-xl font-extrabold text-slate-700" id="new-fms-total">0</div>
+              <div class="text-[10px] text-slate-400 font-semibold mt-0.5">Total</div>
+            </div>
+            <div class="bg-emerald-50 rounded-xl p-3 text-center border border-emerald-100">
+              <div class="text-xl font-extrabold text-emerald-600" id="new-fms-done">0</div>
+              <div class="text-[10px] text-emerald-500 font-semibold mt-0.5">Completed</div>
+            </div>
+            <div class="bg-rose-50 rounded-xl p-3 text-center border border-rose-100">
+              <div class="text-xl font-extrabold text-rose-500" id="new-fms-pending">0</div>
+              <div class="text-[10px] text-rose-400 font-semibold mt-0.5">Pending</div>
+            </div>
+          </div>
+
+          <!-- Per Employee FMS Rows -->
+          <div class="space-y-2 max-h-56 overflow-y-auto" id="new-fms-emp-rows">
+            <div class="text-center text-slate-400 text-xs py-4">Loading...</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ==================== GENERAL WORKLOAD REPORTS ==================== -->
+      <div class="space-y-6 pt-6 border-t border-slate-200">
+
+        <!-- TICKETS TABLE CARD (COLLAPSIBLE WITH DROPDOWN FILTERS) [1] -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-200">
+          <div
+            class="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between cursor-pointer hover:bg-slate-50 card-collapsible-header"
+            data-card-target="tickets-card-body">
+            <div class="flex items-center gap-3">
+              <div class="bg-blue-100 text-blue-600 p-2 rounded-lg"><i class="fas fa-ticket-alt"></i></div>
+              <h2 class="font-extrabold text-slate-800 text-md">Tickets Workload Report</h2>
+            </div>
+            <div class="flex items-center gap-3">
+              <button onclick="event.stopPropagation(); openBatchModal('ticket')" class="bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border border-blue-200">
+                <i class="fas fa-plus mr-1"></i> Add Tickets
+              </button>
+              <i class="fas fa-chevron-down text-slate-400 card-toggle-icon transition-transform" style="transform: rotate(-90deg)"></i>
+            </div>
+          </div>
+
+          <div id="tickets-card-body" style="display: none;">
+            <!-- Dynamic Select Filters [1] -->
+            <div class="px-6 py-3 bg-slate-50/50 border-b border-slate-100 flex flex-wrap gap-4 items-center">
+              <span class="text-[10px] font-bold text-slate-400 uppercase">Filters:</span>
+              <select id="filter-ticket-employee" onchange="applyLocalFilters()" class="bg-white border text-xs rounded-lg px-2.5 py-1.5 font-semibold text-slate-600 outline-none max-w-[200px]">
+                <option value="">All Employees</option>
+              </select>
+              <select id="filter-ticket-client" onchange="applyLocalFilters()" class="bg-white border text-xs rounded-lg px-2.5 py-1.5 font-semibold text-slate-600 outline-none max-w-[200px]">
+                <option value="">All Clients</option>
+              </select>
+            </div>
+            <div class="overflow-x-auto">
+              <table id="table-tickets" class="w-full display text-sm" style="width:100%">
+                <thead class="bg-slate-50">
+                  <tr>
+                    <th></th>
+                    <th>Employee Name</th>
+                    <th class="text-center">Total Assigned</th>
+                    <th class="text-center">Completed</th>
+                    <th class="text-center">Pending Approval</th>
+                    <th class="text-center">Planned TAT</th>
+                    <th class="text-center">Actual Logged</th>
+                    <th class="text-right">Efficiency Status</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- FMS TRACKER TABLE CARD (COLLAPSIBLE WITH DROPDOWN FILTERS) [1] -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-200">
+          <div
+            class="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between cursor-pointer hover:bg-slate-50 card-collapsible-header"
+            data-card-target="fms-card-body">
+            <div class="flex items-center gap-3">
+              <div class="bg-teal-100 text-teal-600 p-2 rounded-lg"><i class="fas fa-tasks"></i></div>
+              <h2 class="font-extrabold text-slate-800 text-md">FMS Tasks Workload Report</h2>
+            </div>
+            <i class="fas fa-chevron-down text-slate-400 card-toggle-icon transition-transform" style="transform: rotate(-90deg)"></i>
+          </div>
+
+          <div id="fms-card-body" style="display: none;">
+            <!-- Dynamic Select Filters [1] -->
+            <div class="px-6 py-3 bg-slate-50/50 border-b border-slate-100 flex flex-wrap gap-4 items-center">
+              <span class="text-[10px] font-bold text-slate-400 uppercase">Filters:</span>
+              <select id="filter-fms-employee" onchange="applyLocalFilters()" class="bg-white border text-xs rounded-lg px-2.5 py-1.5 font-semibold text-slate-600 outline-none max-w-[200px]">
+                <option value="">All Employees</option>
+              </select>
+              <select id="filter-fms-client" onchange="applyLocalFilters()" class="bg-white border text-xs rounded-lg px-2.5 py-1.5 font-semibold text-slate-600 outline-none max-w-[200px]">
+                <option value="">All FMS Projects</option>
+              </select>
+            </div>
+            <div class="overflow-x-auto">
+              <table id="table-fms" class="w-full display text-sm" style="width:100%">
+                <thead class="bg-slate-50">
+                  <tr>
+                    <th></th>
+                    <th>Employee Name</th>
+                    <th class="text-center">Total Assigned</th>
+                    <th class="text-center">Completed</th>
+                    <th class="text-center">Pending Tasks</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TO-DO TABLE CARD (COLLAPSIBLE WITH DROPDOWN FILTERS) [1] -->
+        <div
+          class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-10 transition-all duration-200">
+          <div
+            class="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between cursor-pointer hover:bg-slate-50 card-collapsible-header"
+            data-card-target="todo-card-body">
+            <div class="flex items-center gap-3">
+              <div class="bg-indigo-100 text-indigo-600 p-2 rounded-lg"><i class="fas fa-clipboard-list"></i></div>
+              <h2 class="font-extrabold text-slate-800 text-md">To Do (General Tasks) Workload Report</h2>
+            </div>
+            <div class="flex items-center gap-3">
+              <button onclick="event.stopPropagation(); openBatchModal('todo')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border border-indigo-200">
+                <i class="fas fa-plus mr-1"></i> Add To-Do Tasks
+              </button>
+              <i class="fas fa-chevron-down text-slate-400 card-toggle-icon transition-transform" style="transform: rotate(-90deg)"></i>
+            </div>
+          </div>
+
+          <div id="todo-card-body" style="display: none;">
+            <!-- Dynamic Select Filters [1] -->
+            <div class="px-6 py-3 bg-slate-50/50 border-b border-slate-100 flex flex-wrap gap-4 items-center">
+              <span class="text-[10px] font-bold text-slate-400 uppercase">Filters:</span>
+              <select id="filter-todo-employee" onchange="applyLocalFilters()" class="bg-white border text-xs rounded-lg px-2.5 py-1.5 font-semibold text-slate-600 outline-none max-w-[200px]">
+                <option value="">All Employees</option>
+              </select>
+            </div>
+            <div class="overflow-x-auto">
+              <table id="table-todo" class="w-full display text-sm" style="width:100%">
+                <thead class="bg-slate-50">
+                  <tr>
+                    <th></th>
+                    <th>Employee Name</th>
+                    <th class="text-center">Total Assigned</th>
+                    <th class="text-center">Completed</th>
+                    <th class="text-center">Pending Tasks</th>
+                    <th class="text-center">Total TAT</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CLIENT EFFORT (FULL WIDTH WITH INNER COLLAPSIBLE DETAILS CARD) [1] -->
+      <div class="pt-6 border-t border-slate-200">
+        <div
+          class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden w-full transition-all duration-200">
+          <div
+            class="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between cursor-pointer hover:bg-slate-50 card-collapsible-header"
+            data-card-target="effort-card-body">
+            <div class="flex items-center gap-3">
+              <div class="bg-indigo-100 text-indigo-600 p-2 rounded-lg"><i class="fas fa-user-clock"></i></div>
+              <h2 class="font-extrabold text-slate-800 text-md">User-wise Client Effort Report</h2>
+            </div>
+            <div class="flex items-center gap-3">
+              <button onclick="event.stopPropagation(); exportEffortCSV()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border border-slate-200">
+                <i class="fas fa-download mr-1"></i> Export CSV
+              </button>
+              <i class="fas fa-chevron-down text-slate-400 card-toggle-icon transition-transform" style="transform: rotate(-90deg)"></i>
+            </div>
+          </div>
+
+          <div id="effort-card-body" style="display: none;" class="overflow-x-auto max-h-[500px] overflow-y-auto">
+            <table class="w-full text-xs text-left" id="table-client-effort">
+              <thead class="bg-slate-50 text-slate-400 uppercase font-bold border-b text-[10px]">
+                <tr>
+                  <th class="p-2 w-8 text-center"></th>
+                  <th class="p-2">Employee Name</th>
+                  <th class="p-2 text-center w-28">Total Planned</th>
+                  <th class="p-2 text-center w-28">Total Logged (Completed)</th>
+                  <th class="p-2 text-center w-28">Total Pending (Remaining)</th>
+                  <th class="p-2 text-right pr-6 w-28">Difference</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- AUDIT: INSTANT CLOSURE DETECTION CARD (COLLAPSIBLE) -->
+      <div
+        class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden pt-6 border-t transition-all duration-200">
+        <div
+          class="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between cursor-pointer hover:bg-slate-50 card-collapsible-header"
+          data-card-target="audit-card-body">
+          <div class="flex items-center gap-3">
+            <div class="bg-red-100 text-red-600 p-2 rounded-lg"><i class="fas fa-bolt"></i></div>
+            <h3 class="font-extrabold text-red-600 text-sm italic">Instant Ticket Closure Audit (Flagged &lt; 15 mins)
+            </h3>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-[10px] bg-red-100 text-red-700 px-2 py-1 rounded font-bold uppercase tracking-tighter">Fraud Detection Mode</span>
+            <i class="fas fa-chevron-down text-slate-400 card-toggle-icon transition-transform" style="transform: rotate(-90deg)"></i>
+          </div>
+        </div>
+
+        <div id="audit-card-body" style="display: none;" class="overflow-x-auto">
+          <table class="w-full text-xs text-left" id="table-audit">
+            <thead class="bg-red-50 text-red-800 uppercase font-bold">
+              <tr>
+                <th class="p-2">Employee</th>
+                <th class="p-2">Ticket/Task</th>
+                <th class="p-2">Client</th>
+                <th class="p-2">Date</th>
+                <th class="p-2 text-center">Planned TAT</th>
+                <th class="p-2 text-right">Duration Recorded</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+
+    <!-- ==================== TAB 2: USER EXPLORER ==================== -->
+    <div id="tab-user-explorer" class="tab-content hidden space-y-6">
+
+      <!-- Selection Bar -->
+      <div
+        class="bg-white p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row gap-4 items-center justify-between shadow-sm">
+        <div class="flex items-center gap-3">
+          <div class="bg-blue-100 text-blue-600 p-2 rounded-xl"><i class="fas fa-user-gear"></i></div>
+          <div>
+            <h2 class="text-md font-extrabold text-slate-800">User Performance Explorer</h2>
+            <p class="text-xs text-slate-400 font-semibold">Deep dive into selected employee attendance & workload logs
+            </p>
+          </div>
+        </div>
+        <select id="ux-user-selector" onchange="loadUserExplorerProfile()" class="bg-slate-50 border rounded-lg px-4 py-2.5 text-sm font-bold text-slate-700 outline-none w-64">
+          <option value="">Select an Employee...</option>
+        </select>
+      </div>
+
+      <div id="ux-dashboard" class="hidden space-y-6">
+
+        <!-- Daily Work Breakdown Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+          <!-- Tickets Card -->
+          <div
+            class="bg-white p-5 rounded-2xl border-l-4 border-l-blue-500 border-y border-r border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tickets Dashboard</span>
+              <div class="text-2xl font-extrabold text-slate-800 mt-1" id="ux-tkt-total">0 Assigned</div>
+              <span class="text-xs text-slate-500 font-medium" id="ux-tkt-breakdown">0 Completed | 0 Pending</span>
+            </div>
+            <div class="bg-blue-50 text-blue-500 p-3 rounded-full text-xl"><i class="fas fa-ticket-alt"></i></div>
+          </div>
+
+          <!-- FMS Tasks Card -->
+          <div
+            class="bg-white p-5 rounded-2xl border-l-4 border-l-teal-500 border-y border-r border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">FMS Tasks Tracker</span>
+              <div class="text-2xl font-extrabold text-slate-800 mt-1" id="ux-fms-total">0 Assigned</div>
+              <span class="text-xs text-slate-500 font-medium" id="ux-fms-breakdown">0 Completed | 0 Pending</span>
+            </div>
+            <div class="bg-teal-50 text-teal-500 p-3 rounded-full text-xl"><i class="fas fa-tasks"></i></div>
+          </div>
+
+          <!-- General To-Dos Card -->
+          <div
+            class="bg-white p-5 rounded-2xl border-l-4 border-l-indigo-500 border-y border-r border-slate-200 shadow-sm flex items-center justify-between">
+            <div>
+              <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">General To-Do Tasks</span>
+              <div class="text-2xl font-extrabold text-slate-800 mt-1" id="ux-todo-total">0 Assigned</div>
+              <span class="text-xs text-slate-500 font-medium" id="ux-todo-breakdown">0 Completed | 0 Pending</span>
+            </div>
+            <div class="bg-indigo-50 text-indigo-500 p-3 rounded-full text-xl"><i class="fas fa-clipboard-list"></i>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- User KPI Summary Row -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="block text-[10px] text-slate-400 font-bold uppercase">Total Work Items</span>
+            <div class="text-2xl font-black text-slate-800 mt-1" id="ux-kpi-total">0</div>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="block text-[10px] text-slate-400 font-bold uppercase">Time Logs Margin</span>
+            <div class="text-2xl font-black" id="ux-kpi-balance">0h 0m</div>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="block text-[10px] text-slate-400 font-bold uppercase">Efficiency Index</span>
+            <div class="text-2xl font-black text-indigo-600 mt-1" id="ux-kpi-eff">100%</div>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="block text-[10px] text-slate-400 font-bold uppercase">Attendance Score</span>
+            <div class="text-2xl font-black text-emerald-600 mt-1" id="ux-kpi-presence">0/0 Present</div>
+          </div>
+        </div>
+
+        <!-- ATTENDANCE LOG DETAILS (COLLAPSED BY DEFAULT, TABLE LAYOUT) -->
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-200">
+          <div
+            class="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between cursor-pointer hover:bg-slate-50 card-collapsible-header"
+            data-card-target="ux-attendance-card-body">
+            <div class="flex items-center gap-3">
+              <div class="bg-blue-100 text-blue-600 p-2 rounded-lg"><i class="fas fa-id-card"></i></div>
+              <h3 class="font-extrabold text-slate-800 text-md">Attendance Log Details</h3>
+            </div>
+            <div class="flex items-center gap-3">
+              <!-- डायनामिक काउंट्स का नया कंटेनर -->
+              <div id="ux-summary-attendance" class="hidden sm:flex flex-wrap gap-4 text-xs font-bold font-mono"></div>
+              <i class="fas fa-chevron-down text-slate-400 card-toggle-icon transition-transform" style="transform: rotate(-90deg)"></i>
+            </div>
+          </div>
+          <div id="ux-attendance-card-body" style="display: none;" class="p-6">
+            <div class="overflow-x-auto max-h-[300px] overflow-y-auto">
+              <table class="w-full text-left text-xs text-slate-700" id="ux-table-attendance">
+                <thead>
+                  <tr class="text-slate-400 uppercase tracking-wider border-b text-[10px]">
+                    <th class="pb-2">Date</th>
+                    <th class="pb-2">Employee Name</th>
+                    <th class="pb-2">Time</th>
+                    <th class="pb-2">Action</th>
+                    <th class="pb-2 text-right pr-4">Details / Map / Photo</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2.1: Support Tickets Table (Collapsible) -->
+        <div
+          class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-200 mt-6">
+          <div
+            class="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between cursor-pointer hover:bg-slate-50 card-collapsible-header"
+            data-card-target="ux-tickets-card-body">
+            <div class="flex items-center gap-3">
+              <div class="bg-blue-100 text-blue-600 p-2 rounded-lg"><i class="fas fa-ticket-alt"></i></div>
+              <h3 class="font-extrabold text-slate-800 text-md">Support Tickets</h3>
+            </div>
+            <div class="flex items-center gap-3">
+              <div id="ux-summary-tickets"
+                class="hidden sm:flex flex-nowrap whitespace-nowrap gap-2 md:gap-3 text-[10px] md:text-xs font-bold font-mono items-center">
+              </div>
+              <i class="fas fa-chevron-down text-slate-400 card-toggle-icon transition-transform" style="transform: rotate(-90deg)"></i>
+            </div>
+          </div>
+          <div id="ux-tickets-card-body" style="display: none;" class="p-6 space-y-3">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs text-slate-700" id="ux-table-tickets">
+                <thead>
+                  <tr class="text-slate-400 uppercase tracking-wider border-b">
+                    <th class="pb-2">Date</th>
+                    <th class="pb-2">Details</th>
+                    <th class="pb-2">Client/Project</th>
+                    <th class="pb-2 text-center w-24">Plan TAT</th>
+                    <th class="pb-2 text-center w-24">Actual Logged</th>
+                    <th class="pb-2 text-right pr-2 w-28">Status</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2.2: FMS Tracker Tasks Table (Collapsible) -->
+        <div
+          class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-200 mt-6">
+          <div
+            class="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between cursor-pointer hover:bg-slate-50 card-collapsible-header"
+            data-card-target="ux-fms-card-body">
+            <div class="flex items-center gap-3">
+              <div class="bg-teal-100 text-teal-600 p-2 rounded-lg"><i class="fas fa-tasks"></i></div>
+              <h3 class="font-extrabold text-slate-800 text-md">FMS Tracker Tasks</h3>
+            </div>
+            <div class="flex items-center gap-3">
+              <div id="ux-summary-fms"
+                class="hidden sm:flex flex-nowrap whitespace-nowrap gap-2 md:gap-3 text-[10px] md:text-xs font-bold font-mono items-center">
+              </div>
+              <i class="fas fa-chevron-down text-slate-400 card-toggle-icon transition-transform" style="transform: rotate(-90deg)"></i>
+            </div>
+          </div>
+          <div id="ux-fms-card-body" style="display: none;" class="p-6 space-y-3">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs text-slate-700" id="ux-table-fms">
+                <thead>
+                  <tr class="text-slate-400 uppercase tracking-wider border-b">
+                    <th class="pb-2">Date</th>
+                    <th class="pb-2">Step Name</th>
+                    <th class="pb-2">FMS Name / Project</th>
+                    <th class="pb-2 text-center w-24">Plan TAT</th>
+                    <th class="pb-2 text-center w-24">Actual Logged</th>
+                    <th class="pb-2 text-right pr-2 w-28">Status</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2.3: To-Do (General Tasks) Table (Collapsible) -->
+        <div
+          class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-200 mt-6">
+          <div
+            class="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between cursor-pointer hover:bg-slate-50 card-collapsible-header"
+            data-card-target="ux-todo-card-body">
+            <div class="flex items-center gap-3">
+              <div class="bg-indigo-100 text-indigo-600 p-2 rounded-lg"><i class="fas fa-clipboard-list"></i></div>
+              <h3 class="font-extrabold text-slate-800 text-md">To Do (General Tasks)</h3>
+            </div>
+            <div class="flex items-center gap-3">
+              <div id="ux-summary-todo"
+                class="hidden sm:flex flex-nowrap whitespace-nowrap gap-2 md:gap-3 text-[10px] md:text-xs font-bold font-mono items-center">
+              </div>
+              <i class="fas fa-chevron-down text-slate-400 card-toggle-icon transition-transform" style="transform: rotate(-90deg)"></i>
+            </div>
+          </div>
+          <div id="ux-todo-card-body" style="display: none;" class="p-6 space-y-3">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs text-slate-700" id="ux-table-todo">
+                <thead>
+                  <tr class="text-slate-400 uppercase tracking-wider border-b">
+                    <th class="pb-2">Date</th>
+                    <th class="pb-2">Details</th>
+                    <th class="pb-2 text-center w-24">Plan TAT</th>
+                    <th class="pb-2 text-center w-24">Actual Logged</th>
+                    <th class="pb-2 text-right pr-2 w-28">Status</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- CLIENT TIME DISTRIBUTION TABLE (COLLAPSIBLE) -->
+        <div
+          class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-200 mt-6">
+          <div
+            class="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between cursor-pointer hover:bg-slate-50 card-collapsible-header"
+            data-card-target="ux-client-dist-body">
+            <div class="flex items-center gap-3">
+              <div class="bg-blue-100 text-blue-600 p-2 rounded-lg"><i class="fas fa-chart-pie text-blue-500"></i></div>
+              <h3 class="font-extrabold text-slate-800 text-md">Client-wise Work & Time Distribution</h3>
+            </div>
+            <div class="flex items-center gap-3">
+              <!-- हेडर समरी के लिए कस्टमाइज़्ड कंटेनर (सुनिश्चित करें कि यह आईडी यहाँ मौजूद है) -->
+              <div id="ux-summary-client-dist"
+                class="hidden sm:flex flex-nowrap whitespace-nowrap gap-2 md:gap-3 text-[10px] md:text-xs font-bold font-mono items-center">
+              </div>
+              <i class="fas fa-chevron-down text-slate-400 card-toggle-icon transition-transform" style="transform: rotate(-90deg)"></i>
+            </div>
+          </div>
+          <div id="ux-client-dist-body" style="display: none;" class="p-6">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs text-slate-700" id="ux-client-distribution-table">
+                <thead>
+                  <tr class="text-slate-400 uppercase tracking-wider border-b text-[10px]">
+                    <th class="pb-2">Client / Project Name</th>
+                    <th class="pb-2 text-center">Total Tasks</th>
+                    <th class="pb-2 text-center">Total Planned TAT</th>
+                    <th class="pb-2 text-center">Total Actual Logged</th>
+                    <th class="pb-2 text-right pr-2">Time Share (%)</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  <!-- Dynamically populated rows -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div id="ux-placeholder" class="bg-white rounded-2xl border p-12 text-center text-slate-400 font-medium">
+        <i class="fas fa-user-astronaut text-4xl mb-3 text-slate-300"></i>
+        <p>Choose an employee from the dropdown above to audit their performance metrics.</p>
+      </div>
+
+    </div>
+
+
+    <!-- ==================== TAB 3: CLIENT EXPLORER ==================== -->
+    <div id="tab-client-explorer" class="tab-content hidden space-y-6">
+
+      <!-- PREMIUM COMPACT SELECTION BAR WITH EXPLICIT DUAL-ROW RULES -->
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 flex flex-col gap-4 shadow-sm">
+        <!-- Top Row: Title on Left, Dropdown strictly on the Right -->
+        <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="bg-purple-100 text-purple-600 p-2.5 rounded-xl shadow-2xs">
+              <i class="fas fa-building-user text-md"></i>
+            </div>
+            <div>
+              <h2 class="text-md font-extrabold text-slate-800">Client Explorer</h2>
+              <p class="text-xs text-slate-400 font-semibold leading-none mt-1">Consolidated workload, tickets & billing
+                details</p>
+            </div>
+          </div>
+
+          <select id="cx-client-selector" onchange="loadClientExplorerProfile()" class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 outline-none w-full sm:w-64 shadow-2xs focus:bg-white focus:border-purple-500 transition-all flex-shrink-0">
+            <option value="">Select a Client...</option>
+          </select>
+        </div>
+
+        <!-- Bottom Row: Clean, Full-Width, Explicit Rules Strip (हमेशा विज़िबल और स्पष्ट) -->
+        <div
+          class="flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] md:text-xs font-bold font-mono text-slate-500 bg-slate-50/80 border border-slate-100 px-4 py-2 rounded-xl">
+          <span class="text-slate-400 uppercase text-[9px] flex items-center gap-1.5"><i class="fas fa-compass text-indigo-500"></i> Rules:</span>
+
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span class="text-slate-700">Closed</span>
+          <span class="text-slate-400 font-normal">(= Closed + Pending Approval)</span>
+          </span>
+
+          <span class="text-slate-300">|</span>
+
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+          <span class="text-slate-700">In Progress</span>
+          <span class="text-slate-400 font-normal">(= In Progress + Paused)</span>
+          </span>
+
+          <span class="text-slate-300">|</span>
+
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+          <span class="text-slate-700">Pending</span>
+          <span class="text-slate-400 font-normal">(= Open + Rework + Reassigned)</span>
+          </span>
+        </div>
+      </div>
+      <div id="cx-dashboard" class="hidden space-y-6">
+        <!-- Client KPI Summary (Details Cards - कॉम्पैक्ट p-4 पैडिंग के साथ) -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- Card 1: Total Tickets -->
+          <div
+            class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-200">
+            <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Tickets Raised</span>
+                <div class="text-3xl font-black text-slate-800 mt-1" id="cx-kpi-total">0</div>
+              </div>
+              <div class="text-indigo-500/20 text-2xl group-hover:scale-110 transition-transform duration-200">
+                <i class="fas fa-ticket-alt"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: Active Pending -->
+          <div
+            class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-200">
+            <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Active Pending Work</span>
+                <div class="text-3xl font-black text-amber-500 mt-1" id="cx-kpi-pending">0</div>
+              </div>
+              <div class="text-amber-500/20 text-2xl group-hover:scale-110 transition-transform duration-200">
+                <i class="fas fa-clock"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: Time Allocation -->
+          <div
+            class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-200">
+            <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-indigo-500"></div>
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Time Allocation</span>
+                <div class="text-3xl font-black text-blue-600 mt-1" id="cx-kpi-time">0h 0m</div>
+              </div>
+              <div class="text-blue-500/20 text-2xl group-hover:scale-110 transition-transform duration-200">
+                <i class="fas fa-chart-pie"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 4: Outstanding Dues -->
+          <div
+            class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-200">
+            <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Outstanding Dues</span>
+                <div class="text-3xl font-black text-emerald-600 mt-1" id="cx-kpi-bills">₹0</div>
+              </div>
+              <div class="text-emerald-500/20 text-2xl group-hover:scale-110 transition-transform duration-200">
+                <i class="fas fa-file-invoice-dollar"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CX 1: Invoice Breakdown -->
+        <div
+          class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-200 mt-6">
+          <div
+            class="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between cursor-pointer hover:bg-slate-50 card-collapsible-header"
+            data-card-target="cx-invoice-card-body">
+            <div class="flex items-center gap-3">
+              <div class="bg-blue-100 text-blue-600 p-2 rounded-lg">
+                <i class="fas fa-file-invoice-dollar text-emerald-500"></i>
+              </div>
+              <h3 class="font-extrabold text-slate-800 text-md">Invoice Breakdown</h3>
+            </div>
+            <div class="flex items-center gap-3">
+              <div id="cx-summary-invoices"
+                class="hidden sm:flex flex-nowrap whitespace-nowrap gap-2 md:gap-3 text-[10px] md:text-xs font-bold font-mono items-center">
+              </div>
+              <i class="fas fa-chevron-down text-slate-400 card-toggle-icon transition-transform" style="transform: rotate(-90deg)"></i>
+            </div>
+          </div>
+          <div id="cx-invoice-card-body" style="display: none;" class="p-6">
+            <div id="cx-invoice-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <!-- Cards load here -->
+            </div>
+          </div>
+        </div>
+
+        <!-- CX 2: Client Support Work Items -->
+        <div
+          class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-200 mt-6">
+          <div
+            class="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between cursor-pointer hover:bg-slate-50 card-collapsible-header"
+            data-card-target="cx-work-items-card-body">
+            <div class="flex items-center gap-3">
+              <div class="bg-blue-100 text-blue-600 p-2 rounded-lg"><i class="fas fa-folder-open text-purple-500"></i>
+              </div>
+              <h3 class="font-extrabold text-slate-800 text-md">Client Support Work Items</h3>
+            </div>
+            <div class="flex items-center gap-3">
+              <div id="cx-summary-work-items"
+                class="hidden sm:flex flex-nowrap whitespace-nowrap gap-2 md:gap-3 text-[10px] md:text-xs font-bold font-mono items-center">
+              </div>
+              <i class="fas fa-chevron-down text-slate-400 card-toggle-icon transition-transform" style="transform: rotate(-90deg)"></i>
+            </div>
+          </div>
+          <div id="cx-work-items-card-body" style="display: none;" class="p-6">
+            <div class="overflow-x-auto max-h-120 overflow-y-auto">
+              <table class="w-full text-left text-xs text-slate-700" id="cx-task-table">
+                <thead>
+                  <tr class="text-slate-400 uppercase tracking-wider border-b">
+                    <th class="pb-2">Date</th>
+                    <th class="pb-2">Type</th>
+                    <th class="pb-2">Description</th>
+                    <th class="pb-2">Engineer</th>
+                    <th class="pb-2 text-center w-24">Plan TAT</th>
+                    <th class="pb-2 text-center w-24">Actual TAT</th>
+                    <th class="pb-2 text-right pr-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- CX 3: Employee Bandwidth & Resource Distribution -->
+        <div
+          class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all duration-200 mt-6">
+          <div
+            class="px-6 py-4 border-b border-slate-100 bg-white flex items-center justify-between cursor-pointer hover:bg-slate-50 card-collapsible-header"
+            data-card-target="cx-bandwidth-card-body">
+            <div class="flex items-center gap-3">
+              <div class="bg-blue-100 text-blue-600 p-2 rounded-lg"><i class="fas fa-user-clock text-teal-600"></i>
+              </div>
+              <h3 class="font-extrabold text-slate-800 text-md">Employee Bandwidth & Resource Distribution</h3>
+            </div>
+            <div class="flex items-center gap-3">
+              <div id="cx-summary-bandwidth"
+                class="hidden sm:flex flex-nowrap whitespace-nowrap gap-2 md:gap-3 text-[10px] md:text-xs font-bold font-mono items-center">
+              </div>
+              <i class="fas fa-chevron-down text-slate-400 card-toggle-icon transition-transform" style="transform: rotate(-90deg)"></i>
+            </div>
+          </div>
+          <div id="cx-bandwidth-card-body" style="display: none;" class="p-6">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs text-slate-700" id="cx-bandwidth-table">
+                <thead>
+                  <tr class="text-slate-400 uppercase tracking-wider border-b">
+                    <th class="pb-2">Employee Name</th>
+                    <th class="pb-2 text-center">Assigned Tasks</th>
+                    <th class="pb-2 text-center">Total Planned TAT</th>
+                    <th class="pb-2 text-center">Total Actual Logged</th>
+                    <th class="pb-2 text-right">Time Share (%)</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  <!-- Dynamically populated rows -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div id="cx-placeholder" class="bg-white rounded-2xl border p-12 text-center text-slate-400 font-medium">
+        <i class="fas fa-city text-4xl mb-3 text-slate-300"></i>
+        <p>Select a Client from the dropdown list to audit their work items, outstanding balances, and open projects.
+        </p>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- BATCH MODAL -->
+  <div id="batch-modal"
+    class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+    <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] mx-4">
+      <div class="px-6 py-5 border-b border-slate-100 flex justify-between items-center">
+        <h3 id="modal-title" class="font-extrabold text-md text-slate-800">Add Batch Work</h3>
+        <button onclick="$('#batch-modal').addClass('hidden')" class="text-slate-400 hover:text-red-500 bg-slate-50 p-2 rounded-full w-8 h-8 flex justify-center items-center">
+            <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <div class="px-6 py-4 bg-slate-50 border-b border-slate-200">
+        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-2">Assign Work To</label>
+        <select id="batch-user" class="w-full p-2.5 rounded-lg text-sm font-semibold bg-white border border-slate-200 text-slate-700 outline-none">
+            <option value="">Select an Employee...</option>
+        </select>
+      </div>
+
+      <div class="p-6 overflow-y-auto bg-slate-50/50 flex-1 space-y-4" id="task-list-container"></div>
+
+      <div class="px-6 py-4 border-t border-slate-100 bg-white flex gap-3">
+        <button onclick="addTaskRow()" class="flex-1 border-2 border-dashed border-blue-200 hover:border-blue-300 text-blue-600 font-bold py-2.5 rounded-xl text-xs">
+            <i class="fas fa-plus mr-1"></i> Add Row
+        </button>
+        <button onclick="submitBatch()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl shadow-md text-xs">
+            <i class="fas fa-paper-plane mr-1"></i> Submit All
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN SCRIPT EXECUTION -->
+  <script>
+    // Global data maps
+    let tblTickets = null; 
+    let tblTodo = null;
+    let tblFms = null;
+    let globalData = { tickets:[], todo:[], fms:[], attendance:[], leaves:[], intimations:[], activeUsers:[], activeClients:[], invoices:[] };
+    let lastEffortReportData = []; // Store report data for global CSV export [1]
+    
+    // इन दो वेरिएबल्स को यहाँ जोड़ें
+    let currentStartDate = '';
+    let currentEndDate = '';
+    
+    // Chart References
+    let ovStatusChart = null; 
+    let ovUserChart = null; 
+    let ovAgingChart = null; 
+
+    let currentBatchType = 'ticket'; 
+    let rowCount = 0; 
+    let listClients = []; 
+    let listUsers = []; 
+    let currentDaysCount = 1;
+    const dashboardSearchStorageKey = 'worktrackDashboardGlobalSearch';
+    const dashboardStatusStorageKey = 'worktrackDashboardStatuses';
+    const dashboardTabStorageKey = 'worktrackDashboardActiveTab';
+    const dashboardDateRangeStorageKey = 'worktrackDashboardDateRange';
+    const dashboardCustomStartStorageKey = 'worktrackDashboardCustomStart';
+    const dashboardCustomEndStorageKey = 'worktrackDashboardCustomEnd';
+    const dashboardUserExplorerStorageKey = 'worktrackDashboardUserExplorer';
+    const dashboardClientExplorerStorageKey = 'worktrackDashboardClientExplorer';
+
+    // आपकी शीट के अनुसार स्टेटस की कस्टमाइज़्ड ग्रुपिंग
+    const completedStatuses = ['Closed', 'Completed', 'Posted', 'Resolved', 'Finished'];
+    const approvalStatuses = ['Pending Approval', 'Review', 'Approval', 'Waiting for Approval'];
+    const inProgressStatuses = ['In Progress', 'Paused', 'Allocated', 'Planned', 'Assigned'];
+    const pendingStatuses = ['Open', 'Rework', 'Reassigned', 'Re-work', 'Pending', 'Urgent'];
+    const ignoredStatuses = ['Cancelled', 'Rejected', 'Dropped', 'Void'];
+
+    // ग्रुप वेरिफिकेशन हेल्पर्स
+    const isClosedGroup = (status) => completedStatuses.includes(status) || approvalStatuses.includes(status);
+    const isInProgressGroup = (status) => inProgressStatuses.includes(status);
+    const isPendingGroup = (status) => pendingStatuses.includes(status);
+
+    // Startup Execution Hook
+    $(document).ready(function() {
+        $('#global-search').val(localStorage.getItem(dashboardSearchStorageKey) || '');
+        loadDropdowns();
+        const storedTab = localStorage.getItem(dashboardTabStorageKey) || 'tab-overview';
+        switchTab(storedTab);
+        const storedRange = localStorage.getItem(dashboardDateRangeStorageKey) || 'today';
+        const storedStart = localStorage.getItem(dashboardCustomStartStorageKey) || '';
+        const storedEnd = localStorage.getItem(dashboardCustomEndStorageKey) || '';
+        $('#date-filters button').removeClass('active');
+        $(`#date-filters button[data-range="${storedRange}"]`).addClass('active');
+        if (storedRange === 'custom') {
+            $('#custom-date-picker').removeClass('hidden').addClass('flex');
+            $('#start-date').val(storedStart);
+            $('#end-date').val(storedEnd);
+        } else {
+            $('#custom-date-picker').addClass('hidden').removeClass('flex');
+        }
+        refreshData(storedRange === 'custom' ? 'custom' : storedRange); 
+        
+        // Date button triggers
+        $('#date-filters button').click(function() { 
+            $('#date-filters button').removeClass('active'); 
+            $(this).addClass('active'); 
+            
+            const selectedRange = $(this).data('range'); 
+            localStorage.setItem(dashboardDateRangeStorageKey, selectedRange);
+            if (selectedRange === 'custom') {
+                $('#custom-date-picker').removeClass('hidden').addClass('flex'); 
+            } else { 
+                $('#custom-date-picker').addClass('hidden').removeClass('flex'); 
+                $('#start-date').val('');
+                $('#end-date').val('');
+                localStorage.removeItem(dashboardCustomStartStorageKey);
+                localStorage.removeItem(dashboardCustomEndStorageKey);
+                refreshData(selectedRange); 
+            }
+        });
+        $(document).on('click', function(event) {
+            if (!$(event.target).closest('#statusDropdownBtn, #status-list').length) {
+                $('#status-list').addClass('hidden');
+            }
+        });
+    });
+
+    // SPA Tab Navigation Setup
+    function switchTab(tabId) {
+        localStorage.setItem(dashboardTabStorageKey, tabId);
+        $('.tab-content').addClass('hidden');
+        $('#' + tabId).removeClass('hidden');
+
+        $('.tab-btn').removeClass('text-blue-600 border-b-2 border-blue-600').addClass('text-slate-500 font-semibold');
+        $('#btn-' + tabId).addClass('text-blue-600 border-b-2 border-blue-600').removeClass('text-slate-500 font-semibold');
+
+        // Sync Mobile layout highlights
+        $('.mobile-tab-btn').removeClass('font-bold text-blue-600').addClass('text-slate-500');
+        $(`.mobile-tab-btn[onclick="switchTab('${tabId}')"]`).addClass('font-bold text-blue-600').removeClass('text-slate-500');
+        
+        // NEW: Analytics render trigger
+        if (tabId === 'tab-analytics') {
+            renderAnalyticsReports();
+        }
+        if (tabId === 'tab-user-explorer') {
+            loadUserExplorerProfile();
+        }
+        if (tabId === 'tab-client-explorer') {
+            loadClientExplorerProfile();
+        }
+    }
+
+    function getDaysCount(start, end) {
+        const d1 = new Date(start); 
+        const d2 = new Date(end);
+        let days = Math.round((d2 - d1) / (1000 * 60 * 60 * 24)) + 1;
+        return days > 0 ? days : 1;
+    }
+
+    // UTILITY: Sort tasks to place Closed and Pending Approval at the bottom
+    function sortTasksByStatusPriority(tasks) {
+      const comp = ['Closed', 'Completed', 'Posted', 'Resolved', 'Finished'];
+      const appr = ['Pending Approval', 'Review', 'Approval', 'Waiting for Approval'];
+      
+      return tasks.sort((a, b) => {
+        const sA = a.Status || 'Open';
+        const sB = b.Status || 'Open';
+        
+        let wA = 0; // Active/Pending
+        if (comp.includes(sA)) {
+          wA = 2; // Bottom-most
+        } else if (appr.includes(sA)) {
+          wA = 1; // Middle-bottom
+        }
+        
+        let wB = 0;
+        if (comp.includes(sB)) {
+          wB = 2;
+        } else if (appr.includes(sB)) {
+          wB = 1;
+        }
+        
+        if (wA !== wB) {
+          return wA - wB;
+        }
+        
+        // Same weight: Sort by date descending (latest first)
+        const dateA = a.Date || '';
+        const dateB = b.Date || '';
+        return dateB.localeCompare(dateA);
+      });
+    }
+
+    // Refresh core dataset
+    function refreshData(range) {
+        if (!range) {
+            range = $('#date-filters button.active').data('range');
+        }
+        
+        let start, end; 
+        const today = new Date(); 
+        const fmt = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        
+        if (range === 'today') { 
+            start = end = fmt(today); 
+        } 
+        else if (range === 'yesterday') { 
+            const d = new Date(today); 
+            d.setDate(d.getDate() - 1); 
+            start = end = fmt(d); 
+        } 
+        else if (range === 'last_15') { 
+            const d = new Date(today); 
+            d.setDate(d.getDate() - 15); 
+            start = fmt(d); 
+            end = fmt(today); 
+        } 
+        else if (range === 'this_month') { 
+            const fd = new Date(today.getFullYear(), today.getMonth(), 1); 
+            const ld = new Date(today.getFullYear(), today.getMonth() + 1, 0); 
+            start = fmt(fd); 
+            end = fmt(ld); 
+        } 
+        else if (range === 'custom') { 
+            start = $('#start-date').val(); 
+            end = $('#end-date').val(); 
+            if (!start || !end) {
+                return Swal.fire('Wait', 'Select start and end dates', 'warning');
+            }
+            localStorage.setItem(dashboardDateRangeStorageKey, 'custom');
+            localStorage.setItem(dashboardCustomStartStorageKey, start);
+            localStorage.setItem(dashboardCustomEndStorageKey, end);
+        }
+        else {
+            localStorage.setItem(dashboardDateRangeStorageKey, range);
+        }
+        
+       currentDaysCount = getDaysCount(start, end);
+
+        // चुनी हुई रेंज को ग्लोबल वेरिएबल्स में सेव करें
+        currentStartDate = start;
+        currentEndDate = end;
+
+        // सुंदर और आकर्षक ग्लासमॉर्फिक लोडर
+        Swal.fire({
+          title: 'Syncing Workspace...',
+          html: `
+            <div class="flex flex-col items-center justify-center gap-4 py-4">
+              <div class="relative w-20 h-20 flex items-center justify-center">
+                <!-- Outer Pulsing Glow -->
+                <div class="absolute inset-0 rounded-full bg-indigo-500/10 animate-ping" style="animation-duration: 2s;"></div>
+                <!-- Inner Spinning Progress Ring -->
+                <div class="w-16 h-16 rounded-full border-[5px] border-indigo-50 border-t-indigo-600 animate-spin-custom"></div>
+                <!-- Core Logo/Icon with Pulsing action -->
+                <div class="absolute text-indigo-600 text-xl"><i class="fas fa-cubes-stacked animate-pulse"></i></div>
+              </div>
+              <p class="text-xs text-slate-400 font-semibold mt-2 tracking-wide">Fetching secure logs from active spreadsheets...</p>
+            </div>
+          `,
+          allowOutsideClick: false,
+          showConfirmButton: false,
+          customClass: {
+            popup: 'custom-loader-popup',
+            title: 'custom-loader-title'
+          }
+        });
+        google.script.run.withSuccessHandler(res => { 
+            Swal.close(); 
+            if (res.success) { 
+                globalData = res.data; 
+                generateStatusFilters(); 
+                populateTableDropdowns(globalData.tickets || [], globalData.fms || [], globalData.todo || []); // Load Table-level Dropdowns [1]
+                applyLocalFilters(); 
+                populateExplorerDropdowns();
+            } else { 
+                Swal.fire('Error', res.message, 'error'); 
+            }
+        }).getAdminReports(start, end);
+    }
+
+    // Dynamic Select Populate Helper inside Workload Tables [1]
+    function populateTableDropdowns(tickets, fms, todo) {
+      const fillSelect = (selectId, values) => {
+        const sel = $(selectId);
+        const currentVal = sel.val();
+        sel.find('option:not(:first)').remove();
+        
+        const uniqueVals = [...new Set(values.filter(v => v))].sort();
+        uniqueVals.forEach(v => {
+          sel.append(`<option value="${v}">${v}</option>`);
+        });
+        
+        if (uniqueVals.includes(currentVal)) {
+          sel.val(currentVal);
+        }
+      };
+
+      fillSelect('#filter-ticket-client', tickets.map(t => t.Client));
+      fillSelect('#filter-ticket-employee', tickets.map(t => t.User));
+
+      fillSelect('#filter-fms-client', fms.map(t => t.Client));
+      fillSelect('#filter-fms-employee', fms.map(t => t.User));
+
+      fillSelect('#filter-todo-employee', todo.map(t => t.User));
+    }
+
+    function generateStatusFilters() {
+        const allTasks = [...(globalData.tickets || []), ...(globalData.todo || []), ...(globalData.fms || [])];
+        const uniqueStatuses = [...new Set(allTasks.map(t => t.Status))].sort();
+        const storedStatuses = loadStoredDashboardStatuses();
+        const hasStoredStatuses = Array.isArray(storedStatuses);
+        
+        let html = '';
+        uniqueStatuses.forEach(s => {
+            if (!s) s = 'Open';
+            const checked = hasStoredStatuses
+                ? (storedStatuses.includes(s) ? 'checked' : '')
+                : (ignoredStatuses.includes(s) ? '' : 'checked');
+            
+            html += `
+                <label class="flex items-center gap-3 text-xs cursor-pointer hover:bg-slate-50 p-1.5 rounded-lg">
+                    <input type="checkbox" class="filter-status w-4 h-4 rounded" value="${s}" ${checked} onchange="applyLocalFilters()"> 
+                    <span class="font-semibold text-slate-700">${s}</span>
+                </label>`;
+        });
+        
+        $('#status-checkboxes').html(html); 
+        updateStatusBtnLabel();
+    }
+
+    function loadStoredDashboardStatuses() {
+        try {
+            const raw = localStorage.getItem(dashboardStatusStorageKey);
+            if (raw === null) return null;
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function saveDashboardFilterState() {
+        const searchTerm = $('#global-search').val() || '';
+        const selectedStatuses = $('.filter-status:checked').map(function() { return $(this).val(); }).get();
+        localStorage.setItem(dashboardSearchStorageKey, searchTerm);
+        localStorage.setItem(dashboardStatusStorageKey, JSON.stringify(selectedStatuses));
+    }
+
+    // Label Update Helper Function [1]
+    function updateStatusBtnLabel() {
+        const total = $('.filter-status').length; 
+        const checked = $('.filter-status:checked').length;
+        if (total === 0) {
+            $('#statusDropdownBtn span').text('No Statuses Available');
+            return;
+        }
+        if (checked === total) {
+            $('#statusDropdownBtn span').text('All Statuses Selected');
+        } else if (checked === 0) {
+            $('#statusDropdownBtn span').text('No Status Filter Applied');
+        } else {
+            $('#statusDropdownBtn span').text(`${checked} selected`);
+        }
+    }
+
+    // Checkbox toggle logic [1]
+    function toggleAllStatuses() {
+        const checkboxes = $('.filter-status');
+        const allChecked = checkboxes.length === checkboxes.filter(':checked').length;
+        checkboxes.prop('checked', !allChecked);
+        applyLocalFilters();
+    }
+
+    function populateExplorerDropdowns() {
+      // User Selector
+      const uxSel = $('#ux-user-selector');
+      const prevUser = localStorage.getItem(dashboardUserExplorerStorageKey) || uxSel.val(); // वर्तमान में चुना हुआ यूजर सुरक्षित रखें
+      
+      uxSel.find('option:not(:first)').remove();
+      uxSel.append(`<option value="ALL_USERS" class="text-blue-600 font-bold">★ All Employees / Users</option>`);
+      
+      globalData.activeUsers.forEach(u => {
+        uxSel.append(`<option value="${u.name}">${u.name}</option>`);
+      });
+
+      // चुने हुए यूजर को री-स्टोर करें
+      if (prevUser && uxSel.find(`option[value="${prevUser}"]`).length > 0) {
+        uxSel.val(prevUser);
+      } else if (prevUser) {
+        localStorage.removeItem(dashboardUserExplorerStorageKey);
+      }
+
+      // Client Selector
+      const cxSel = $('#cx-client-selector');
+      const prevClient = localStorage.getItem(dashboardClientExplorerStorageKey) || cxSel.val(); // वर्तमान में चुना हुआ क्लाइंट सुरक्षित रखें
+      
+      cxSel.find('option:not(:first)').remove();
+      globalData.activeClients.forEach(c => {
+        cxSel.append(`<option value="${c.name}">${c.name}</option>`);
+      });
+
+      // चुने हुए क्लाइंट को री-स्टोर करें
+      if (prevClient && cxSel.find(`option[value="${prevClient}"]`).length > 0) {
+        cxSel.val(prevClient);
+      } else if (prevClient) {
+        localStorage.removeItem(dashboardClientExplorerStorageKey);
+      }
+    }
+
+    // Intelligent Name Matching helper to avoid whitespace/case issues [1]
+    function isUserMatch(taskUser, targetName) {
+      if (!taskUser || !targetName) return false;
+      return taskUser.trim().toLowerCase() === targetName.trim().toLowerCase();
+    }
+
+    // Engine multi filtering calculations
+    function applyLocalFilters() {
+        const statuses = []; 
+        $('.filter-status:checked').each(function() { statuses.push($(this).val()); });
+        updateStatusBtnLabel();
+        saveDashboardFilterState();
+
+        // Custom filtering method evaluating local selects [1]
+        const filterTask = (list, clientSelId, empSelId) => {
+            let res = list.filter(t => statuses.includes(t.Status || 'Open'));
+            
+            if (clientSelId) {
+                const clientVal = $(clientSelId).val();
+                if (clientVal) res = res.filter(t => t.Client === clientVal);
+            }
+            if (empSelId) {
+                const empVal = $(empSelId).val();
+                if (empVal) res = res.filter(t => t.User === empVal);
+            }
+            return res;
+        };
+        
+        const filteredTickets = filterTask(globalData.tickets || [], '#filter-ticket-client', '#filter-ticket-employee'); 
+        const filteredTodo = filterTask(globalData.todo || [], null, '#filter-todo-employee');
+        const filteredFms = filterTask(globalData.fms || [], '#filter-fms-client', '#filter-fms-employee');
+        const combinedTasks = [...filteredTickets, ...filteredTodo, ...filteredFms];
+      
+      // चार्ट्स के लिए डेटा विभाजन
+      let stats = { pending: 0, progress: 0, completed: 0 };
+
+      combinedTasks.forEach(t => {
+        if (ignoredStatuses.includes(t.Status)) return;
+        
+        if (isClosedGroup(t.Status)) {
+          stats.completed++; // Closed / Pending Approval
+        } else if (isInProgressGroup(t.Status)) {
+          stats.progress++;  // In Progress / Paused
+        } else if (isPendingGroup(t.Status)) {
+          stats.pending++;   // Rework / Reassigned / Open
+        }
+      });
+        
+        // Updates metrics
+        renderOverviewMetrics(combinedTasks);
+        renderOverviewCharts(combinedTasks);
+        
+        tblTickets = renderTable('#table-tickets', processData(filteredTickets), tblTickets);
+        tblTodo = renderTable('#table-todo', processData(filteredTodo), tblTodo);
+        tblFms = renderTable('#table-fms', processData(filteredFms), tblFms);
+
+        // Dynamically render the dashboard components [1]
+        renderClientEffort(combinedTasks);
+        renderInstantClosures(filteredTickets);
+
+        // Auto-run search filter if something is typed in the search box [1]
+        filterOverviewTables();
+
+        // Auto reload if viewing an active explorer tab
+        if(!$('#tab-user-explorer').hasClass('hidden')) loadUserExplorerProfile();
+        if(!$('#tab-client-explorer').hasClass('hidden')) loadClientExplorerProfile();
+        renderNewAnalyticsCards(filteredTickets, filteredFms, combinedTasks);
+    }
+
+    // ==================== NEW: RENDER ANALYTICS CARDS ====================
+function renderNewAnalyticsCards(tickets, fms, allTasks) {
+
+  // --- 1. WORKING HOURS CHART ---
+  const userHoursMap = {};
+
+  // TO SHOW ALL ACTIVE EMPLOYEES: Initialize map with all active users
+  if (globalData.activeUsers && globalData.activeUsers.length > 0) {
+    globalData.activeUsers.forEach(u => {
+      userHoursMap[u.name] = { plan: 0, act: 0 };
+    });
+  }
+
+  allTasks.forEach(t => {
+    if (ignoredStatuses.includes(t.Status)) return;
+    const u = t.User || 'Unassigned';
+    if (!userHoursMap[u]) userHoursMap[u] = { plan: 0, act: 0 };
+    userHoursMap[u].plan += (parseInt(t.TAT) || 0);
+    userHoursMap[u].act += parseDuration(t.Duration);
+  });
+
+  // Removed .slice limit to show all active employees
+  const allUsersData = Object.entries(userHoursMap)
+    .filter(([name]) => !name.includes('Unassigned') && !name.includes('Inactive') && !name.includes('[Unassigned/Inactive]'))
+    .sort((a, b) => b[1].plan - a[1].plan);
+
+  const hoursLabels = allUsersData.map(([name]) => name.split(' ')[0]);
+  const hoursPlanned = allUsersData.map(([, v]) => Math.round(v.plan / 60 * 10) / 10);
+  const hoursActual = allUsersData.map(([, v]) => Math.round(v.act / 60 * 10) / 10);
+
+  if (window._newHoursChart) window._newHoursChart.destroy();
+  const hCtx = document.getElementById('newHoursChart');
+  if (hCtx) {
+    window._newHoursChart = new Chart(hCtx, {
+      type: 'bar',
+      data: {
+        labels: hoursLabels,
+        datasets: [
+          { label: 'Planned (hrs)', data: hoursPlanned, backgroundColor: 'rgba(59,130,246,0.85)', borderRadius: 5 },
+          { label: 'Actual Logged (hrs)', data: hoursActual, backgroundColor: 'rgba(16,185,129,0.85)', borderRadius: 5 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11, family: 'Plus Jakarta Sans', weight: '700' } } } },
+        scales: {
+          y: { beginAtZero: true, border: { display: false }, ticks: { font: { size: 11 } } },
+          x: { grid: { display: false }, ticks: { font: { size: 11, weight: '700' } } }
+        }
+      }
+    });
+  }
+
+  // --- 2. TIME BALANCE LIST ---
+  let balanceHtml = '';
+  if (allUsersData.length === 0) {
+    balanceHtml = `<div class="text-center text-slate-400 text-xs py-4">Koi data nahi mila.</div>`;
+  } else {
+    allUsersData.forEach(([name, v]) => {
+      const diff = v.plan - v.act;
+      const diffMins = Math.abs(diff);
+      const diffStr = fmtMins(diffMins);
+      const isSaved = diff >= 0;
+      const isOver = diff < 0;
+      const effPct = v.plan > 0 ? Math.round((v.act / v.plan) * 100) : 100;
+      const barW = Math.min(effPct, 100);
+      const barColor = effPct > 110 ? '#ef4444' : effPct > 90 ? '#f59e0b' : '#10b981';
+      const initials = name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+
+      balanceHtml += `
+        <div class="flex items-center gap-3 p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-extrabold flex-shrink-0" 
+               style="background:${isSaved ? '#d1fae5' : '#fee2e2'};color:${isSaved ? '#065f46' : '#991b1b'}">${initials}</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex justify-between items-center mb-1">
+              <span class="text-xs font-extrabold text-slate-700 truncate">${name}</span>
+              <span class="text-[10px] font-extrabold ml-2 flex-shrink-0" style="color:${isSaved ? '#10b981' : '#ef4444'}">
+                ${isSaved ? '+ ' + diffStr + ' saved' : '– ' + diffStr + ' over'}
+              </span>
+            </div>
+            <div class="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+              <div class="h-1.5 rounded-full transition-all" style="width:${barW}%;background:${barColor}"></div>
+            </div>
+            <div class="text-[10px] text-slate-400 mt-0.5">${fmtMins(v.plan)} planned · ${fmtMins(v.act)} logged · ${effPct}% efficiency</div>
+          </div>
+        </div>`;
+    });
+  }
+  $('#new-time-balance-list').html(balanceHtml);
+
+  // --- 3. TICKET CLOSURE RATE ---
+  const todayStr = new Date().toISOString().split('T')[0];
+  const tktTotal = tickets.filter(t => !ignoredStatuses.includes(t.Status)).length;
+  const tktClosed = tickets.filter(t => completedStatuses.includes(t.Status) || approvalStatuses.includes(t.Status)).length;
+  const tktOpen = tickets.filter(t => !completedStatuses.includes(t.Status) && !approvalStatuses.includes(t.Status) && !ignoredStatuses.includes(t.Status)).length;
+  const tktOverdue = tickets.filter(t => !completedStatuses.includes(t.Status) && !ignoredStatuses.includes(t.Status) && t.Date && t.Date < todayStr).length;
+  const tktRate = tktTotal > 0 ? Math.round((tktClosed / tktTotal) * 100) : 0;
+
+  $('#new-tkt-total').text(tktTotal);
+  $('#new-tkt-closed').text(tktClosed);
+  $('#new-tkt-open').text(tktOpen);
+  $('#new-tkt-overdue').text(tktOverdue);
+  $('#new-tkt-rate-badge').text(tktRate + '%')
+    .removeClass('text-teal-600 text-amber-500 text-rose-500')
+    .addClass(tktRate >= 70 ? 'text-teal-600' : tktRate >= 40 ? 'text-amber-500' : 'text-rose-500');
+
+  // Per Employee Ticket breakdown (Showing all active employees)
+  const tktEmpMap = {};
+  if (globalData.activeUsers && globalData.activeUsers.length > 0) {
+    globalData.activeUsers.forEach(u => {
+      tktEmpMap[u.name] = { total: 0, closed: 0, open: 0, overdue: 0 };
+    });
+  }
+
+  tickets.forEach(t => {
+    if (ignoredStatuses.includes(t.Status)) return;
+    const u = t.User || 'Unassigned';
+    if (!tktEmpMap[u]) tktEmpMap[u] = { total: 0, closed: 0, open: 0, overdue: 0 };
+    tktEmpMap[u].total++;
+    if (completedStatuses.includes(t.Status) || approvalStatuses.includes(t.Status)) tktEmpMap[u].closed++;
+    else {
+      tktEmpMap[u].open++;
+      if (t.Date && t.Date < todayStr) tktEmpMap[u].overdue++;
+    }
+  });
+
+  let tktEmpHtml = '';
+  Object.entries(tktEmpMap)
+    .filter(([name]) => !name.includes('Unassigned') && !name.includes('Inactive') && !name.includes('[Unassigned/Inactive]'))
+    .sort((a, b) => b[1].total - a[1].total)
+    .forEach(([name, v]) => {
+      const rate = v.total > 0 ? Math.round((v.closed / v.total) * 100) : 0;
+      const rateColor = rate >= 70 ? '#10b981' : rate >= 40 ? '#f59e0b' : '#ef4444';
+      const overdueTag = v.overdue > 0 ? `<span class="ml-1 text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-bold">${v.overdue} overdue</span>` : '';
+      tktEmpHtml += `
+        <div class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold text-slate-700 truncate">${name}${overdueTag}</span>
+              <span class="text-xs font-extrabold ml-2 flex-shrink-0" style="color:${rateColor}">${rate}%</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
+              <div class="h-1.5 rounded-full" style="width:${rate}%;background:${rateColor}"></div>
+            </div>
+            <div class="text-[10px] text-slate-400 mt-0.5">${v.total} total · ${v.closed} closed · ${v.open} open</div>
+          </div>
+        </div>`;
+    });
+  $('#new-ticket-emp-rows').html(tktEmpHtml || '<div class="text-center text-slate-400 text-xs py-3">Koi ticket data nahi</div>');
+
+  // --- 4. FMS COMPLETION RATE ---
+  const fmsTotal = fms.filter(t => !ignoredStatuses.includes(t.Status)).length;
+  const fmsDone = fms.filter(t => t.Status === 'Completed').length;
+  const fmsPending = fmsTotal - fmsDone;
+  const fmsRate = fmsTotal > 0 ? Math.round((fmsDone / fmsTotal) * 100) : 0;
+
+  $('#new-fms-total').text(fmsTotal);
+  $('#new-fms-done').text(fmsDone);
+  $('#new-fms-pending').text(fmsPending);
+  $('#new-fms-rate-badge').text(fmsRate + '%')
+    .removeClass('text-purple-600 text-amber-500 text-rose-500')
+    .addClass(fmsRate >= 70 ? 'text-purple-600' : fmsRate >= 40 ? 'text-amber-500' : 'text-rose-500');
+
+  // Per Employee FMS breakdown (Showing all active employees)
+  const fmsEmpMap = {};
+  if (globalData.activeUsers && globalData.activeUsers.length > 0) {
+    globalData.activeUsers.forEach(u => {
+      fmsEmpMap[u.name] = { total: 0, done: 0, pending: 0 };
+    });
+  }
+
+  fms.forEach(t => {
+    if (ignoredStatuses.includes(t.Status)) return;
+    const u = t.User || 'Unassigned';
+    if (!fmsEmpMap[u]) fmsEmpMap[u] = { total: 0, done: 0, pending: 0 };
+    fmsEmpMap[u].total++;
+    if (t.Status === 'Completed') fmsEmpMap[u].done++;
+    else fmsEmpMap[u].pending++;
+  });
+
+  let fmsEmpHtml = '';
+  Object.entries(fmsEmpMap)
+    .filter(([name]) => !name.includes('Unassigned') && !name.includes('Inactive') && !name.includes('[Unassigned/Inactive]'))
+    .sort((a, b) => b[1].total - a[1].total)
+    .forEach(([name, v]) => {
+      const rate = v.total > 0 ? Math.round((v.done / v.total) * 100) : 0;
+      const rateColor = rate >= 70 ? '#8b5cf6' : rate >= 40 ? '#f59e0b' : '#ef4444';
+      fmsEmpHtml += `
+        <div class="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-extrabold text-slate-700 truncate">${name}</span>
+              <span class="text-xs font-extrabold ml-2 flex-shrink-0" style="color:${rateColor}">${rate}%</span>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-1.5 mt-1 overflow-hidden">
+              <div class="h-1.5 rounded-full" style="width:${rate}%;background:${rateColor}"></div>
+            </div>
+            <div class="text-[10px] text-slate-400 mt-0.5">${v.total} total · ${v.done} done · ${v.pending} pending</div>
+          </div>
+        </div>`;
+    });
+  $('#new-fms-emp-rows').html(fmsEmpHtml || '<div class="text-center text-slate-400 text-xs py-3">Koi FMS data nahi</div>');
+}
+
+    function processData(raw) { 
+        const map = {}; 
+        
+        raw.forEach(t => { 
+            const u = t.User || 'Unassigned'; 
+            if (!map[u]) {
+                map[u] = { name: u, total: 0, completed: 0, pending: 0, approval: 0, plan: 0, act: 0, tasks: [] }; 
+            }
+            
+            const s = t.Status || 'Open';
+            if (ignoredStatuses.includes(s)) {
+                return; // Ignore cancelled/rejected in reports count
+            }
+
+            map[u].total++; 
+            
+            // "Pending Approval" is also counted as Completed here
+            if (completedStatuses.includes(s) || approvalStatuses.includes(s)) {
+                map[u].completed++;
+            }
+            if (approvalStatuses.includes(s)) {
+                map[u].approval++;
+            } 
+            if (!completedStatuses.includes(s) && !approvalStatuses.includes(s)) {
+                map[u].pending++; 
+            }
+
+            // Sum planned hours & actual hours for all non-ignored tasks
+            map[u].plan += (parseInt(t.TAT) || 0); 
+            map[u].act += parseDuration(t.Duration);
+            
+            map[u].tasks.push(t);
+        }); 
+        
+        return Object.values(map).map(u => {
+            const diff = u.plan - u.act; 
+            let diffStrFormatted = '';
+            if (diff < 0) {
+                diffStrFormatted = `-${fmtMins(Math.abs(diff))}`;
+            } else {
+                diffStrFormatted = `+${fmtMins(diff)}`;
+            }
+            
+            return { 
+                ...u, 
+                planStr: fmtMins(u.plan), 
+                actStr: fmtMins(u.act), 
+                diffVal: diff, 
+                diffStr: diffStrFormatted 
+            };
+        }); 
+    }
+
+    // --- ANALYTICAL OVERVIEW DRAWING ---
+    function renderOverviewMetrics(tasks) {
+      const totalUsers = globalData.activeUsers.length;
+      const uniqueCheckedIn = new Set();
+      globalData.attendance.forEach(a => {
+        if((a.Action || '').toLowerCase().includes('in')) uniqueCheckedIn.add(a.EmpID);
+      });
+      const presentCount = uniqueCheckedIn.size;
+      const pct = totalUsers > 0 ? Math.round((presentCount / totalUsers) * 100) : 0;
+      $('#kpi-attendance-pct').text(`${pct}%`);
+      $('#kpi-attendance-count').text(`${presentCount} of ${totalUsers} Checked In`);
+
+      let outTotal = 0;
+      let overdueInvs = 0;
+      const todayStr = new Date().toISOString().split('T')[0];
+      globalData.invoices.forEach(i => {
+        outTotal += i.Outstanding;
+        if (i.Outstanding > 0 && i.DueDateFmt && i.DueDateFmt < todayStr) {
+          overdueInvs++;
+        }
+      });
+      $('#kpi-outstanding-total').text('₹' + outTotal.toLocaleString('en-IN'));
+      $('#kpi-invoice-overdue').text(`${overdueInvs} Aging Overdue`);
+
+      let plannedMinutes = 0;
+      tasks.forEach(t => {
+        if(!ignoredStatuses.includes(t.Status)) plannedMinutes += (parseInt(t.TAT) || 0);
+      });
+      $('#kpi-planned-time').text(fmtMins(plannedMinutes));
+
+      // Completed tasks calculation (Completed + Pending Approval)
+      const compCount = tasks.filter(t => completedStatuses.includes(t.Status) || approvalStatuses.includes(t.Status)).length;
+      const activeTotal = tasks.filter(t => !ignoredStatuses.includes(t.Status)).length;
+      const completionRate = activeTotal > 0 ? Math.round((compCount / activeTotal) * 100) : 0;
+      $('#kpi-completed-today').text(`${compCount} Tasks`);
+      $('#kpi-completed-rate').text(`${completionRate}% Work Completed`);
+
+      let alertHtml = '';
+      const overdueTasks = tasks.filter(t => !completedStatuses.includes(t.Status) && !ignoredStatuses.includes(t.Status) && t.Date && t.Date < todayStr);
+      
+      if(overdueTasks.length === 0 && overdueInvs === 0) {
+        alertHtml = `<div class="p-3 text-center text-xs text-slate-400 font-semibold bg-slate-50 border border-dashed rounded-xl">No active warnings across departments today.</div>`;
+      } else {
+        overdueTasks.slice(0, 4).forEach(ot => {
+          alertHtml += `
+            <div class="flex items-center justify-between bg-red-50 border border-red-100 p-2.5 rounded-xl">
+              <div class="flex items-center gap-2">
+                <i class="fas fa-triangle-exclamation text-red-500 text-xs"></i>
+                <div class="text-[11px] font-semibold text-slate-700">
+                  <span class="font-extrabold text-red-600">[Overdue Task]</span> ${ot.Desc}
+                  <span class="block text-[9px] text-slate-400">Assigned to ${ot.User} | Plan: ${ot.Date}</span>
+                </div>
+              </div>
+              <span class="text-[10px] bg-red-100 text-red-800 px-2 py-0.5 rounded-md font-bold">${ot.Type}</span>
+            </div>`;
+        });
+
+        globalData.invoices.filter(i => i.Outstanding > 0 && i.DueDateFmt && i.DueDateFmt < todayStr).slice(0, 2).forEach(i => {
+          const agingLabel = getInvoiceAgingBucket(i);
+          alertHtml += `
+            <div class="flex items-center justify-between bg-amber-50 border border-amber-100 p-2.5 rounded-xl">
+              <div class="flex items-center gap-2">
+                <i class="fas fa-receipt text-amber-500 text-xs"></i>
+                <div class="text-[11px] font-semibold text-slate-700">
+                  <span class="font-extrabold text-amber-600">[Aging Invoice]</span> ${i.CustomerName}
+                  <span class="block text-[9px] text-slate-400">Balance: ₹${i.Outstanding.toLocaleString('en-IN')} | Due: ${i.DueDateFmt}</span>
+                </div>
+              </div>
+              ${agingLabel ? `<span class="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md font-bold">${agingLabel}</span>` : ''}
+            </div>`;
+        });
+      }
+      $('#dashboard-alerts-container').html(alertHtml);
+    }
+
+    $(document).on('change', '#ux-user-selector', function() {
+        localStorage.setItem(dashboardUserExplorerStorageKey, $(this).val() || '');
+    });
+
+    $(document).on('change', '#cx-client-selector', function() {
+        localStorage.setItem(dashboardClientExplorerStorageKey, $(this).val() || '');
+    });
+
+    function getInvoiceAgingBucket(invoice = {}) {
+      const raw = String(invoice.Bucket || invoice['Aging Bucket'] || invoice.AgingBucket || invoice.Aging || '').trim();
+      if (raw) {
+        const lowered = raw.toLowerCase();
+        if (['0-30', '1-30', '0-30 days', '1-30 days'].includes(lowered)) return '0-30 Days';
+        if (['30-60', '31-60', '30-60 days', '31-60 days'].includes(lowered)) return '30-60 Days';
+        if (['60-90', '61-90', '60-90 days', '61-90 days'].includes(lowered)) return '60-90 Days';
+        if (['90+', '90+ days', '91+', '91+ days'].includes(lowered)) return '90+ Days';
+        return raw;
+      }
+
+      const dueDate = invoice.DueDateFmt || invoice.DueDate || invoice.Date;
+      if (!dueDate) return '';
+      const due = new Date(dueDate);
+      if (Number.isNaN(due.getTime())) return '';
+      const diffDays = Math.max(0, Math.floor((new Date().setHours(0, 0, 0, 0) - due.setHours(0, 0, 0, 0)) / 86400000));
+      if (diffDays <= 30) return '0-30 Days';
+      if (diffDays <= 60) return '30-60 Days';
+      if (diffDays <= 90) return '60-90 Days';
+      return '90+ Days';
+    }
+
+    function renderOverviewCharts(tasks) {
+      let stats = { pending: 0, progress: 0, completed: 0 };
+
+      tasks.forEach(t => {
+        if(completedStatuses.includes(t.Status) || approvalStatuses.includes(t.Status)) stats.completed++;
+        else if(ignoredStatuses.includes(t.Status)) return;
+        else if (['In Progress', 'Allocated', 'Re-work', 'Planned'].includes(t.Status)) stats.progress++;
+        else stats.pending++;
+      });
+
+      if(ovStatusChart) ovStatusChart.destroy();
+      const ctx1 = document.getElementById('ovStatusChart').getContext('2d');
+      ovStatusChart = new Chart(ctx1, {
+        type: 'doughnut',
+        data: {
+          labels: ['Pending', 'In Progress', 'Completed'],
+          datasets: [{
+            data: [stats.pending, stats.progress, stats.completed],
+            backgroundColor: ['#ef4444', '#f59e0b', '#10b981'],
+            borderWidth: 0,
+            hoverOffset: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '70%',
+          plugins: {
+            legend: { position: 'bottom', labels: { font: { size: 10, family: 'Plus Jakarta Sans', weight: '700' }, color: '#475569', boxWidth: 10 } }
+          }
+        }
+      });
+
+      const userStats = {};
+      tasks.forEach(t => {
+        const u = t.User || 'Unassigned';
+        if(!userStats[u]) userStats[u] = { plan: 0, act: 0 };
+        if(!ignoredStatuses.includes(t.Status)) {
+          userStats[u].plan += (parseInt(t.TAT) || 0);
+          userStats[u].act += parseDuration(t.Duration);
+        }
+      });
+      const topUsers = Object.entries(userStats).sort((a,b) => b[1].plan - a[1].plan).slice(0, 6);
+      const userLabels = topUsers.map(u => u[0].split(' ')[0]);
+      const userPlans = topUsers.map(u => Math.round(u[1].plan / 60));
+      const userActs = topUsers.map(u => Math.round(u[1].act / 60));
+
+      if(ovUserChart) ovUserChart.destroy();
+      const ctx2 = document.getElementById('ovUserChart').getContext('2d');
+      ovUserChart = new Chart(ctx2, {
+        type: 'bar',
+        data: {
+          labels: userLabels,
+          datasets: [
+            { label: 'Planned (Hours)', data: userPlans, backgroundColor: 'rgba(59, 130, 246, 0.85)', borderRadius: 4 },
+            { label: 'Actual Logged (Hours)', data: userActs, backgroundColor: 'rgba(16, 185, 129, 0.85)', borderRadius: 4 }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { boxWidth: 8, font: { size: 10, family: 'Plus Jakarta Sans', weight: '700' } } } },
+          scales: { y: { beginAtZero: true, border: { display: false } }, x: { grid: { display: false } } }
+        }
+      });
+
+      const agingMap = { '0-30 Days': 0, '30-60 Days': 0, '60-90 Days': 0, '90+ Days': 0 };
+      globalData.invoices.forEach(i => {
+        const bucket = getInvoiceAgingBucket(i);
+        if(agingMap[bucket] !== undefined) agingMap[bucket] += i.Outstanding;
+      });
+
+      if(ovAgingChart) ovAgingChart.destroy();
+      const ctx3 = document.getElementById('ovAgingChart').getContext('2d');
+      ovAgingChart = new Chart(ctx3, {
+        type: 'bar',
+        data: {
+          labels: Object.keys(agingMap),
+          datasets: [{
+            data: Object.values(agingMap),
+            backgroundColor: ['#4ade80', '#facc15', '#fb923c', '#ef4444'],
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, border: { display: false } }, x: { grid: { display: false } } }
+        }
+      });
+    }
+    // हेल्पर फ़ंक्शंस: कैलेंडर डेट रेंज और लीव-इंटिमेशन मैचिंग के लिए
+    function getDatesInRange(startDateStr, endDateStr) {
+      const dates = [];
+      if (!startDateStr || !endDateStr) return dates;
+      let curr = new Date(startDateStr);
+      const end = new Date(endDateStr);
+      while (curr <= end) {
+        const yyyy = curr.getFullYear();
+        const mm = String(curr.getMonth() + 1).padStart(2, '0');
+        const dd = String(curr.getDate()).padStart(2, '0');
+        dates.push(`${yyyy}-${mm}-${dd}`);
+        curr.setDate(curr.getDate() + 1);
+      }
+      return dates;
+    }
+
+    function getDayName(dayIndex) {
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      return days[dayIndex];
+    }
+
+    function isUserMatchRow(row, targetName) {
+      if (!targetName) return false;
+      if (targetName === "ALL_USERS") return true;
+      
+      const val = String(getClientFlexibleValue(row, ['Employee Name', 'Name', 'Emp Name', 'User', 'Employee ID', 'Emp ID', 'Employee_ID', 'Employee'])).trim().toLowerCase();
+      if (!val) return false;
+      
+      const targetLower = targetName.trim().toLowerCase();
+      if (val === targetLower) return true;
+
+      // यदि शीट में Employee ID लिखी है, तो उसे एक्टिव यूजर्स लिस्ट के नाम से क्रॉस-चेक करें
+      const matchedUser = globalData.activeUsers.find(u => u.name.toLowerCase() === targetLower);
+      if (matchedUser && val === matchedUser.id.toLowerCase()) {
+        return true;
+      }
+      return false;
+    }
+
+    function getClientFlexibleValue(row, possibleKeys) {
+      const keys = Object.keys(row);
+      for (let pk of possibleKeys) {
+        const cleanPk = pk.toLowerCase().replace(/[^a-z0-9]/g, '');
+        for (let k of keys) {
+          const cleanK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (cleanK === cleanPk) {
+            return row[k];
+          }
+        }
+      }
+      return '';
+    }
+
+    const toYMD = (d) => {
+      if (!d) return '';
+      if (typeof d === 'string') {
+        const match = d.trim().match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+        if (match) {
+          return `${match[1]}-${String(match[2]).padStart(2, '0')}-${String(match[3]).padStart(2, '0')}`;
+        }
+      }
+      let dateObj = (d instanceof Date) ? d : new Date(d);
+      if (isNaN(dateObj.getTime())) return '';
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+function loadUserExplorerProfile() {
+      const uName = $('#ux-user-selector').val();
+      if(!uName) {
+        $('#ux-placeholder').removeClass('hidden');
+        $('#ux-dashboard').addClass('hidden');
+        return;
+      }
+      $('#ux-placeholder').addClass('hidden');
+      $('#ux-dashboard').removeClass('hidden');
+
+      const isAllUsers = (uName === "ALL_USERS");
+
+      // क्रिटिकल फिक्स: केवल वही टास्क लें जो चुनी गई तारीख सीमा के अंदर हैं और जिनके पास मान्य तारीख है!
+      const filterByDateRange = (list) => {
+        return list.filter(t => {
+          if (!t.Date) return false; // बिना तारीख वाले रिकॉर्ड्स को एक्सप्लोरर से बाहर रखें
+          return t.Date >= currentStartDate && t.Date <= currentEndDate;
+        });
+      };
+
+      const allTickets = isAllUsers ? filterByDateRange(globalData.tickets) : filterByDateRange(globalData.tickets).filter(t => isUserMatch(t.User, uName));
+      const allFms = isAllUsers ? filterByDateRange(globalData.fms) : filterByDateRange(globalData.fms).filter(t => isUserMatch(t.User, uName));
+      const allTodos = isAllUsers ? filterByDateRange(globalData.todo) : filterByDateRange(globalData.todo).filter(t => isUserMatch(t.User, uName));
+      const userAttendance = isAllUsers ? globalData.attendance : globalData.attendance.filter(a => isUserMatch(a.Name, uName));
+      
+      if (isAllUsers) {
+        const uniqueUsersCount = globalData.activeUsers.length;
+        const totalCheckedIn = new Set(globalData.attendance.filter(a => (a.Action || '').toLowerCase().includes('in')).map(a => a.Name)).size;
+        $('#ux-kpi-presence').text(`${totalCheckedIn} / ${uniqueUsersCount} Active`);
+      } else {
+        const uniqueDays = [...new Set(globalData.attendance.map(a => a.Date))];
+        const checkIns = userAttendance.filter(a => (a.Action || '').toLowerCase().includes('in'));
+        $('#ux-kpi-presence').text(`${checkIns.length} / ${uniqueDays.length || 1} Days`);
+      }
+
+      const userTasks = [...allTickets, ...allFms, ...allTodos];
+
+      // Breakdown calculations (independent structure)
+      const getBreakdown = (list) => {
+        const total = list.filter(t => !ignoredStatuses.includes(t.Status)).length;
+        const comp = list.filter(t => isClosedGroup(t.Status)).length;
+        const appr = list.filter(t => approvalStatuses.includes(t.Status)).length;
+        const pend = total - comp;
+        return { total, comp, appr, pend };
+      };
+
+      const tktB = getBreakdown(allTickets);
+      const fmsB = getBreakdown(allFms);
+      const todoB = getBreakdown(allTodos);
+
+      $('#ux-tkt-total').text(`${tktB.total} Work Items`);
+      $('#ux-tkt-breakdown').html(
+        `<b class="text-emerald-600">${tktB.comp - tktB.appr} Done</b> | ` +
+        `<b class="text-purple-600">${tktB.appr} Approval</b> | ` +
+        `<b class="text-rose-500">${tktB.pend} Pending</b>`
+      );
+
+      $('#ux-fms-total').text(`${fmsB.total} Processes`);
+      $('#ux-fms-breakdown').html(
+        `<b class="text-emerald-600">${fmsB.comp - fmsB.appr} Done</b> | ` +
+        `<b class="text-purple-600">${fmsB.appr} Approval</b> | ` +
+        `<b class="text-rose-500">${fmsB.pend} Pending</b>`
+      );
+
+      $('#ux-todo-total').text(`${todoB.total} Tasks`);
+      $('#ux-todo-breakdown').html(
+        `<b class="text-emerald-600">${todoB.comp - todoB.appr} Done</b> | ` +
+        `<b class="text-purple-600">${todoB.appr} Approval</b> | ` +
+        `<b class="text-rose-500">${todoB.pend} Pending</b>`
+      );
+
+      // KPI stopwatch calculations
+      let planMins = 0;
+      let actMins = 0;
+      let stopwatchTasksCount = 0;
+      
+      userTasks.forEach(t => {
+        if (t.Type === 'FMS') return; // Exclude FMS from stopwatch performance calculations
+        
+        stopwatchTasksCount++;
+        if(!ignoredStatuses.includes(t.Status)) {
+          planMins += (parseInt(t.TAT) || 0);
+          actMins += parseDuration(t.Duration);
+        }
+      });
+
+      const balance = planMins - actMins;
+      let balanceStr = balance >= 0 ? `+${fmtMins(balance)}` : `-${fmtMins(Math.abs(balance))}`;
+      let balanceClass = balance >= 0 ? 'text-emerald-500' : 'text-red-500';
+
+      let indexScore = planMins > 0 ? Math.round((actMins / planMins) * 100) : 100;
+      let effText = indexScore > 100 ? `${indexScore}% (Slow)` : `${indexScore}% (Fast)`;
+
+      $('#ux-kpi-total').text(stopwatchTasksCount);
+      $('#ux-kpi-balance').text(balanceStr).removeClass('text-slate-800 text-emerald-500 text-red-500').addClass(balanceClass);
+      $('#ux-kpi-eff').text(effText).removeClass('text-emerald-500 text-red-500 text-slate-800').addClass(indexScore > 100 ? 'text-red-500' : 'text-emerald-500');
+
+      // Pre-filter Leaves & Intimations
+      const filteredLeaves = (globalData.leaves || []).filter(row => isAllUsers || isUserMatchRow(row, uName));
+      const filteredIntimations = (globalData.intimations || []).filter(row => isAllUsers || isUserMatchRow(row, uName));
+
+      const leavesPreParsed = filteredLeaves.map(row => ({
+        sDate: toYMD(getClientFlexibleValue(row, ['Start Date', 'StartDate'])),
+        eDate: toYMD(getClientFlexibleValue(row, ['End Date', 'EndDate'])),
+        reason: getClientFlexibleValue(row, ['Reason', 'Leave Type', 'Remarks', 'Type']) || 'Leave Approved'
+      }));
+
+      const intimationsPreParsed = filteredIntimations.map(row => ({
+        iDate: toYMD(getClientFlexibleValue(row, ['Intimation Date', 'IntimationDate', 'Date'])),
+        reason: getClientFlexibleValue(row, ['Reason', 'Remarks', 'Details', 'Intimation Type']) || 'Intimation Filed'
+      }));
+
+      const extractTimePart = (timeStr) => {
+        if (!timeStr) return '';
+        const parts = timeStr.trim().split(/\s+/);
+        return parts.find(p => p.includes(':')) || '';
+      };
+
+      // Hash Maps for O(1) Lookups
+      const punchesByDate = {};
+      userAttendance.forEach(a => {
+        if (a.Date) {
+          if (!punchesByDate[a.Date]) punchesByDate[a.Date] = [];
+          punchesByDate[a.Date].push(a);
+        }
+      });
+
+      const intimationsByDate = {};
+      intimationsPreParsed.forEach(i => {
+        if (i.iDate) {
+          intimationsByDate[i.iDate] = i;
+        }
+      });
+
+      const leavesByDate = {};
+      leavesPreParsed.forEach(l => {
+        let start = new Date(l.sDate);
+        const end = new Date(l.eDate);
+        let limit = 0;
+        while (start <= end && limit < 100) {
+          limit++;
+          const yStr = start.getFullYear();
+          const mStr = String(start.getMonth() + 1).padStart(2, '0');
+          const dStr = String(start.getDate()).padStart(2, '0');
+          const formattedDate = `${yStr}-${mStr}-${dStr}`;
+          leavesByDate[formattedDate] = l;
+          start.setDate(start.getDate() + 1);
+        }
+      });
+
+      const datesSeq = getDatesInRange(currentStartDate, currentEndDate);
+      let attHtml = '';
+
+      let totalPresent = 0;
+      let totalLate = 0;
+      let totalAbsent = 0;
+      let totalLeave = 0;
+      let totalIntimations = 0;
+
+      if (datesSeq.length === 0) {
+        attHtml = `<tr><td colspan="5" class="text-center py-6 text-slate-400 font-medium">No date range selected.</td></tr>`;
+      } else {
+        datesSeq.forEach(dateStr => {
+          const dayOfWeek = new Date(dateStr).getDay();
+          const isSunday = (dayOfWeek === 0);
+          const dayName = getDayName(dayOfWeek);
+
+          const punches = punchesByDate[dateStr] || [];
+          const matchingLeave = leavesByDate[dateStr];
+          const matchingIntimation = intimationsByDate[dateStr];
+
+          if (matchingIntimation) {
+            totalIntimations++;
+          }
+          if (punches.length > 0) {
+            totalPresent++;
+          } else if (matchingLeave) {
+            totalLeave++;
+          } else if (!isSunday) {
+            totalAbsent++;
+          }
+
+          let displayEmpName = isAllUsers ? "All Users" : uName;
+          let timeHtml = '';
+          let actionHtml = '';
+          let metaHtml = '';
+
+          if (punches.length > 0) {
+            displayEmpName = punches[0].Name || displayEmpName;
+
+            const punchIns = punches.filter(p => (p.Action || '').toLowerCase().includes('in'));
+            let isDayLate = false;
+            if (punchIns.length > 0) {
+              const firstIn = punchIns[0];
+              const cleanTime = extractTimePart(firstIn.Time || '');
+              if (cleanTime) {
+                const timeParts = cleanTime.split(':');
+                const hour = parseInt(timeParts[0], 10) || 0;
+                const min = parseInt(timeParts[1], 10) || 0;
+                if (hour > 10 || (hour === 10 && min > 0)) {
+                  isDayLate = true;
+                  totalLate++;
+                }
+              }
+            }
+
+            punches.forEach(p => {
+              const isCheckIn = (p.Action || 'In').toLowerCase().includes('in');
+              const pillColor = isCheckIn ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100';
+              const icon = isCheckIn ? 'fa-sign-in-alt' : 'fa-sign-out-alt';
+
+              const isPunchInLate = isCheckIn && isDayLate;
+              const lateBadge = isPunchInLate ? `<span class="bg-amber-100 text-amber-800 text-[9px] px-1.5 py-0.5 rounded ml-1 font-bold">Late</span>` : '';
+              const cleanTimeDisplay = extractTimePart(p.Time || '') || p.Time || '-';
+
+              timeHtml += `<div class="py-1 font-semibold text-slate-600">${cleanTimeDisplay}${lateBadge}</div>`;
+              actionHtml += `
+                <div class="py-1">
+                  <span class="badge-soft ${pillColor} text-[10px] font-bold inline-block">
+                    <i class="fas ${icon} mr-1"></i> ${p.Action || 'In'}
+                  </span>
+                </div>`;
+
+              let actionMeta = [];
+              if (p.Lat && p.Long) {
+                actionMeta.push(`<a href="https://maps.google.com/?q=${p.Lat},${p.Long}" target="_blank" class="text-blue-600 hover:text-blue-800 font-bold inline-flex items-center gap-1"><i class="fas fa-location-dot"></i> Map</a>`);
+              }
+              if (p.Photo) {
+                actionMeta.push(`<button onclick="Swal.fire({imageUrl: '${p.Photo}', imageWidth:400})" class="text-purple-600 hover:text-purple-800 font-bold inline-flex items-center gap-1"><i class="fas fa-camera"></i> View Photo</button>`);
+              }
+              metaHtml += `<div class="py-1 font-semibold text-xs text-slate-500">${actionMeta.length > 0 ? actionMeta.join(' | ') : '-'}</div>`;
+            });
+
+            if (matchingIntimation) {
+              actionHtml += `
+                <div class="mt-1">
+                  <span class="badge-soft bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-bold inline-block">
+                    <i class="fas fa-sticky-note mr-1"></i> Intimation: ${matchingIntimation.reason}
+                  </span>
+                </div>`;
+            }
+
+          } else if (matchingLeave) {
+            timeHtml = `<span class="text-slate-400 font-medium italic">Full Day Leave</span>`;
+            actionHtml = `
+              <span class="badge-soft bg-purple-100 text-purple-700 border border-purple-200 text-[10px] font-bold inline-block">
+                <i class="fas fa-calendar-times mr-1"></i> ${matchingLeave.reason}
+              </span>`;
+            metaHtml = `<span class="text-slate-300">-</span>`;
+          } else if (matchingIntimation) {
+            timeHtml = `<span class="text-slate-400 font-medium italic">Intimation Filed</span>`;
+            actionHtml = `
+              <span class="badge-soft bg-amber-100 text-amber-700 border border-amber-200 text-[10px] font-bold inline-block">
+                <i class="fas fa-sticky-note mr-1"></i> ${matchingIntimation.reason}
+              </span>`;
+            metaHtml = `<span class="text-slate-300">-</span>`;
+          } else if (isSunday) {
+            timeHtml = `<span class="text-slate-400 font-medium italic">Weekly Off</span>`;
+            actionHtml = `
+              <span class="badge-soft bg-slate-100 text-slate-500 border border-slate-200 text-[10px] font-bold inline-block">
+                <i class="fas fa-umbrella-beach mr-1"></i> Sunday Off
+              </span>`;
+            metaHtml = `<span class="text-slate-300">-</span>`;
+          } else {
+            timeHtml = `<span class="text-red-500 font-extrabold italic">No Entry</span>`;
+            actionHtml = `
+              <span class="badge-soft bg-red-100 text-red-700 border border-red-200 text-[10px] font-bold inline-block">
+                <i class="fas fa-user-slash mr-1"></i> Absent
+              </span>`;
+            metaHtml = `<span class="text-slate-300">-</span>`;
+          }
+
+          attHtml += `
+            <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
+              <td class="py-3 font-bold text-slate-600">${dateStr} <span class="text-[11px] font-normal text-slate-400">(${dayName})</span></td>
+              <td class="py-3 font-extrabold text-slate-800">${displayEmpName}</td>
+              <td class="py-3">${timeHtml}</td>
+              <td class="py-3">${actionHtml}</td>
+              <td class="py-3 text-right pr-4 font-semibold text-xs">${metaHtml}</td>
+            </tr>`;
+        });
+      }
+      $('#ux-table-attendance tbody').html(attHtml);
+
+      const summaryHtml = `
+        <span class="text-emerald-600">Present: ${totalPresent}</span> | 
+        <span class="text-amber-500">Late: ${totalLate}</span> | 
+        <span class="text-red-500">Absent: ${totalAbsent}</span> | 
+        <span class="text-purple-600">Leave: ${totalLeave}</span> | 
+        <span class="text-indigo-600">Intimation: ${totalIntimations}</span>
+      `;
+      $('#ux-summary-attendance').html(summaryHtml);
+
+      // Support Tickets Table rows population
+      let ticketsHtml = '';
+      allTickets.forEach(t => {
+        const isPending = !completedStatuses.includes(t.Status) && !approvalStatuses.includes(t.Status);
+        const statusColor = isPending ? 'bg-rose-50 text-rose-700 font-extrabold' : 'bg-emerald-50 text-emerald-600';
+        const plannedMins = parseInt(t.TAT) || 0;
+
+        ticketsHtml += `
+          <tr class="hover:bg-slate-50 border-b border-slate-100">
+            <td class="py-2.5 font-bold text-slate-500 whitespace-nowrap">${t.Date || '-'}</td>
+            <td class="py-2.5 font-semibold text-slate-700 break-words max-w-xs pr-2">${t.Desc || '-'}</td>
+            <td class="py-2.5 font-bold text-slate-400 break-words max-w-xs pr-2">${t.Client || 'Internal'}</td>
+            <td class="py-2.5 text-center font-mono font-bold text-blue-600">${fmtMins(plannedMins)}</td>
+            <td class="py-2.5 text-center font-mono text-slate-500">${t.Duration || '0h 0m'}</td>
+            <td class="py-2.5 text-right"><span class="badge-soft ${statusColor} text-[9px] font-bold">${t.Status}</span></td>
+          </tr>`;
+      });
+      $('#ux-table-tickets tbody').html(ticketsHtml || `<tr><td colspan="6" class="text-center py-4 text-slate-400">No Tickets found.</td></tr>`);
+      $('#ux-summary-tickets').html(calculateSubTableStats(allTickets, 'Ticket'));
+
+      // FMS Tasks Table rows population
+      let fmsHtml = '';
+      allFms.forEach(t => {
+        const isPending = !completedStatuses.includes(t.Status) && !approvalStatuses.includes(t.Status);
+        const statusColor = isPending ? 'bg-rose-50 text-rose-700 font-extrabold' : 'bg-emerald-50 text-emerald-600';
+        const plannedMins = parseInt(t.TAT) || 0;
+        const stepBadge = t.Step ? `<span class="bg-slate-100 text-slate-600 px-1 rounded text-[9px] mr-1">Step ${t.Step}</span>` : '';
+
+        fmsHtml += `
+          <tr class="hover:bg-slate-50 border-b border-slate-100">
+            <td class="py-2.5 font-bold text-slate-500 whitespace-nowrap">${t.Date || '-'}</td>
+            <td class="py-2.5 font-semibold text-slate-700 break-words max-w-xs pr-2">${stepBadge}${t.Desc || '-'}</td>
+            <td class="py-2.5 font-bold text-slate-400 break-words max-w-xs pr-2">${t.Client || 'FMS Project'}</td>
+            <td class="py-2.5 text-center font-mono font-bold text-blue-600">${fmtMins(plannedMins)}</td>
+            <td class="py-2.5 text-center font-mono text-slate-500">${t.Duration || '0h 0m'}</td>
+            <td class="py-2.5 text-right"><span class="badge-soft ${statusColor} text-[9px] font-bold">${t.Status}</span></td>
+          </tr>`;
+      });
+      $('#ux-table-fms tbody').html(fmsHtml || `<tr><td colspan="6" class="text-center py-4 text-slate-400">No FMS Tasks found.</td></tr>`);
+      $('#ux-summary-fms').html(calculateSubTableStats(allFms, 'Task'));
+
+      // To-Do Tasks Table rows population
+      let todoHtml = '';
+      allTodos.forEach(t => {
+        const isPending = !completedStatuses.includes(t.Status) && !approvalStatuses.includes(t.Status);
+        const statusColor = isPending ? 'bg-rose-50 text-rose-700 font-extrabold' : 'bg-emerald-50 text-emerald-600';
+        const plannedMins = parseInt(t.TAT) || 0;
+
+        todoHtml += `
+          <tr class="hover:bg-slate-50 border-b border-slate-100">
+            <td class="py-2.5 font-bold text-slate-500 whitespace-nowrap">${t.Date || '-'}</td>
+            <td class="py-2.5 font-semibold text-slate-700 break-words max-w-xs pr-2">${t.Desc || '-'}</td>
+            <td class="py-2.5 text-center font-mono font-bold text-blue-600">${fmtMins(plannedMins)}</td>
+            <td class="py-2.5 text-center font-mono text-slate-500">${t.Duration || '0h 0m'}</td>
+            <td class="py-2.5 text-right"><span class="badge-soft ${statusColor} text-[9px] font-bold">${t.Status}</span></td>
+          </tr>`;
+      });
+      $('#ux-table-todo tbody').html(todoHtml || `<tr><td colspan="5" class="text-center py-4 text-slate-400">No General Tasks found.</td></tr>`);
+      $('#ux-summary-todo').html(calculateSubTableStats(allTodos, 'Task'));
+
+      // Client-wise Work & Time Distribution Table population
+      const clientSummaryMap = {};
+      let totalUserActMins = 0;
+      let distTasks = [];
+
+      userTasks.forEach(t => {
+        if (ignoredStatuses.includes(t.Status)) return;
+        
+        const clientName = t.Client || 'Internal / General';
+        if (!clientSummaryMap[clientName]) {
+          clientSummaryMap[clientName] = {
+            name: clientName,
+            count: 0,
+            plan: 0,
+            act: 0
+          };
+        }
+        
+        clientSummaryMap[clientName].count++;
+        clientSummaryMap[clientName].plan += (parseInt(t.TAT) || 0);
+        
+        const actMins = parseDuration(t.Duration);
+        clientSummaryMap[clientName].act += actMins;
+        totalUserActMins += actMins;
+        distTasks.push(t);
+      });
+
+      const sortedClients = Object.values(clientSummaryMap).sort((a, b) => b.act - a.act);
+
+      let clientRowsHtml = '';
+      if (sortedClients.length === 0) {
+        clientRowsHtml = `<tr><td colspan="5" class="text-center py-6 text-slate-400">No active work logs to aggregate.</td></tr>`;
+      } else {
+        sortedClients.forEach(c => {
+          const sharePct = totalUserActMins > 0 ? Math.round((c.act / totalUserActMins) * 100) : 0;
+          
+          let progressColor = 'bg-blue-500';
+          if (sharePct > 50) progressColor = 'bg-purple-600';
+          else if (sharePct > 25) progressColor = 'bg-blue-600';
+          else if (sharePct > 10) progressColor = 'bg-teal-500';
+          else progressColor = 'bg-slate-400';
+
+          clientRowsHtml += `
+            <tr class="hover:bg-slate-50 border-b border-slate-100">
+              <td class="py-3 font-extrabold text-slate-800">${c.name}</td>
+              <td class="py-3 text-center font-bold text-slate-600">${c.count}</td>
+              <td class="py-3 text-center font-mono font-bold text-slate-400">${fmtMins(c.plan)}</td>
+              <td class="py-3 text-center font-mono font-bold text-slate-700">${fmtMins(c.act)}</td>
+              <td class="py-3">
+                <div class="flex items-center gap-2 justify-end">
+                  <span class="font-mono font-bold text-slate-600 text-[11px]">${sharePct}%</span>
+                  <div class="w-20 bg-slate-100 rounded-full h-1.5 overflow-hidden hidden sm:block">
+                    <div class="${progressColor} h-1.5 rounded-full" style="width: ${sharePct}%"></div>
+                  </div>
+                </div>
+              </td>
+            </tr>`;
+        });
+      }
+      
+      $('#ux-client-distribution-table tbody').html(clientRowsHtml);
+      
+      // फिक्स: समरी हेडर में डेटा भेजने के लिए इस लाइन को सुरक्षित रूप से एक्टिवेट करें
+      $('#ux-summary-client-dist').html(calculateSubTableStats(distTasks, 'Item'));
+    }
+    // समय (Hours) और संख्या (Task Count) दोनों की एक साथ सटीक गणना करने वाला फ़ंक्शन
+    function calculateSubTableStats(tasksList, itemLabel = 'Task') {
+      let planMins = 0;
+      let compPlanMins = 0;
+      let compMins = 0;
+      let pendMins = 0;
+
+      // काउंटर्स वेरिएबल्स
+      let plannedCount = 0;
+      let completedCount = 0;
+      let pendingCount = 0;
+
+      tasksList.forEach(t => {
+        if (ignoredStatuses.includes(t.Status)) return;
+        
+        plannedCount++; // कुल असाइन किए गए टास्क की संख्या
+        
+        const p = parseInt(t.TAT) || 0;
+        const a = parseDuration(t.Duration);
+        const isComp = isClosedGroup(t.Status);
+
+        planMins += p;
+        if (isComp) {
+          completedCount++; // कम्प्लीट हुए टास्क की संख्या
+          compMins += a;
+          compPlanMins += p;
+        } else {
+          pendingCount++; // पेंडिंग बचे हुए टास्क की संख्या
+          pendMins += p;
+        }
+      });
+
+      const diff = compPlanMins - compMins;
+      let diffStr = '';
+      let diffClass = '';
+      if (diff < 0) {
+        diffStr = `-${fmtMins(Math.abs(diff))} Over`;
+        diffClass = 'text-red-500 font-extrabold';
+      } else if (diff > 0) {
+        diffStr = `+${fmtMins(diff)} Saved`;
+        diffClass = 'text-emerald-500 font-extrabold';
+      } else {
+        diffStr = '0h 0m';
+        diffClass = 'text-slate-400 font-semibold';
+      }
+
+      // सिंगुलर/प्लूरल सफिक्स (जैसे: 1 Ticket vs 2 Tickets)
+      const pSuffix = plannedCount === 1 ? itemLabel : itemLabel + 's';
+      const cSuffix = completedCount === 1 ? itemLabel : itemLabel + 's';
+      const penSuffix = pendingCount === 1 ? itemLabel : itemLabel + 's';
+
+      return `
+        <span class="text-blue-600">Planned: ${fmtMins(planMins)} (${plannedCount} ${pSuffix})</span> | 
+        <span class="text-emerald-600">Completed (Logged): ${fmtMins(compMins)} (${completedCount} ${cSuffix})</span> | 
+        <span class="text-rose-500">Pending: ${fmtMins(pendMins)} (${pendingCount} ${penSuffix})</span> | 
+        <span class="${diffClass}">Diff: ${diffStr}</span>
+      `;
+    }
+
+
+    // ==================== TAB 3: CLIENT EXPLORER ====================
+   function loadClientExplorerProfile() {
+      const cName = $('#cx-client-selector').val();
+      if(!cName) {
+        $('#cx-placeholder').removeClass('hidden');
+        $('#cx-dashboard').addClass('hidden');
+        return;
+      }
+      $('#cx-placeholder').addClass('hidden');
+      $('#cx-dashboard').removeClass('hidden');
+
+      const allTasks = [...globalData.tickets, ...globalData.todo, ...globalData.fms];
+      
+      // क्रिटिकल फिक्स: केवल वही टास्क लें जो चुनी गई तारीख सीमा के अंदर हैं
+      const clientTasks = allTasks.filter(t => {
+        if (t.Client !== cName) return false;
+        if (!t.Date) return false;
+        return t.Date >= currentStartDate && t.Date <= currentEndDate;
+      });
+
+      // समय (Hours) और संख्या (Count) दोनों की एक साथ सटीक गणना (अत्यंत ऑप्टिमाइज़्ड)
+      let totalCount = 0;
+      let totalPlanMins = 0;
+
+      let pendingCount = 0;
+      let pendingPlanMins = 0;
+
+      let progressCount = 0;
+      let progressPlanMins = 0;
+
+      let closedCount = 0;
+      let closedLoggedMins = 0;
+
+      clientTasks.forEach(t => {
+        if (ignoredStatuses.includes(t.Status)) return;
+        
+        totalCount++;
+        const planMins = parseInt(t.TAT) || 0;
+        totalPlanMins += planMins;
+
+        if (isClosedGroup(t.Status)) {
+          closedCount++;
+          closedLoggedMins += parseDuration(t.Duration); // कम्प्लीटेड टास्क का एक्चुअल लॉग समय जोड़ें
+        } else if (isInProgressGroup(t.Status)) {
+          progressCount++;
+          progressPlanMins += planMins; // इन-प्रोग्रेस का प्लान्ड समय जोड़ें
+        } else {
+          pendingCount++;
+          pendingPlanMins += planMins; // पेंडिंग का प्लान्ड समय जोड़ें
+        }
+      });
+
+      // हेडर में समय और संख्या दोनों को एक साथ रेंडर करें
+      const summaryHtml = `
+        <span class="text-blue-600">Total: ${fmtMins(totalPlanMins)} (${totalCount})</span> | 
+        <span class="text-rose-500">Pending: ${fmtMins(pendingPlanMins)} (${pendingCount})</span> | 
+        <span class="text-amber-500">In Progress: ${fmtMins(progressPlanMins)} (${progressCount})</span> | 
+        <span class="text-emerald-600">Closed: ${fmtMins(closedLoggedMins)} (${closedCount})</span>
+      `;
+      $('#cx-summary-work-items').html(summaryHtml).removeClass('hidden');
+
+      // इनवॉइस और कुल बकाया राशि की कस्टमाइज़्ड गणना
+      const clientInvoices = globalData.invoices.filter(i => i.CustomerName.toLowerCase().includes(cName.toLowerCase()));
+      let outstanding = 0;
+      
+      let totalInvoices = clientInvoices.length;
+      let pendingInvoices = 0;
+      let clearedInvoices = 0;
+
+      clientInvoices.forEach(i => { 
+        outstanding += i.Outstanding; 
+        if (i.Outstanding > 0) {
+          pendingInvoices++;
+        } else {
+          clearedInvoices++;
+        }
+      });
+
+      // इनवॉइस ब्रेकडाउन हेडर में लाइव समरी डालें
+      const invoiceSummaryHtml = `
+        <span class="text-blue-600">Total: ${totalInvoices}</span> | 
+        <span class="text-rose-500">Pending: ${pendingInvoices}</span> | 
+        <span class="text-emerald-600">Cleared: ${clearedInvoices}</span>
+      `;
+      $('#cx-summary-invoices').html(invoiceSummaryHtml);
+
+      // शीर्ष KPI कार्ड्स की सटीक अपडेट
+      $('#cx-kpi-total').text(totalCount);                                 // कुल टिकट्स
+      $('#cx-kpi-pending').text(pendingCount + progressCount);             // सक्रीय काम (Pending + In Progress)
+      $('#cx-kpi-time').text(fmtMins(totalPlanMins));                      // समय आवंटन
+      $('#cx-kpi-bills').text('₹' + outstanding.toLocaleString('en-IN'));
+
+      let billHtml = '';
+      if(clientInvoices.length === 0) {
+        billHtml = `<div class="col-span-full p-6 text-center text-xs text-slate-400 font-semibold bg-slate-50 border border-dashed rounded-xl">No ledger balances recorded.</div>`;
+      } else {
+        clientInvoices.forEach(i => {
+          let labelCls = i.Outstanding > 0 ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100';
+          billHtml += `
+            <div class="p-4 bg-slate-50 border rounded-xl flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
+              <div>
+                <span class="text-xs font-bold text-slate-800 block">${i.InvoiceID || 'General Invoice'}</span>
+                <span class="text-[10px] text-slate-400 block font-semibold mt-1">Assigned Agent: ${i.AssignedCollector || 'Internal'}</span>
+              </div>
+              <div class="text-right">
+                <span class="badge-soft font-mono font-bold text-xs ${labelCls}">₹${i.Outstanding.toLocaleString('en-IN')}</span>
+              </div>
+            </div>`;
+        });
+      }
+      $('#cx-invoice-list').html(billHtml);
+
+      let taskHtml = '';
+      const sortedClientTasks = sortTasksByStatusPriority([...clientTasks]);
+      sortedClientTasks.forEach(t => {
+        let label = '';
+        if(t.Type==='FMS') label = `<span class="bg-teal-50 text-teal-700 font-extrabold px-1.5 py-0.5 rounded text-[9px]">FMS</span>`;
+        else if(t.Type==='Todo') label = `<span class="bg-indigo-50 text-indigo-700 font-extrabold px-1.5 py-0.5 rounded text-[9px]">TODO</span>`;
+        else label = `<span class="bg-blue-50 text-blue-700 font-extrabold px-1.5 py-0.5 rounded text-[9px]">TKT</span>`;
+
+        let statusColor = 'bg-slate-50 text-slate-600';
+        if (isClosedGroup(t.Status)) {
+          statusColor = 'bg-emerald-50 text-emerald-600';
+        } else if (approvalStatuses.includes(t.Status)) {
+          statusColor = 'bg-purple-50 text-purple-600 font-bold';
+        } else if (isInProgressGroup(t.Status)) {
+          statusColor = 'bg-amber-50 text-amber-600';
+        } else if (isPendingGroup(t.Status)) {
+          statusColor = 'bg-red-50 text-red-600';
+        }
+
+        // एक्चुअल TAT (लॉग समय) का विश्लेषण और अलर्ट्स की गणना
+        let actualFormatted = t.Duration || '0h 0m';
+        let planMins = parseInt(t.TAT) || 0;
+        let actualMins = parseDuration(actualFormatted);
+        
+        let timeWarningClass = '';
+        if (t.Type !== 'FMS' && planMins > 0) {
+          if (actualMins > planMins) {
+            timeWarningClass = 'text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-lg border border-rose-100 font-bold';
+          } else if (actualMins > 0) {
+            timeWarningClass = 'text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-lg border border-emerald-100 font-bold';
+          }
+        }
+
+        taskHtml += `
+          <tr class="hover:bg-slate-50">
+            <td class="py-2.5 font-semibold text-slate-400 text-[10px]">${t.Date || '-'}</td>
+            <td class="py-2.5">${label}</td>
+            <td class="py-2.5 font-semibold text-slate-700 break-words max-w-xs pr-2" title="${t.Desc}">${t.Desc}</td>
+            <td class="py-2.5 font-bold text-slate-500">${t.User}</td>
+            <td class="py-2.5 text-center font-mono font-bold text-blue-600">${fmtMins(planMins)}</td>
+            <td class="py-2.5 text-center font-mono"><span class="${timeWarningClass}">${actualFormatted}</span></td>
+            <td class="py-2.5 text-right"><span class="badge-soft ${statusColor} text-[9px] font-bold">${t.Status}</span></td>
+          </tr>`;
+      });
+      $('#cx-task-table tbody').html(taskHtml || `<tr><td colspan="7" class="text-center py-6 text-slate-400">All work clear! No support records pending.</td></tr>`);
+
+      // Dynamic Resource/User Bandwidth Distribution Calculation for Selected Client
+      const empBandwidthMap = {};
+      let totalClientActMins = 0;
+      let totalClientPlanMins = 0;
+
+      clientTasks.forEach(t => {
+        if (ignoredStatuses.includes(t.Status)) return;
+        
+        const empName = t.User || 'Unassigned';
+        if (!empBandwidthMap[empName]) {
+          empBandwidthMap[empName] = {
+            name: empName,
+            count: 0,
+            plan: 0,
+            act: 0
+          };
+        }
+        
+        empBandwidthMap[empName].count++;
+        
+        const planMins = parseInt(t.TAT) || 0;
+        empBandwidthMap[empName].plan += planMins;
+        totalClientPlanMins += planMins;
+        
+        const actMins = parseDuration(t.Duration);
+        empBandwidthMap[empName].act += actMins;
+        totalClientActMins += actMins;
+      });
+
+      const sortedEmps = Object.values(empBandwidthMap).sort((a, b) => b.act - a.act);
+      const totalEmployeesCount = sortedEmps.length;
+
+      // हेडर में बैंडविड्थ समरी रेंडर करें
+      const summaryBandwidthHtml = `
+        <span class="text-blue-600">Employees: ${totalEmployeesCount}</span> | 
+        <span class="text-amber-500">Planned: ${fmtMins(totalClientPlanMins)}</span> | 
+        <span class="text-emerald-600">Logged: ${fmtMins(totalClientActMins)}</span>
+      `;
+      $('#cx-summary-bandwidth').html(summaryBandwidthHtml);
+
+      let bandwidthRowsHtml = '';
+      if (sortedEmps.length === 0) {
+        bandwidthRowsHtml = `<tr><td colspan="5" class="text-center py-6 text-slate-400">No active resource logs recorded for this client.</td></tr>`;
+      } else {
+        sortedEmps.forEach(e => {
+          const sharePct = totalClientActMins > 0 ? Math.round((e.act / totalClientActMins) * 100) : 0;
+          
+          let progressColor = 'bg-purple-500';
+          if (sharePct > 50) progressColor = 'bg-purple-600';
+          else if (sharePct > 25) progressColor = 'bg-blue-600';
+          else if (sharePct > 10) progressColor = 'bg-teal-500';
+          else progressColor = 'bg-slate-400';
+
+          bandwidthRowsHtml += `
+            <tr class="hover:bg-slate-50 border-b border-slate-100">
+              <td class="py-3 font-extrabold text-slate-800">${e.name}</td>
+              <td class="py-3 text-center font-bold text-slate-600">${e.count}</td>
+              <td class="py-3 text-center font-mono font-bold text-slate-400">${fmtMins(e.plan)}</td>
+              <td class="py-3 text-center font-mono font-bold text-slate-700">${fmtMins(e.act)}</td>
+              <td class="py-3">
+                <div class="flex items-center gap-2 justify-end">
+                  <span class="font-mono font-bold text-slate-600 text-[11px]">${sharePct}%</span>
+                  <div class="w-20 bg-slate-100 rounded-full h-1.5 overflow-hidden hidden sm:block">
+                    <div class="${progressColor} h-1.5 rounded-full" style="width: ${sharePct}%"></div>
+                  </div>
+                </div>
+              </td>
+            </tr>`;
+        });
+      }
+      $('#cx-bandwidth-table tbody').html(bandwidthRowsHtml);
+    }
+   // ==================== TABLES RENDER DRIVERS ====================
+    function renderTable(sel, data, inst) { 
+        if (inst) { inst.destroy(); }
+        
+        let cols = [];
+        let orderConfig = [[2, 'desc'], [3, 'desc']];
+
+        if (sel === '#table-tickets') {
+            cols = [
+                { 
+                    className: 'dt-control cursor-pointer text-center text-slate-400 text-sm w-10', 
+                    orderable: false, 
+                    data: null, 
+                    defaultContent: '<i class="fas fa-caret-right"></i>' 
+                },
+                { data: 'name', className: 'font-extrabold text-slate-800' }, 
+                { data: 'total', className: 'text-center font-bold text-slate-700 bg-slate-50' }, 
+                { 
+                    data: 'completed', 
+                    className: 'text-center font-bold text-emerald-600 bg-emerald-50/40', 
+                    render: function(val) {
+                        return val > 0 ? `<span class="badge-soft bg-emerald-100 text-emerald-800">${val} Completed</span>` : `<span class="text-slate-300">-</span>`;
+                    }
+                }, 
+                { 
+                    data: 'approval', 
+                    className: 'text-center', 
+                    render: function(d) {
+                        if (d > 0) return `<span class="badge-soft bg-purple-100 text-purple-700 border border-purple-200">${d}</span>`;
+                        return `<span class="badge-soft bg-slate-100 text-slate-400">0</span>`;
+                    }
+                }, 
+                { data: 'planStr', className: 'text-center font-semibold text-slate-600' }, 
+                { data: 'actStr', className: 'text-center font-semibold text-slate-600' },
+                { 
+                    data: 'diffVal', 
+                    className: 'text-right', 
+                    render: function(val, type, row) {
+                        if (type === 'display') {
+                            if (val < 0) {
+                                const overTime = row.diffStr.replace('-', '');
+                                return `<div class="inline-flex items-center gap-1 bg-red-50 text-red-600 px-2 py-0.5 rounded border border-red-200 font-extrabold text-[10px] shadow-sm"><i class="fas fa-arrow-up text-[8px]"></i> ${overTime} Over</div>`;
+                            } else if (val > 0) {
+                                const savedTime = row.diffStr.replace('+', '');
+                                return `<div class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded border border-emerald-200 font-extrabold text-[10px] shadow-sm"><i class="fas fa-arrow-down text-[8px]"></i> ${savedTime} Saved</div>`;
+                            } else {
+                                return `<span class="text-slate-400 font-medium text-xs">On Track</span>`;
+                            }
+                        }
+                        return val; 
+                    }
+                }
+            ];
+        } else if (sel === '#table-todo') {
+            cols = [
+                { 
+                    className: 'dt-control cursor-pointer text-center text-slate-400 text-sm w-10', 
+                    orderable: false, 
+                    data: null, 
+                    defaultContent: '<i class="fas fa-caret-right"></i>' 
+                },
+                { data: 'name', className: 'font-extrabold text-slate-800' }, 
+                { data: 'total', className: 'text-center font-bold text-slate-700 bg-slate-50' }, 
+                { 
+                    data: 'completed', 
+                    className: 'text-center font-bold text-emerald-600 bg-emerald-50/40', 
+                    render: function(val) {
+                        return val > 0 ? `<span class="badge-soft bg-emerald-100 text-emerald-800">${val} Completed</span>` : `<span class="text-slate-300">-</span>`;
+                    }
+                }, 
+                { 
+                    data: 'pending', 
+                    className: 'text-center font-bold text-rose-600 bg-rose-50/40', 
+                    render: function(val) {
+                        return val > 0 ? `<span class="badge-soft bg-rose-100 text-rose-800">${val} Pending</span>` : `<span class="text-slate-300">0</span>`;
+                    }
+                },
+                { data: 'planStr', className: 'text-center font-semibold text-slate-600' }
+            ];
+        } else if (sel === '#table-fms') {
+            cols = [
+                { 
+                    className: 'dt-control cursor-pointer text-center text-slate-400 text-sm w-10', 
+                    orderable: false, 
+                    data: null, 
+                    defaultContent: '<i class="fas fa-caret-right"></i>' 
+                },
+                { data: 'name', className: 'font-extrabold text-slate-800' }, 
+                { data: 'total', className: 'text-center font-bold text-slate-700 bg-slate-50' }, 
+                { 
+                    data: 'completed', 
+                    className: 'text-center font-bold text-emerald-600 bg-emerald-50/40', 
+                    render: function(val) {
+                        return val > 0 ? `<span class="badge-soft bg-emerald-100 text-emerald-800">${val} Completed</span>` : `<span class="text-slate-300">-</span>`;
+                    }
+                }, 
+                { 
+                    data: 'pending', 
+                    className: 'text-center font-bold text-rose-600 bg-rose-50/40', 
+                    render: function(val) {
+                        return val > 0 ? `<span class="badge-soft bg-rose-100 text-rose-800">${val} Pending</span>` : `<span class="text-slate-300">0</span>`;
+                    }
+                }
+            ];
+            orderConfig = [[2, 'desc'], [3, 'desc']];
+        }
+
+        const tbl = $(sel).DataTable({ 
+            data: data, 
+            paging: false, 
+            info: false, 
+            searching: true, // SEARCHING CHANGED TO TRUE FOR UNIFIED SEARCH KEYUPS [1]
+            dom: 't',       // HIDE DEFAULT DT UI, ONLY SHOW TABLE [1]
+            order: orderConfig, 
+            language: { 
+                emptyTable: "<div class='text-slate-400 py-6 font-medium text-center'>No active tasks recorded.</div>" 
+            },
+            
+            createdRow: function(row, data, dataIndex) {
+                if (sel === '#table-tickets') {
+                    if (data.diffVal < 0) {
+                        $(row).addClass('row-poor-performance');
+                    } else if (data.diffVal > 0 && data.act > 0) {
+                        $(row).addClass('row-good-performance');
+                    } else {
+                        $(row).addClass('row-neutral');
+                    }
+                } else {
+                    $(row).addClass('row-neutral');
+                }
+            },
+
+            columns: cols
+        }); 
+
+        $(`${sel} tbody`).off('click', 'td.dt-control').on('click', 'td.dt-control', function () {
+            var tr = $(this).closest('tr'); 
+            var row = tbl.row(tr);
+            
+            if (row.child.isShown()) { 
+                row.child.hide(); 
+                $(this).html('<i class="fas fa-caret-right text-slate-300"></i>'); 
+            } else { 
+                row.child(formatChildRow(row.data(), sel)).show(); 
+                $(this).html('<i class="fas fa-caret-down text-blue-500"></i>'); 
+            }
+        });
+        
+        return tbl; 
+    }
+
+   function formatChildRow(d, sel) {
+        let vis = d.tasks.filter(t => !ignoredStatuses.includes(t.Status || 'Open'));
+        
+        if (vis.length === 0) {
+            return '<div class="p-4 text-center text-slate-400 text-xs font-semibold border border-dashed m-2 rounded-xl">No tasks to display in this range.</div>';
+        }
+
+        // Apply dynamic status sorting to push Closed / Pending Approval to the bottom
+        vis = sortTasksByStatusPriority(vis);
+
+        const isFms = (sel === '#table-fms');
+        const isTodo = (sel === '#table-todo');
+
+        let html = `
+        <div class="p-4 bg-slate-50 border-l-4 border-blue-500 rounded-r-xl m-2">
+            <table class="w-full text-left">
+                <thead>
+                    <tr class="text-[9px] text-slate-400 uppercase tracking-widest border-b pb-1">
+                        <th class="pb-2">${(isFms || isTodo) ? 'Planned Date' : 'Date'}</th>
+                        <th class="pb-2">Type</th>
+                        <th class="pb-2">${isFms ? 'Task Name' : 'Task Details'}</th>
+                        <th class="pb-2">${isFms ? 'FMS Name' : 'Client/Project'}</th>
+                        ${isFms ? '<th class="pb-2 text-center">Step no</th>' : '<th class="pb-2 text-center">Plan TAT</th>'}
+                        ${isFms ? '' : '<th class="pb-2 text-center">Actual Logged</th>'}
+                        <th class="pb-2">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="text-xs">`;
+        
+        vis.forEach(t => {
+            let typeBadge = '';
+            if (t.Type === 'FMS') {
+                typeBadge = `<span class="bg-teal-100 text-teal-700 px-2 py-0.5 rounded text-[9px]">FMS</span>`;
+            } else if (t.Type === 'Todo') {
+                typeBadge = `<span class="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded text-[9px]">TODO</span>`;
+            } else {
+                typeBadge = `<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[9px]">TKT</span>`;
+            }
+
+            const isDone = completedStatuses.includes(t.Status);
+            let sColor = 'text-slate-600 bg-slate-100'; 
+            
+            if (isDone) {
+                sColor = 'text-emerald-800 bg-emerald-100 border border-emerald-200';
+            } else if (approvalStatuses.includes(t.Status)) {
+                sColor = 'text-purple-800 bg-purple-100 border border-purple-200';
+            } else if (['Open', 'Pending', 'Urgent'].includes(t.Status)) {
+                sColor = 'text-red-700 bg-red-100 border border-red-200';
+            } else if (['In Progress', 'Re-work', 'Allocated', 'Planned', 'Assigned'].includes(t.Status)) {
+                sColor = 'text-orange-700 bg-orange-100 border border-orange-200';
+            }
+
+            let tatFormatted = '-';
+            if (t.TAT && !isNaN(t.TAT)) {
+                tatFormatted = fmtMins(parseInt(t.TAT, 10)); 
+            }
+
+            let actualFormatted = t.Duration || '0h 0m';
+            let timeWarningClass = '';
+            if (!isFms && t.TAT && !isNaN(t.TAT)) {
+                const actualMins = parseDuration(actualFormatted); 
+                if (actualMins > parseInt(t.TAT, 10)) {
+                    timeWarningClass = 'text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-100 font-bold';
+                } else if (actualMins > 0) {
+                    timeWarningClass = 'text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 font-bold';
+                }
+            }
+
+            const descStyle = isDone ? 'line-through text-slate-400 font-normal' : 'font-semibold text-slate-700';
+            const checkIcon = isDone ? '<i class="fas fa-check-double text-emerald-500 mr-1"></i>' : '';
+            
+            html += `
+                <tr class="border-b border-slate-100 hover:bg-white transition-colors">
+                    <td class="py-2.5 font-bold text-slate-500 text-[10px] whitespace-nowrap">${t.Date || '-'}</td>
+                    <td class="py-2.5">${typeBadge}</td>
+                    <td class="py-2.5 pr-4 text-[11px] ${descStyle}">${checkIcon}${t.Desc}</td>
+                    <td class="py-2.5 font-bold text-slate-600 text-[11px]">${t.Client}</td>
+                    ${isFms ? `<td class="py-2.5 text-center font-mono font-bold text-slate-600">${t.Step || '-'}</td>` : `<td class="py-2.5 text-center font-mono font-bold text-blue-600">${tatFormatted}</td>`}
+                    ${isFms ? '' : `<td class="py-2.5 text-center font-mono"><span class="${timeWarningClass}">${actualFormatted}</span></td>`}
+                    <td class="py-2.5"><span class="px-2 py-0.5 rounded-md text-[9px] font-bold ${sColor}">${t.Status}</span></td>
+                </tr>`;
+        });
+        
+        html += `</tbody></table></div>`;
+        return html;
+    }
+
+    // Load Dropdowns
+    function loadDropdowns() { 
+        google.script.run.withSuccessHandler(r => { 
+            if (r.success) { 
+                listClients = r.dropdowns.clients; 
+                listUsers = r.dropdowns.users; 
+                
+                const batchUserOptions = listUsers.map(u => `<option value="${u['Employee ID']}">${u['Employee Name']}</option>`).join('');
+                $('#batch-user').append(batchUserOptions);
+            } 
+        }).getTicketSystemData(); 
+    }
+
+    // Modal Control System
+    function openBatchModal(type) { 
+        currentBatchType = type; 
+        $('#batch-modal').removeClass('hidden'); 
+        $('#task-list-container').empty(); 
+        rowCount = 0; 
+        
+        if (type === 'ticket') {
+            $('#modal-title').html(`<i class="fas fa-ticket-alt text-blue-500 mr-2"></i> Assign Support Ticket Job`);
+        } else {
+            $('#modal-title').html(`<i class="fas fa-clipboard-list text-indigo-500 mr-2"></i> Assign General Tasks/To-Do List`);
+        }
+        addTaskRow(); 
+    }
+
+    function addTaskRow() { 
+        rowCount++; 
+        let html = `
+        <div class="bg-white border border-slate-200 p-5 rounded-xl relative shadow-sm mb-4" id="row-${rowCount}">
+            <button class="absolute -top-3 -right-3 bg-white border border-slate-200 text-red-400 hover:text-red-600 rounded-full w-8 h-8 flex items-center justify-center shadow-sm" onclick="$('#row-${rowCount}').remove()">
+                <i class="fas fa-times"></i>
+            </button>`;
+            
+        if (currentBatchType === 'ticket') {
+            const clientOpts = listClients.map(c => `<option value="${c.Client_Id}">${c['Client Name']}</option>`).join('');
+            html += `
+                <div class="mb-4">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Client</label>
+                    <select class="inp-client w-full p-2 rounded-lg text-xs bg-slate-50 border font-semibold outline-none">
+                        <option value="">Select...</option>
+                        ${clientOpts}
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Description</label>
+                    <textarea class="inp-desc w-full p-2.5 rounded-lg text-xs bg-slate-50 border outline-none" rows="2" placeholder="Write scope of work..."></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">TAT (Mins)</label>
+                        <input type="number" class="inp-tat w-full p-2 rounded-lg text-xs bg-slate-50 border outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Priority</label>
+                        <select class="inp-priority w-full p-2 rounded-lg text-xs bg-slate-50 border outline-none font-semibold">
+                            <option>Normal</option>
+                            <option>Urgent</option>
+                        </select>
+                    </div>
+                </div>
+            </div>`;
+        } else {
+            html += `
+                <div class="mb-4">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Task Description</label>
+                    <textarea class="inp-desc w-full p-2.5 rounded-lg text-xs bg-slate-50 border outline-none" rows="2" placeholder="Write description..."></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Plan Date</label>
+                        <input type="date" class="inp-date w-full p-2 rounded-lg text-xs bg-slate-50 border outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">TAT (Mins)</label>
+                        <input type="number" class="inp-tat w-full p-2 rounded-lg text-xs bg-slate-50 border outline-none" placeholder="e.g. 30">
+                    </div>
+                </div>
+            </div>`;
+        }
+        
+        $('#task-list-container').append(html); 
+    }
+
+    async function submitBatch() { 
+        const userId = $('#batch-user').val();
+        if (!userId) { return Swal.fire('Wait', 'Select employee', 'warning'); }
+        
+        const tasks = [];
+        $('.bg-white.border-slate-200.p-5').each(function() { 
+            const r = $(this); 
+            const desc = r.find('.inp-desc').val(); 
+            const tat = r.find('.inp-tat').val();
+            
+            if (desc) {
+                if (currentBatchType === 'ticket') {
+                    tasks.push({ 
+                        func: 'createTicketInSheet', 
+                        data: { 
+                            'Employee ID': userId, 
+                            Client_Id: r.find('.inp-client').val(), 
+                            Description: desc, 
+                            TAT: tat, 
+                            Priority: r.find('.inp-priority').val() 
+                        } 
+                    });
+                } else {
+                    tasks.push({ 
+                        func: 'createTodoInSheet', 
+                        data: { 
+                            'Employee ID': userId, 
+                            Description: desc, 
+                            'Plan Date': r.find('.inp-date').val(), 
+                            TAT: tat 
+                        } 
+                    });
+                }
+            }
+        });
+        
+        if (tasks.length === 0) { return Swal.fire('Warning', 'Write details for at least one row', 'warning'); }
+        
+        Swal.fire({
+            title: 'Submitting Jobs...', 
+            allowOutsideClick: false, 
+            showConfirmButton: false, 
+            didOpen: () => { Swal.showLoading(); }
+        });
+        
+        for (const task of tasks) {
+            await new Promise((res, rej) => { 
+                google.script.run.withSuccessHandler(res).withFailureHandler(rej)[task.func](task.data); 
+            });
+        }
+        
+        Swal.fire('Success', 'Jobs Assigned!', 'success'); 
+        $('#batch-modal').addClass('hidden'); 
+        refreshData(); 
+    }
+
+    // --- TIME PARSERS AND FORMATTERS ---
+    function parseDuration(s) { 
+        if (!s) return 0; 
+        const str = String(s).trim();
+        if (!isNaN(str)) { return parseInt(str, 10); }
+        
+        if (str.includes(':')) {
+            const parts = str.split(':');
+            const hrs = parseInt(parts[0], 10) || 0;
+            const mins = parseInt(parts[1], 10) || 0;
+            return (hrs * 60) + mins;
+        }
+        
+        const parts = str.split(/\s+/); 
+        let mins = 0; 
+        let matched = false;
+        
+        parts.forEach(x => { 
+            const num = parseInt(x, 10);
+            if (!isNaN(num)) {
+                if (x.includes('h')) {
+                    mins += num * 60; 
+                    matched = true;
+                } else if (x.includes('m')) {
+                    mins += num; 
+                    matched = true;
+                }
+            }
+        }); 
+        
+        if (!matched && parts.length === 1) {
+            const num = parseInt(str, 10);
+            if (!isNaN(num)) return num;
+        }
+        
+        return mins; 
+    }
+    
+    function fmtMins(m) { 
+        const h = Math.floor(m / 60); 
+        const r = m % 60; 
+        return `${h}h ${r}m`; 
+    }
+
+    // Dynamic Drill-Down Client Effort Report with Kriscel-FMS Grouping, Extra Column Calculations, and 5-min CRM FMS Activity Overrides [1]
+    function renderClientEffort(tasks) {
+      const userMap = {};
+
+      tasks.forEach(t => {
+        if (ignoredStatuses.includes(t.Status)) return;
+        const u = t.User || 'Unassigned';
+        const c = t.Client || 'Internal / General';
+        const type = t.Type || 'Ticket';
+        const actMins = parseDuration(t.Duration);
+        
+        let planMins = parseInt(t.TAT) || 0;
+        
+        // 5-min override rule for CRM FMS calls and follow-ups [1]
+        const isCrmFms = c.toLowerCase().includes('crm fms') || c.toLowerCase().includes('crm-fms') || c.toLowerCase() === 'crm';
+        const taskDesc = (t.Desc || '').toLowerCase();
+        const isCallOrFollowUp = taskDesc.includes('call') || taskDesc.includes('follow up') || taskDesc.includes('followup') || taskDesc.includes('follow-up');
+
+        if (isCrmFms && isCallOrFollowUp) {
+          planMins = 5;
+        }
+
+        const isComp = completedStatuses.includes(t.Status) || approvalStatuses.includes(t.Status);
+
+        if (!userMap[u]) {
+          userMap[u] = {
+            name: u,
+            planMins: 0,
+            compPlanMins: 0, // Planned TAT of completed/approved tasks [1]
+            compMins: 0,
+            pendMins: 0,
+            breakdown: {}
+          };
+        }
+
+        userMap[u].planMins += planMins;
+        if (isComp) {
+          userMap[u].compMins += actMins;
+          userMap[u].compPlanMins += planMins; // Collect planned TAT of completed tasks [1]
+        } else {
+          userMap[u].pendMins += planMins; // Only pending (non-completed) planned TAT is calculated [1]
+        }
+
+        // FMS belongs to Kriscel Tech [1]
+        let isFMS = (type === 'FMS' || c.toLowerCase().includes('fms'));
+        let displayClientName = c;
+
+        if (isFMS) {
+          const cleanFmsName = c.replace(/fms/gi, '').trim() + " FMS";
+          displayClientName = `Kriscel Tech Private Limited (${cleanFmsName})`;
+        }
+
+        if (!userMap[u].breakdown[displayClientName]) {
+          userMap[u].breakdown[displayClientName] = {
+            clientName: displayClientName,
+            planMins: 0,     // Client planned TAT [1]
+            compPlanMins: 0, // Client completed planned TAT [1]
+            compMins: 0,     // Client logged (completed) [1]
+            pendMins: 0,     // Client pending TAT [1]
+            isFMS: isFMS,
+            tasks: [] // Store tasks under the client breakdown [1]
+          };
+        }
+        
+        userMap[u].breakdown[displayClientName].planMins += planMins;
+        if (isComp) {
+          userMap[u].breakdown[displayClientName].compMins += actMins;
+          userMap[u].breakdown[displayClientName].compPlanMins += planMins;
+        } else {
+          userMap[u].breakdown[displayClientName].pendMins += planMins;
+        }
+        
+        userMap[u].breakdown[displayClientName].tasks.push({
+          ...t,
+          actMins: actMins,
+          planMins: planMins // Now contains the overridden 5 mins TAT! [1]
+        });
+      });
+
+      // Sort users by total planned minutes [1]
+      const sortedUsers = Object.values(userMap).sort((a, b) => b.planMins - a.planMins);
+      lastEffortReportData = sortedUsers; // Store inside global cache for easy CSV download [1]
+
+      let html = '';
+      if (sortedUsers.length === 0) {
+        html = `<tr><td colspan="6" class="text-center py-6 text-slate-400">No active work hours recorded.</td></tr>`;
+        $('#table-client-effort tbody').html(html);
+        return;
+      }
+
+      sortedUsers.forEach((user, idx) => {
+        const userIdSanitized = "user-row-" + idx;
+        
+        // Calculate dynamic difference based ONLY on completed tasks to prevent false 'Saved' time [1]
+        const diff = user.compPlanMins - user.compMins;
+        let diffStr = '';
+        let diffClass = '';
+        if (diff < 0) {
+          diffStr = `-${fmtMins(Math.abs(diff))} Over`;
+          diffClass = 'text-red-500 font-extrabold';
+        } else if (diff > 0) {
+          diffStr = `+${fmtMins(diff)} Saved`;
+          diffClass = 'text-emerald-500 font-extrabold';
+        } else {
+          diffStr = '0h 0m';
+          diffClass = 'text-slate-400 font-semibold';
+        }
+
+        // Parent Row with 4 integrated calculation metrics [1]
+        html += `
+          <tr class="user-parent-row border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors" data-user-target="${userIdSanitized}">
+            <td class="p-3 text-center text-slate-400 w-8">
+              <i class="fas fa-chevron-right expand-icon transition-transform"></i>
+            </td>
+            <td class="p-3 font-extrabold text-slate-800">${user.name}</td>
+            <td class="p-3 text-center font-mono font-bold text-blue-600">${fmtMins(user.planMins)}</td> <!-- Total Planned -->
+            <td class="p-3 text-center font-mono font-bold text-emerald-600 bg-emerald-50/20">${fmtMins(user.compMins)}</td> <!-- Total Completed Logged -->
+            <td class="p-3 text-center font-mono font-bold text-rose-500 bg-rose-50/20">${fmtMins(user.pendMins)}</td> <!-- Total Pending TAT -->
+            <td class="p-3 text-right pr-6 font-mono ${diffClass}">${diffStr}</td> <!-- Difference Plan vs Comp on Completed tasks [1] -->
+          </tr>
+          
+          <tr class="user-child-row hidden bg-slate-50/70" id="${userIdSanitized}">
+            <td colspan="6" class="p-3">
+              <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-inner">
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Client / Project Breakdown</div>
+                <table class="w-full text-xs text-left">
+                  <thead>
+                    <tr class="border-b text-slate-400 uppercase text-[9px] tracking-wider font-bold">
+                      <th class="pb-2">Client Name</th>
+                      <th class="pb-2 text-center w-16">Type</th>
+                      <th class="pb-2 text-center w-28">Planned</th> <!-- Expanded Column [1] -->
+                      <th class="pb-2 text-center w-28">Logged (Completed)</th> <!-- Expanded Column [1] -->
+                      <th class="pb-2 text-center w-28">Pending (Remaining)</th> <!-- Expanded Column [1] -->
+                      <th class="pb-2 text-right w-28 pr-2">Difference</th> <!-- Expanded Column [1] -->
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-100">`;
+
+        // Sort sub-clients by planned minutes [1]
+        const sortedBreakdown = Object.values(user.breakdown).sort((a, b) => b.planMins - a.planMins);
+        
+        sortedBreakdown.forEach((b, sIdx) => {
+          const badgeClass = b.isFMS ? "bg-teal-50 text-teal-700" : "bg-blue-50 text-blue-700";
+          const badgeText = b.isFMS ? "FMS" : "TICKET";
+          const clientRowId = userIdSanitized + "-client-" + sIdx;
+
+          // Calculate difference for each client row based ONLY on completed tasks [1]
+          const clientDiff = b.compPlanMins - b.compMins;
+          let clientDiffStr = '';
+          let clientDiffClass = '';
+          if (clientDiff < 0) {
+            clientDiffStr = `-${fmtMins(Math.abs(clientDiff))} Over`;
+            clientDiffClass = 'text-red-500 font-bold';
+          } else if (clientDiff > 0) {
+            clientDiffStr = `+${fmtMins(clientDiff)} Saved`;
+            clientDiffClass = 'text-emerald-500 font-bold';
+          } else {
+            clientDiffStr = '0h 0m';
+            clientDiffClass = 'text-slate-400 font-semibold';
+          }
+
+          // Sub-row containing detailed 4 calculations [1]
+          html += `
+            <tr class="client-parent-row hover:bg-slate-100/50 cursor-pointer border-b border-slate-100" data-client-target="${clientRowId}">
+              <td class="py-2.5 font-bold text-slate-700">
+                <i class="fas fa-caret-right mr-1.5 sub-expand-icon text-slate-400 transition-transform"></i> ${b.clientName}
+              </td>
+              <td class="py-2.5 text-center">
+                <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${badgeClass}">${badgeText}</span>
+              </td>
+              <td class="py-2.5 text-center font-mono text-slate-500 font-semibold">${fmtMins(b.planMins)}</td> <!-- Planned -->
+              <td class="py-2.5 text-center font-mono text-emerald-600 font-bold bg-emerald-50/10">${fmtMins(b.compMins)}</td> <!-- Logged (Completed) -->
+              <td class="py-2.5 text-center font-mono text-rose-500 font-bold bg-rose-50/10">${fmtMins(b.pendMins)}</td> <!-- Pending (Remaining) -->
+              <td class="py-2.5 text-right font-mono ${clientDiffClass} pr-2">${clientDiffStr}</td> <!-- Difference -->
+            </tr>
+            
+            <!-- Grandchild row: Detailed task list (colspan updated to 6) [1] -->
+            <tr class="client-child-row hidden bg-slate-50" id="${clientRowId}">
+              <td colspan="6" class="p-3">
+                <div class="space-y-1.5 border-l-2 border-indigo-500 pl-3 py-1">
+                  <div class="text-[9px] uppercase font-black text-slate-400 tracking-wider mb-2">Task / Step Details</div>
+                  <table class="w-full text-[11px] text-left">
+                    <thead>
+                      <tr class="text-[9px] uppercase text-slate-400 border-b">
+                        <th class="pb-1 font-bold">Planned Date</th>
+                        <th class="pb-1 font-bold">Task Detail / Step Name</th>
+                        <th class="pb-1 text-center font-bold">Plan TAT</th>
+                        <th class="pb-1 text-center font-bold">Actual</th>
+                        <th class="pb-1 text-right font-bold pr-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>`;
+          
+          // Sort tasks: pending first, then by date descending [1]
+          const sortedTasks = b.tasks.sort((tA, tB) => {
+            const isPendingA = !completedStatuses.includes(tA.Status) && !approvalStatuses.includes(tA.Status);
+            const isPendingB = !completedStatuses.includes(tB.Status) && !approvalStatuses.includes(tB.Status);
+            if (isPendingA !== isPendingB) return isPendingB - isPendingA;
+            return (tB.Date || '').localeCompare(tA.Date || '');
+          });
+
+          sortedTasks.forEach(t => {
+            const isPending = !completedStatuses.includes(t.Status) && !approvalStatuses.includes(t.Status);
+            const statusColor = isPending ? 'bg-rose-50 text-rose-700 font-extrabold' : 'bg-emerald-50 text-emerald-600';
+            const statusText = t.Status || 'Pending';
+            const plannedDate = t.Date || 'No Date';
+            const stepBadge = t.Step ? `<span class="bg-slate-100 text-slate-600 px-1 rounded text-[9px] mr-1">Step ${t.Step}</span>` : '';
+
+            html += `
+              <tr class="border-b border-slate-100/50 hover:bg-white/80 transition-colors">
+                <td class="py-2 text-slate-500 font-semibold">${plannedDate}</td>
+                <td class="py-2 text-slate-700 font-medium break-words max-w-xs">${stepBadge}${t.Desc || '-'}</td>
+                <td class="py-2 text-center font-mono text-blue-600 font-bold">${fmtMins(t.planMins)}</td>
+                <td class="py-2 text-center font-mono text-slate-500">${t.Duration || '0h 0m'}</td>
+                <td class="py-2 text-right pr-2">
+                  <span class="px-1.5 py-0.5 rounded-md text-[9px] font-bold ${statusColor}">${statusText}</span>
+                </td>
+              </tr>`;
+          });
+
+          html += `
+                    </tbody>
+                  </table>
+                </div>
+              </td>
+            </tr>`;
+        });
+
+        html += `
+                  </tbody>
+                </table>
+              </div>
+            </td>
+          </tr>`;
+      });
+
+      $('#table-client-effort tbody').html(html);
+    }
+
+    // Dynamic Instant Closure Audit Renderer with Planned TAT [1]
+    function renderInstantClosures(tasks) {
+      let html = '';
+      const flagged = tasks.filter(t => {
+        if (t.Type !== 'Ticket') return false;
+        if (!completedStatuses.includes(t.Status)) return false;
+        const mins = parseDuration(t.Duration);
+        return mins > 0 && mins < 15; // Flags tickets closed in less than 15 mins
+      });
+      
+      flagged.forEach(t => {
+        // Format TAT safely
+        let tatFormatted = '-';
+        if (t.TAT && !isNaN(t.TAT)) {
+          tatFormatted = fmtMins(parseInt(t.TAT, 10)); 
+        }
+
+        html += `
+          <tr class="border-b border-slate-100 hover:bg-red-50/50">
+            <td class="p-2 font-bold text-slate-700">${t.User}</td>
+            <td class="p-2 text-slate-600 font-semibold truncate max-w-xs">${t.Desc}</td>
+            <td class="p-2 text-slate-500">${t.Client}</td>
+            <td class="p-2 text-slate-400">${t.Date || '-'}</td>
+            <td class="p-2 text-center font-mono font-bold text-blue-600">${tatFormatted}</td> <!-- Planned TAT column cell -->
+            <td class="p-2 text-right font-mono font-bold text-red-600">${t.Duration}</td>
+          </tr>`;
+      });
+      
+      $('#table-audit tbody').html(html || '<tr><td colspan="6" class="text-center py-4 text-slate-400">No flag alerts detected.</td></tr>');
+    }
+
+    // Dynamic Drill-Down Collapsible Row Toggle Action with Smooth Transforms [1]
+    $(document).off('click', '.user-parent-row').on('click', '.user-parent-row', function() {
+        const targetId = $(this).data('user-target');
+        const childRow = $('#' + targetId);
+        const icon = $(this).find('.expand-icon');
+        
+        if (childRow.hasClass('hidden')) {
+            childRow.removeClass('hidden');
+            icon.css('transform', 'rotate(90deg)').addClass('text-indigo-500'); // Smooth rotate to down [1]
+        } else {
+            childRow.addClass('hidden');
+            icon.css('transform', 'rotate(0deg)').removeClass('text-indigo-500'); // Rotate back to right [1]
+        }
+    });
+
+    // Grandchild Collapsible toggle logic (Client row toggle with Smooth Transforms) [1]
+    $(document).off('click', '.client-parent-row').on('click', '.client-parent-row', function(e) {
+        e.stopPropagation(); // Prevents collapse of main parent row
+        const targetId = $(this).data('client-target');
+        const childRow = $('#' + targetId);
+        const icon = $(this).find('.sub-expand-icon');
+        
+        if (childRow.hasClass('hidden')) {
+            childRow.removeClass('hidden');
+            icon.css('transform', 'rotate(90deg)').addClass('text-indigo-500'); // Smooth rotate to down [1]
+        } else {
+            childRow.addClass('hidden');
+            icon.css('transform', 'rotate(0deg)').removeClass('text-indigo-500'); // Rotate back to right [1]
+        }
+    });
+
+    // UNIFIED SEARCH ENGINE METHOD: Type करते ही सभी टेबल्स और एफ्फोर्ट रो फ़िल्टर होंगे [1]
+    function filterOverviewTables() {
+      const term = $('#global-search').val().trim().toLowerCase();
+      localStorage.setItem(dashboardSearchStorageKey, $('#global-search').val() || '');
+      
+      // Filter Datatables cleanly
+      if (tblTickets) tblTickets.search(term).draw();
+      if (tblTodo) tblTodo.search(term).draw();
+      if (tblFms) tblFms.search(term).draw();
+      
+      // Filter Employee row headers in Client Effort Drill Down
+      $('.user-parent-row').each(function() {
+        const name = $(this).find('td:nth-child(2)').text().toLowerCase();
+        const targetId = $(this).data('user-target');
+        const childRow = $('#' + targetId);
+        
+        if (name.includes(term)) {
+          $(this).show();
+        } else {
+          $(this).hide();
+          childRow.addClass('hidden'); // Auto-collapse if hidden
+        }
+      });
+    }
+
+    // CLIENT SIDE EXPORT CSV ENGINE: वर्तमान फ़िल्टर डेटा रीयल-TIME में एक्सपोर्ट करें [1]
+    function exportEffortCSV() {
+      if (lastEffortReportData.length === 0) {
+        return Swal.fire('Wait', 'No effort logs to export!', 'warning');
+      }
+      
+      let csvContent = "data:text/csv;charset=utf-8,";
+      csvContent += "Employee Name,Client / Project,Planned (Hrs),Logged Completed (Hrs),Pending Remaining (Hrs),Difference\n";
+      
+      lastEffortReportData.forEach(user => {
+        // Parent summary line
+        const diffText = user.compPlanMins >= user.compMins 
+          ? `+${fmtMins(user.compPlanMins - user.compMins)} Saved`
+          : `-${fmtMins(Math.abs(user.compPlanMins - user.compMins))} Over`;
+          
+        csvContent += `"${user.name} (TOTAL)",,${(user.planMins/60).toFixed(2)}h,${(user.compMins/60).toFixed(2)}h,${(user.pendMins/60).toFixed(2)}h,"${diffText}"\n`;
+        
+        // Nested details lines
+        Object.values(user.breakdown).forEach(b => {
+          const clientDiff = b.compPlanMins - b.compMins;
+          const clientDiffText = clientDiff >= 0 ? `+${fmtMins(clientDiff)} Saved` : `-${fmtMins(Math.abs(clientDiff))} Over`;
+          csvContent += `,"${b.clientName}",${(b.planMins/60).toFixed(2)}h,${(b.compMins/60).toFixed(2)}h,${(b.pendMins/60).toFixed(2)}h,"${clientDiffText}"\n`;
+        });
+      });
+      
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `Workspace_Effort_Report_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // Dynamic Tables & Cards Folding Animation Method [1]
+    $(document).on('click', '.card-collapsible-header', function() {
+      const targetId = $(this).data('card-target');
+      const body = $('#' + targetId);
+      const icon = $(this).find('.card-toggle-icon');
+      
+      body.slideToggle(200, function() {
+        if (body.is(':visible')) {
+          icon.css('transform', 'rotate(0deg)');
+        } else {
+          icon.css('transform', 'rotate(-90deg)');
+        }
+      });
+    });
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,1043 @@
+  WorkTrack ERP - Developer Handoff Blueprint
+
+Detailed SRS + module workflow + data model + API blueprint based on uploaded Apps Script, WorkTrack
+                                       UI, Client Portal, and Analytics Dashboard code
+
+Document item                             Value
+Prepared for                              ERP developer / implementation team
+Prepared on                               02 Jul 2026
+Source reviewed                           6 uploaded files: backend, WorkTrack UI, Client Portal backend,
+                                          Client Portal UI, Dashboard backend, Dashboard UI
+Approximate source size                   24,536 lines
+Detected functions / handlers             391
+Goal                                      Build a secure, scalable ERP without missing any current workflow
+
+1. Executive Summary
+
+Current system is a Google Apps Script + Google Sheets based ERP MVP with three major portals: WorkTrack
+Employee/Admin Portal, Client Portal, and Master Analytics Dashboard. It already includes users, hierarchy, attendance,
+leave/intimation, tickets, expenses, FMS, To-Do, client tickets, payment restriction, invoices, reports, WhatsApp notifications,
+and trigger-based reminders.
+
+Developer objective: convert this MVP into a stable ERP product with central authentication, role based access control,
+normalized database, audit logs, clean APIs, reusable UI modules, and reliable reporting. The sections below describe every
+current module, required screens, backend services, database tables, workflows, validation rules, and missing improvements.
+
+2. Source Code Inventory
+
+File                 Lines     Functions  UI IDs                                                            Purpose
+Pasted text.txt      6089      147        0
+                                                                                                            Main WorkTrack
+Pasted text (2).txt  9709      99         356                                                               backend: users,
+                                                                                                            approvals, dashboard,
+Pasted code (3).js   823       30         0                                                                 attendance, tickets,
+                                                                                                            expenses, FMS, To-Do,
+Pasted text (4).txt  3553      53         101                                                               notifications, utilities
+
+Pasted code (5).js   514       19         0                                                                 WorkTrack frontend
+                                                                                                            HTML/JS/CSS: login,
+Pasted text (6).txt  3848      43         104                                                               sidebar, dashboards,
+                                                                                                            attendance, tickets,
+                                                                                                            employee master,
+                                                                                                            approvals, reports, FMS,
+                                                                                                            forms, clients
+
+                                                                                                            Client Portal backend:
+                                                                                                            client auth, ticket
+                                                                                                            creation, invoices,
+                                                                                                            reports, checklist/social
+                                                                                                            tasks, messages,
+                                                                                                            notifications
+
+                                                                                                            Client Portal frontend:
+                                                                                                            login, dashboard, ticket
+                                                                                                            views, checklists, social
+                                                                                                            tasks, invoices, reports,
+                                                                                                            chat
+
+                                                                                                            Master Analytics
+                                                                                                            backend: reports
+                                                                                                            aggregation, date
+                                                                                                            parsing, ticket/todo
+                                                                                                            creation, unified task
+                                                                                                            mapping
+
+                                                                                                            Master Analytics
+                                                                                                            frontend: filters, KPIs,
+
+                     WorkTrack ERP Developer Handoff Blueprint - confidential implementation specification
+                                                                                                            charts, workload tables,
+                                                                                                            explorer, batch tasks,
+                                                                                                            CSV export
+
+3. Target ERP Architecture  Recommended implementation                  Reason
+                            React / Next.js web app with role-based     Modern UI, reusable components, faster
+ Layer                      routes                                      development than large single HTML files
+ Frontend                   Node.js/NestJS or Express API services      Clean business logic, validation,
+ Backend API                                                            background jobs, audit logging
+ Database                   PostgreSQL / Supabase                       Relational workflows, reporting, constraints,
+ Authentication                                                         joins, backups
+ File storage               Hashed passwords + refresh tokens +         Avoid plain sheet passwords and default
+ Notifications              optional OTP                                123456 risk
+ Reporting                  Google Drive API / S3 compatible storage    Attachments, attendance photos, receipts,
+ Admin tooling                                                          proofs
+                            WhatsApp provider + email queue + retry     Reliable alerts without blocking user actions
+                            logs
+                            Materialized report views + dashboard APIs  Avoid reading every sheet for every
+                                                                        dashboard request
+                            Settings UI for roles, permissions,         No hardcoded IDs or business rules in
+                            templates, holidays, TAT rules              source code
+
+4. Global ERP Roles and Permission Matrix
+
+All modules must use one central RBAC engine. Do not hardcode employee IDs for restrictions. Store permission rows in
+database and evaluate them server side for every API call.
+
+Role                        Access scope                                Key permissions
+Super Admin                 Entire company
+                                                                        Manage all data, reports, settings, users,
+Admin                       Assigned departments/teams                  clients, final approvals except rules explicitly
+HR                          Employees except restricted categories if   restricted by permission table
+Manager / Team Lead         configured
+Employee / User             Own team                                    Manage tickets, team attendance, reports,
+                            Self                                        task assignment, client work
+Client
+                            Own client account only                     Employee master, attendance approvals,
+Finance / Accounts                                                      leave/intimation, onboarding, HR reports
+                            Finance scope
+                                                                        Approve team tickets/leaves/attendance,
+                                                                        reassign tasks, see team reports
+
+                                                                        Punch attendance, submit
+                                                                        leave/intimation/expense, work on assigned
+                                                                        tickets/FMS/todo, chat
+
+                                                                        Create tickets, view own tasks,
+                                                                        approve/reject, respond, invoices, reports,
+                                                                        chat
+
+                                                                        Invoices, payments, expenses, client
+                                                                        payment restrictions, revenue reports
+
+5. Global Status Standardization
+
+Developer should create a controlled status master. Current code checks many free-text statuses. ERP should map them into
+consistent groups.
+
+Entity                      Allowed statuses                            Notes
+Ticket
+                            Open, Assigned, In Progress, Paused,        Use status_history table for every transition
+Attendance
+Leave                       Pending Client Response, Client
+
+                            Responded, Pending Approval, HR
+
+                            Approved, Rework, Closed, Cancelled
+
+                            Present, Late, Need Approval, Pending,      Separate raw punch action from approval
+
+                            Approved, Rejected, Missed Punch, Half      status
+
+                            Day
+
+                            Pending, Approved, Rejected, Cancelled      Balance should update only after approval
+
+                     WorkTrack ERP Developer Handoff Blueprint - confidential implementation specification
+Intimation  Submitted, Approved, Rejected, Cancelled     Late coming / WFH / short leave types
+Expense     Pending, Verified, Approved, Rejected, Paid
+                                                         Finance payment separate from manager
+FMS         Future, Pending, In Progress, Completed,     approval
+            Overdue
+Todo        Pending, Completed, Deleted                  Actual Date determines completion in
+Invoice     Draft, Sent, Partial, Paid, Full Payment     current code
+            Received, Overdue, Cancelled
+                                                         Deleted should be soft delete
+
+                                                         Payment restriction should read canonical
+                                                         status
+
+            WorkTrack ERP Developer Handoff Blueprint - confidential implementation specification
+6. Module 1 - Authentication and Session Management
+
+Current behavior: employee/client login data is read from sheets. New app users are auto-created from employee master and
+currently receive default password. Developer must replace this with secure auth.
+
+Feature             Current need                                   Developer implementation
+Employee login      Employee ID + password
+                                                                   /auth/login with hashed password,
+Client login        Client ID + password                           JWT/session token, device metadata
+
+Password storage    Plain/default passwords exist in current       Separate client_auth table or
+                    MVP                                            user_type=client with tenant_id
+First login         New user must change default password
+                                                                   bcrypt/argon2 hash; never store or send
+Forgot password     Not reliable in sheet MVP                      plain passwords
+Session expiry      Browser state currently likely local
+                                                                   force_password_reset flag + one-time setup
+Access enforcement  Mostly UI and function checks                  link
+
+                                                                   OTP/email reset token with expiry
+
+                                                                   Access token short expiry + refresh token +
+                                                                   logout invalidation
+
+                                                                   Every API must call authorize(user, action,
+                                                                   resource) server-side
+
+7. Module 2 - Employee Master and User Management
+
+This is the root module for WorkTrack hierarchy. Employee Master should sync with Users table but not overwrite manually
+controlled fields unless allowed.
+
+Screen              Fields / actions                               Developer notes
+Employee List       Search, filter by category/status/department,  Tabs: Master, EMP, Intern, Freelancer,
+Add/Edit Employee   view active/inactive                           Inactive, Users
+                    Name, User ID, Emp Code, phone, email,         Validate unique User ID and Employee ID
+User Account Sync   department, designation, joining date,
+Role Assignment     status, manager, task approver, documents      Set status active/inactive based on
+Inactive/Exit Flow  Create login account from Employee Master      employee status
+Documents                                                          Role changes must be audit logged
+                    Role, manager ID, task approver,
+                    department, permissions                        Disable login, keep historical work and
+                    Resigned, terminated, inactive                 reports
+                                                                   Private storage, not public links by default
+                    Upload Aadhaar/PAN/offer/other docs if
+                    needed
+
+1. HR/Admin opens Employee Master.
+2. Adds employee with required personal and official details.
+3. System validates duplicate Employee ID/User ID/mobile/email.
+4. System creates user account with role=User by default unless admin selects another role.
+5. System sends secure onboarding link, not plain password.
+6. Manager and Task Approver are assigned.
+7. User appears in active users for tickets/FMS/to-do assignment.
+8. When status becomes resigned/inactive/terminated, login is disabled but historical records remain visible in reports.
+
+8. Module 3 - Hierarchy and Approval Engine
+
+Approval should be implemented as one reusable service, not separately inside each module. Current logic uses Task
+Approver first, Manager fallback, and reassigned ticket approver overrides previous manager. Keep this behavior.
+
+Approval type       Approver logic                                 Required actions
+Attendance          Manager/Admin for team, HR/Super Admin
+                    based on permission                            Approve, reject, add remarks, edit status if
+Leave               Manager/Admin team, HR/Super Admin             permitted
+
+Intimation          Manager/Admin team, HR/Super Admin             Approve/reject, update leave balance, notify
+                                                                   employee
+Ticket completion   Task Approver first, Manager fallback,
+                                                                   Approve/reject, link to attendance if
+                                                                   applicable
+
+                                                                   Approve close, reject/rework, transfer
+
+                    WorkTrack ERP Developer Handoff Blueprint - confidential implementation specification
+Expense           Reassigned To overrides old approver            approval
+Client approval                                                   Verify, approve, reject, mark paid
+                  Manager/HR/Finance/Super Admin based
+                  on amount and policy                            Approve, reject, request changes, respond
+
+                  Client on own tickets/social/checklists
+
+9. Module 4 - Attendance Management  Developer specification
+
+ Component                           Capture action, date, time, employee, photo URL, latitude,
+ Punch In/Out                        longitude, device/IP, remarks, approval status
+
+ Attendance Gate                     If employee has not punched in, block starting task if company
+                                     policy requires it
+ Geo/photo proof
+ Late/missed punch                   Store proof privately; provide signed/permissioned URL to approver
+
+ Daily status                        Auto-detect late, missing punch, missing punch out; generate
+ Approval dashboard                  approval request
+
+ Reports                             Present, Absent, Late, Half Day, On Leave, WFH, Holiday
+
+                                     Group by employee + date, show punch-in/out, duration, proof,
+                                     approve/reject
+
+                                     Daily attendance, monthly attendance, employee attendance
+                                     history, late count, missing punch count
+
+9. Employee opens Attendance page.
+10. System checks today attendance state.
+11. Employee captures photo or allows location, then punches in.
+12. System saves raw punch record and calculates status: on time, late, need approval, etc.
+13. If punch out, system calculates working duration.
+14. If approval needed, record goes to approver queue.
+15. Approver reviews proof and approves/rejects with remarks.
+16. Dashboard and payroll/HR reports consume approved attendance summary.
+
+10. Module 5 - Leave and Intimation
+
+Submodule         Fields                                          Workflow
+Leave Request                                                     Submit -> Manager/HR approval -> balance
+                  Employee, leave type, start date, end date,     update -> notify employee
+Intimation        reason, attachment, status, approver,
+                  remarks                                         Submit -> approval -> attendance
+Leave Balance                                                     adjustment if applicable
+Calendar          Type, date, reason, in/out time if applicable,  Should be separate from requests table
+                  status, approver, remarks                       Used in attendance and workload planning
+
+                  Opening, earned, used, pending, remaining
+
+                  Approved leaves, holidays, WFH
+
+11. Module 6 - Ticket / Task Management
+
+Ticket module is the core operating system for client and internal work. It should support creation by employee, manager,
+admin, client portal, and automated batch import.
+
+Feature                              Required behavior
+Create Ticket
+Bulk Create                          Fields: ticket ID, client, creator, assignee, category, priority,
+Assignment                           description, plan date, TAT, attachments, source
+Timer
+Reassign to User                     Allow multiple rows from UI/client portal; validate required fields per
+Send to Client                       row before save
+
+                                     Assign to employee; notify assignee; visible based on
+                                     role/team/client
+
+                                     Start, pause, resume, end. Store sessions in ticket_time_logs, not
+                                     only total duration text
+
+                                     Track reassigned_by, reassigned_to, old assignee, reason,
+                                     timestamp
+
+                                     Move to Pending Client Response; client can
+                                     respond/approve/reject
+
+                  WorkTrack ERP Developer Handoff Blueprint - confidential implementation specification
+Client Responded              Employee/manager sees response and continues work
+Submit for Approval
+                              Employee ends work -> Pending Approval to Task
+Approve Close                 Approver/Manager
+History
+Chat                          Approver closes ticket or sends to Rework with remarks
+
+TAT reminders                 Every change goes into ticket_history with old/new value and actor
+
+                              Task-level messages with read/unread state for employee, client,
+                              manager
+
+                              Notify before/after planned start and overdue; escalate if not
+                              started/completed
+
+17. Ticket is created by employee/admin/client/batch.
+18. System generates stable unique ticket ID; row number must not be primary ID.
+19. Ticket is assigned to employee or queue.
+20. Assignee receives notification with TAT, priority, client, and description.
+21. Assignee starts timer only if attendance gate passes.
+22. Assignee may pause/resume; system stores each session.
+23. If input from client is required, assignee sends to client with clear question/attachment.
+24. Client responds from Client Portal; status becomes Client Responded.
+25. Assignee completes work and submits for approval.
+26. Approver reviews output, duration, remarks, and either closes or sends rework.
+27. Closed ticket appears in client report and ERP dashboard.
+
+12. Module 7 - Client Portal
+
+Client Portal is a tenant-limited portal. Client must only see records for their own Client_Id.
+
+Screen                        Purpose                                        Developer requirements
+Client Login                  Client authentication
+                                                                             Secure password hash, active status check,
+Client Dashboard              Summary of                                     no data leakage
+                              open/completed/pending/invoice states
+Create Tickets                                                               Cards: Open tickets, completed tickets,
+                              Bulk ticket creation with attachments          awaiting response, invoices due, recent
+Tickets                                                                      activity
+                              Open/completed filters, status badge, detail,
+Checklist Tasks               chat, response                                 Payment restriction check before ticket
+                              Service checklist visibility                   actions
+Social Media Tasks
+Invoices                      Post approval workflow                         Client can respond, approve/reject where
+                              Invoice list and status                        allowed
+Reports
+Notifications                 Client monthly report                          Client can view details/status and approvals
+                              Unread updates                                 if configured
+
+                                                                             Approve/reject social posts, view history
+
+                                                                             Due amount, date, status, downloadable
+                                                                             invoice, payment link if added
+
+                                                                             Charts + table + export PDF/CSV
+
+                                                                             Polling/websocket; mark as notified/read
+
+13. Module 8 - Payment Restriction and Finance
+
+Current client backend blocks ticket actions if an unpaid invoice is older than 10 days. ERP should keep this as configurable
+policy, not hardcoded.
+
+Functionality                 Developer specification
+Invoice master
+Payment log                   Invoice ID, client, date, due date, amount, tax, paid amount,
+Restriction policy            balance, status, PDF URL
+Restriction check
+Alerts                        Payment ID, invoice ID, mode, transaction ref, amount, date,
+Finance dashboard             recorded by
+
+                              Policy table: client, grace days, restrict ticket
+                              create/respond/approve yes/no
+
+                              Before client ticket creation/action, calculate overdue unpaid
+                              invoices
+
+                              Send reminders before due, on due, after due, and before
+                              restriction
+
+                              Receivables, overdue clients, monthly revenue, payment aging
+
+                     WorkTrack ERP Developer Handoff Blueprint - confidential implementation specification
+14. Module 9 - Expense Management  Fields and behavior
+                                   Date, type, amount, description, receipt, employee, status pending
+ Screen / action                   Approver sees receipt, amount, employee, remarks
+ Submit Expense                    Pending -> Verified -> Approved/Rejected -> Paid
+ Review Expense                    Notify HR/Finance/Super Admin based on policy
+ Approval Flow                     Employee expense history, pending claims, monthly total, type-wise
+ Notifications                     expense
+ Reports
+
+15. Module 10 - FMS Workflow
+
+FMS appears as structured recurring/process tasks. Current logic maps FMS fields flexibly and marks completion by Actual
+Date. Developer should formalize this into process templates and generated tasks.
+
+Feature                            Developer specification
+FMS Template
+                                   Process name, step name, assigned role/person, planned duration,
+FMS Task                           dependency, frequency
+
+Visibility                         Generated task instance with planned date, actual date, assignee,
+                                   status, TAT
+Future Task Logic
+Completion                         Self tasks, team tasks, admin all tasks based on role and
+Special TAT Rules                  assignment token
+Reports
+                                   Tasks with future planned date should not count as overdue
+
+                                   Mark done with actual date/time, remarks, attachment if required
+
+                                   Configurable overrides e.g., CRM follow-up/call = 5 minutes
+
+                                   Pending, overdue, completed, employee-wise and client/process-
+                                   wise workload
+
+16. Module 11 - To-Do System       Developer specification
+                                   Title/description, assignee, due date, priority, created by, source
+ Feature                           Admin can add multiple todos
+ Create Todo                       Employee sees own pending/completed
+ Bulk Todo                         Manager/Admin sees team
+ My Todos                          Company pending To-Dos summary
+ Team Todos                        Mark deleted, do not remove row permanently
+ Super Admin Audit                 Pending by assignee, overdue, completed count
+ Soft Delete
+ Reports
+
+17. Module 12 - Chat, Comments, and Messages
+
+Task-level communication should be unified across WorkTrack and Client Portal.
+
+Requirement                        Specification
+Message entity                     message_id, task_type, task_id, sender_type, sender_id, body,
+                                   attachments, created_at
+Read state                         message_read table per user/client; unread badge count
+Task types                         Ticket, checklist, social task, FMS if enabled
+Visibility                         Only participants with task access can read/post
+Notifications                      New message triggers WhatsApp/email/in-app as configured
+Audit                              Edited/deleted messages tracked; avoid permanent delete
+
+18. Module 13 - Forms and Client Portal Configuration
+
+Current WorkTrack includes Forms and Clients Portal admin functions. Developer should make these configurable screens.
+
+Admin area                                                                   Purpose
+Forms Portal Data                                                            Manage form entries, status, filters, permissions
+Client Portal Data                                                           Manage client portal records and access
+                    WorkTrack ERP Developer Handoff Blueprint - confidential implementation specification
+Dynamic Filters                        Department, service, client, status, date
+Permissions                            Only allowed admins can add/edit/delete
+Audit                                  Every admin change captured
+
+19. Module 14 - Master Analytics Dashboard
+
+This dashboard is the executive ERP report layer. It should not directly scan raw operational tables every time in production.
+Create reporting views and materialized summaries.
+
+Dashboard area                         Metrics and behavior
+Overview
+                                       Active users, active clients, open tasks, completed tasks, overdue,
+Workload Table                         pending approvals, total planned/actual hours
+
+Employee Explorer                      Combined Tickets + FMS + To-Do with normalized fields: id, desc,
+                                       type, client, employee, status, planned date, TAT, duration
+Client Explorer
+Performance Analytics                  Employee profile, attendance, workload, performance, overdue
+                                       breakdown
+Filters
+Batch Creation                         Client-wise tickets, tasks, effort, status, invoices
+Exports
+                                       Efficiency, planned vs actual, delay, instant closures, poor/good
+                                       performance flags
+
+                                       Date range, employee, client, status, task type, department
+
+                                       Create ticket/todo rows from dashboard if permitted
+
+                                       CSV/PDF export by table and report
+
+20. Module 15 - Notifications, Triggers, and Automation
+
+Automation              Trigger / condition                  Action
+Daily Pending Reminder  Morning/evening scheduled job        Send user attendance + pending ticket/todo
+                                                             summary
+Super Admin Audit       Scheduled job                        Send company pending To-Do report
+Company Summary         Scheduled job                        Send attendance + task summary to
+                                                             leadership
+Ticket Assignment       Ticket assigned/reassigned           Notify assignee with task details
+TAT Reminder            Not started / due soon / overdue     Notify employee, then manager, then super
+                                                             admin
+Expense Claim           New expense submitted                Notify HR/Finance/Super Admin
+Payment Reminder        Invoice due/overdue                  Notify client/account manager
+Client Update           Client responds or approves/rejects  Notify task owner/manager
+Retry Failed WhatsApp   Scheduled retry                      Use notification_logs with status
+                                                             failed/retried/sent
+
+                        WorkTrack ERP Developer Handoff Blueprint - confidential implementation specification
+21. Database Schema Blueprint
+
+Below is the minimum normalized schema. Developer can implement with PostgreSQL/Supabase. Use UUID primary keys
+internally and readable business codes for display.
+
+Table                                Fields
+users
+                                     id, employee_code, user_id, name, email, mobile, password_hash,
+roles                                role_id, department_id, manager_id, task_approver_id, status,
+permissions                          force_password_reset, created_at, updated_at
+departments
+clients                              id, name, description, is_system
+
+client_contacts                      id, role_id/user_id, module, action, scope, allow
+tickets
+                                     id, name, status
+ticket_history
+                                     id, client_code, name, services, account_manager_id, status,
+ticket_time_logs                     billing_cycle, portal_enabled
+
+messages                             id, client_id, name, email, mobile, role, login_enabled
+
+message_reads                        id, ticket_code, source, client_id, creator_user_id, creator_client_id,
+attendance                           assignee_id, category, priority, description, plan_date, tat_minutes,
+                                     status, current_approver_id, close_date, last_update_at
+attendance_summary
+                                     id, ticket_id, actor_type, actor_id, action, old_value, new_value,
+leave_requests                       remarks, created_at
+
+leave_balances                       id, ticket_id, user_id, start_at, pause_at, end_at, duration_minutes,
+intimations                          remarks
+
+expenses                             id, task_type, task_id, sender_type, sender_id, body,
+                                     attachment_url, created_at
+invoices
+                                     id, message_id, reader_type, reader_id, read_at
+payments
+fms_templates                        id, user_id, date, action, time, photo_url, latitude, longitude,
+fms_tasks                            duration_minutes, status, approval_status, approver_id, remarks
+
+todos                                id, user_id, date, punch_in, punch_out, work_minutes, status,
+                                     approval_status
+attachments
+                                     id, user_id, leave_type, start_date, end_date, reason, status,
+notification_logs                    approver_id, remarks, created_at
+
+audit_logs                           id, user_id, leave_type, opening, earned, used, pending, remaining
+
+settings                             id, user_id, type, date, from_time, to_time, reason, status,
+                                     approver_id, remarks
+
+                                     id, expense_code, user_id, date, type, amount, description,
+                                     receipt_url, status, approver_id, payment_status
+
+                                     id, invoice_code, client_id, invoice_date, due_date, amount, tax,
+                                     paid_amount, status, pdf_url
+
+                                     id, invoice_id, amount, mode, transaction_ref, paid_at, recorded_by
+
+                                     id, name, client_id, department_id, status
+
+                                     id, template_id, task_code, description, assignee_id, planned_date,
+                                     actual_date, tat_minutes, status, remarks
+
+                                     id, todo_code, description, assignee_id, due_date, priority, status,
+                                     created_by, source
+
+                                     id, owner_type, owner_id, file_name, mime_type, storage_url,
+                                     uploaded_by, created_at
+
+                                     id, channel, recipient, template, payload, status, error, retries,
+                                     sent_at, created_at
+
+                                     id, actor_type, actor_id, module, action, resource_type,
+                                     resource_id, before_json, after_json, ip, created_at
+
+                                     id, key, value_json, description, updated_by, updated_at
+
+22. API / Backend Service Blueprint
+
+Developer should create APIs grouped by bounded context. Existing Apps Script functions can be used as business logic
+reference, but final ERP should use REST/GraphQL APIs with validation and tests.
+
+Service                                                                      Endpoints
+Auth                                                                         POST /auth/login, POST /auth/logout, POST /auth/refresh, POST
+                                                                             /auth/change-password, POST /auth/reset-request, POST
+Users                                                                        /auth/reset-confirm
+                                                                             GET /users, POST /users, PATCH /users/{id}, GET /users/{id},
+Permissions                                                                  POST /users/{id}/disable, GET /users/team
+Attendance                                                                   GET /roles, POST /roles, GET /permissions, PATCH /permissions
+                                                                             POST /attendance/punch, GET /attendance/me, GET
+                                                                             /attendance/team, POST /attendance/{id}/approve, POST
+                                                                             /attendance/{id}/reject
+
+                    WorkTrack ERP Developer Handoff Blueprint - confidential implementation specification
+Leave                          POST /leaves, GET /leaves/me, GET /leaves/pending, POST
+Intimation                     /leaves/{id}/approve, POST /leaves/{id}/reject
+Tickets
+                               POST /intimations, GET /intimations/me, GET /intimations/pending,
+Client Portal                  POST /intimations/{id}/approve
+Messages
+Expenses                       GET /tickets, POST /tickets, POST /tickets/bulk, GET /tickets/{id},
+FMS                            PATCH /tickets/{id}, POST /tickets/{id}/start, POST
+ToDo                           /tickets/{id}/pause, POST /tickets/{id}/end, POST
+Reports                        /tickets/{id}/submit-approval, POST /tickets/{id}/approve, POST
+Notifications                  /tickets/{id}/rework, POST /tickets/{id}/reassign, POST
+                               /tickets/{id}/send-to-client
+
+                               POST /client/auth/login, GET /client/dashboard, GET /client/tickets,
+                               POST /client/tickets/bulk, POST /client/tickets/{id}/respond, POST
+                               /client/tickets/{id}/approve, GET /client/invoices, GET /client/reports
+
+                               GET /messages?task_type=&task_id=, POST /messages, POST
+                               /messages/read
+
+                               POST /expenses, GET /expenses/me, GET /expenses/pending,
+                               POST /expenses/{id}/approve, POST /expenses/{id}/reject,
+                               POST /expenses/{id}/mark-paid
+
+                               GET /fms/tasks, POST /fms/tasks, POST /fms/tasks/{id}/complete,
+                               GET /fms/templates
+
+                               GET /todos, POST /todos, POST /todos/bulk, PATCH /todos/{id},
+                               POST /todos/{id}/complete, DELETE /todos/{id}
+
+                               GET /reports/dashboard, GET /reports/admin, GET
+                               /reports/employee/{id}, GET /reports/client/{id}, GET /reports/export
+
+                               GET /notifications, POST /notifications/read, POST /jobs/retry-
+                               notifications
+
+23. Frontend Screen Blueprint  Screens/components
+
+ Area                          Login, reset password, change password, profile, notification bell,
+ Global                        sidebar, role based menu
+
+ Employee Dashboard            KPI cards, upcoming tasks, attendance state, pending approvals if
+                               manager, charts
+ Attendance
+ Tickets                       Punch camera/location, history, request status
+
+ Approvals                     My tickets, team tickets, approval tickets, create/bulk, filters, timer
+                               controls, details modal, chat modal
+ Employee Master
+ Expenses                      Tabs: Attendance, Leaves, Intimations, Tickets, Expenses;
+ FMS                           actionable first
+
+ To-Do                         Employee tabs, CRUD, sync login, inactive view
+ Reports
+                               Submit claim, receipt upload, claim history, approval list
+ Forms/Clients Admin
+ Client Portal                 My FMS, Team FMS, Future/Pending/Overdue filters, complete
+                               action
+ Master Analytics
+                               My to-do, add, edit, bulk, complete, delete
+
+                               Ticket report, FMS report, attendance report, expense report, KPI
+                               detail modal, exports
+
+                               Manage portal data, filters, permission-controlled add/edit/delete
+
+                               Login, dashboard, create tickets, open/completed tickets, checklist,
+                               social posts, invoices, reports, chat
+
+                               Overview, workload table, status filters, employee explorer, client
+                               explorer, batch modal, CSV export
+
+24. Validation Rules
+
+Module                         Validation
+Users
+Attendance                     Unique employee_code/user_id; required name/status/role; valid
+Leave                          email/mobile; manager cannot be self
+Ticket
+Timer                          One active punch-in per user per day; punch-out after punch-in;
+                               location/photo required if policy enabled
+
+                               End date >= start date; balance check if paid leave; overlapping
+                               leave warning
+
+                               Description, priority, category, plan date, assignee/client required
+                               as per source; TAT numeric; attachments size/type limit
+
+                               Only assignee/authorized user can start; cannot start multiple active
+
+               WorkTrack ERP Developer Handoff Blueprint - confidential implementation specification
+Approval                                 sessions on same ticket
+Client
+Expense                                  Actor must be current approver or have explicit permission; cannot
+FMS                                      approve own ticket unless policy allows
+Invoice
+                                         Client can only access own client_id records; payment restriction
+                                         before ticket creation/action
+
+                                         Amount numeric > 0; receipt required above configured amount;
+                                         duplicate claim warning
+
+                                         Planned date valid; completion requires actual date; dependency
+                                         validation if configured
+
+                                         Amount >= paid amount; due date >= invoice date; paid status only
+                                         if balance zero
+
+25. Security and Compliance Requirements
+
+ Never store or send plain passwords. Replace default password flow with one-time password setup link.
+ All access checks must happen server-side, not only by hiding UI buttons.
+ Every create/update/delete/approval/login should write audit_logs.
+ Files should not be public by default. Use signed URLs or permissioned Drive links.
+ Client portal must enforce tenant isolation by client_id on every query.
+ Use input validation and sanitization for messages, remarks, descriptions, uploaded file names, and filters.
+ Use rate limits for login and OTP actions.
+ Use backups and database migration scripts. Do not edit production schema manually.
+ Use environment variables/secrets for spreadsheet IDs, WhatsApp tokens, email settings, and storage credentials.
+ Create admin settings for hardcoded values like grace days, restricted roles, CRM TAT overrides, reminder timings.
+
+26. Reporting Logic and KPI Definitions  Definition
+
+ KPI                                     Sum of TAT minutes for tasks planned in selected date range
+ Total Planned Bandwidth
+ Actual Productive Time                  Sum of completed/in-progress task time logs in selected date range
+ Gap Time
+                                         Assumed working minutes minus actual productive minutes; should
+ Pending Tickets                         exclude approved leave/holiday if configured
+
+ Completed Tickets                       Tickets in Open/In Progress/Rework/Client Responded/Pending
+                                         Client Response
+ Overdue Tasks
+                                         Tickets in Closed/Completed/Approved by Client/Done/Resolved
+ Attendance %                            group
+ Efficiency %
+                                         Pending tasks whose plan date is before today and not
+ Client Open Work                        Future/Closed/Completed
+ Payment Due
+                                         Present/approved working days divided by expected working days
+
+                                         Completed TAT or productive output divided by assumed
+                                         bandwidth; define exact formula in settings
+
+                                         Open tickets + pending checklist/social tasks for a client
+
+                                         Invoice amount minus paid amount where status not paid/cancelled
+
+27. Migration Plan from Google Sheets to ERP
+
+28. Freeze current sheet structure and export all tabs as CSV backup.
+29. Create mapping document: sheet column -> database table field.
+30. Build database schema and run migrations in development.
+31. Import Users, Clients, Tickets, Attendance, Leaves, Intimations, Expenses, FMS, To-Do, Invoices, Messages, History.
+32. Generate stable IDs for rows missing IDs; preserve old row number as legacy_reference.
+33. Normalize statuses using status mapping table.
+34. Validate counts: row counts, active users, open tickets, invoices, attendance totals.
+35. Run dual-read pilot: old Apps Script and new ERP reports for same date range should match.
+36. Switch writes to new ERP while keeping Sheets as read-only archive/export.
+37. After 2-4 weeks, disable Apps Script write operations and keep only backup export if needed.
+
+                                          WorkTrack ERP Developer Handoff Blueprint - confidential implementation specification
+28. Implementation Roadmap
+
+Phase                         Duration   Deliverables
+Phase 0 - Discovery           2-4 days
+                                         Confirm roles, sheet columns, status
+Phase 1 - Core Setup          1 week     mapping, approval rules, hosting, WhatsApp
+Phase 2 - WorkTrack Core      2-3 weeks  provider, database choice
+Phase 3 - Client Portal       1-2 weeks
+Phase 4 - FMS/To-Do/Expenses  1-2 weeks  Database, auth, RBAC, users, clients, audit
+Phase 5 - Analytics           1-2 weeks  logs, file storage
+Phase 6 - Notifications       3-5 days
+Phase 7 - QA and Migration    1-2 weeks  Attendance, leave/intimation, ticket lifecycle,
+                                         timer, approvals, chat
+
+                                         Client login, ticket creation, responses,
+                                         invoices, reports
+
+                                         FMS tasks, to-do, expenses, finance
+                                         approvals
+
+                                         Master dashboard, filters, KPIs, exports,
+                                         explorer views
+
+                                         WhatsApp/email queue, scheduled jobs,
+                                         retry logs
+
+                                         Data import, UAT, role testing, performance
+                                         testing, production deployment
+
+29. Developer Acceptance Checklist
+
+ Every current function/workflow has a mapped API or backend service.
+ Every current screen has a replacement screen or documented reason for removal.
+ No plain passwords, no default password in notification, no public file links unless explicitly intended.
+ Role based routes and server-side permissions work for Super Admin, Admin, HR, Manager, User, Client.
+ Client users cannot access other clients through URL/API manipulation.
+ Ticket lifecycle works end to end: create -> assign -> start -> pause -> client response -> submit -> approve/rework ->
+
+     close.
+
+ Attendance works end to end with photo/location proof and approval.
+ Reports match old sheet data for sample date ranges after migration.
+ Audit logs exist for all critical actions.
+ WhatsApp/email notification failure does not break the main transaction; failures are retried.
+ Dashboard loads fast with indexes/materialized views, not full-table scans for every request.
+ Backup and restore process tested before production launch.
+
+                     WorkTrack ERP Developer Handoff Blueprint - confidential implementation specification
+30. Appendix A - Current Function Inventory by File
+
+Pasted text.txt
+
+Lines: 6,089; Detected functions/handlers: 147; UI IDs: 0
+
+getEmpMasterData, saveFileToFolder, syncToAppUsers, getSheetDataFromSheetObject, getPendingApprovals,
+getDashboardData, getSafeDate, escapeRegExp
+
+matchesUser, getPlanDate, getCompletionDate, adminTicketAction, _safeText_, _normText_,
+_appendWorkTrackLinkToMessage_, _getTicketAssignmentOwner_
+
+_isClientCreatedTicket_, notifyTicketAssignmentOwner_, sendWhatsAppMessage, saveOrUpdateUser,
+syncUserStatusToEmpMaster, setupInitialSheets, getSpreadsheet, getSheet
+
+getCachedSheetData, getSheetData, appendRowToSheet, updateRowInSheet, durationToMinutes, sendEmailNotification,
+doGet, getTaskMessages
+
+postTaskMessage, markTicketMessagesAsRead, reassignTicket, processClientResponse, submitLeaveRequest,
+submitIntimation, processAdminAction, createNewAttendanceRow
+
+getUserRequestStatus, recordAttendance, recordExpense, getExpensesForUser, getAttendanceForUser,
+createTicketInSheet, getTicketSystemData, getTicketDetails
+
+updateTicketInSheet, exportReportForWeb, getKpiDetails, getSafeDate, getTicketReportData, getFmsReportData,
+escapeRegExp, matchesUser
+
+checkForNewNotifications, fixMissingLeaveIds, fixMissingIntimationIds, _todoSafe_, _todoNorm_, _isActiveUser_,
+_isPendingTodo_, _isSameDateIST_
+
+_formatTodoDate_, _getUserNameById_, _getAkashTodoAuditor_, _buildSuperAdminTodoAuditMessage_,
+notifyAkashForNewSuperAdminTodo_, parseStrictDateOnly, safeText, parseFMSDate
+
+isDateToday, isDateOverdue, sendDailyPendingReminders, sendSuperAdminAudit, sendCompanySummary,
+_deleteTriggersByHandler_, setupReliableTriggers, checkAndSendReminders
+
+cleanupOldProperties, logTicketHistory, createBulkTicketsInSheet, calculateSessionAndTotal, updateTicketSchedule,
+saveBase64FileToDrive, getTeamIds, getNextEmpCode
+
+authenticateUser, getMyTeamMembers, getAllManagersList, _fmsSafe_, _fmsNorm_, _fmsSplitIds_, _fmsEscapeRegExp_,
+_fmsHasWholeToken_
+
+_buildFmsVisibilityContext_, _fmsMatchesUser_, _getFmsRowDecision_, getFmsTasksForApp, markFmsTaskDoneInApp,
+saveEmpMasterData, saveEmpMasterDataWithFiles, fixDrivePermissions
+
+FORCE_CLEAR_CACHE, autoClosePendingTickets, setupTodoSheet, getTodos, addTodo, toggleTodoStatus, editTodoItem,
+deleteTodoItem
+
+addBulkTodos, fixBlankClientTickets, setupWaLogsSheet, logWhatsApp, retryFailedWhatsAppMessages,
+forceApproveAllPendingTickets, getAllUsersForAdmin, sendTicketStartReminder
+
+checkTicketTatReminders, parseDateTimeSafe, processExpenseApproval, changeUserPassword, transferTicketApproval,
+getTaskApproversList, getFormsData, saveClientPortalData
+
+saveFormsPortalData, deleteClientPortalData, deleteFormsPortalData, getClientsPortalData, addFormsPortalData,
+checkUserAttendanceActive, enforceAttendanceGate, hasValidId
+
+getValidName, isFmsFutureDate, getWorkingDays, reformatDate, mapTaskData, safeParseDate, safeParseDate,
+parseDateSafe
+
+isFmsFutureDate, getCompletionDate, shouldRun
+
+Pasted text (2).txt
+
+Lines: 9,709; Detected functions/handlers: 99; UI IDs: 356
+
+showAppsScriptRuntimeError, updateLocalRow, updateSlide, showStyledModal, showIframeModal, showLoading,
+showSwalMessage, playNotificationSound
+
+getUserName, getFormattedDate, handlePunch, handleLogin, setupUI, setView, handleLogout, loadDashboard
+
+                                          WorkTrack ERP Developer Handoff Blueprint - confidential implementation specification
+updateDashboardUI, handleKpiCardClick, renderUpcomingTasksTable, startPunchInTimer, stopPunchInTimer,
+checkAttendanceStatus, resetPunchPhotoUI, stopCamera
+
+startCamera, capturePhoto, retakePhoto, openSecureCameraPopup, initCamera, openChangePasswordModal,
+closeChangePasswordModal, loadAttendanceHistory
+
+handleLeaveRequestSubmit, handleIntimationSubmit, loadUserRequestHistory, loadTicketSystemData, switchTicketTab,
+renderTicketTable, populateTicketDropdowns, addTicketRow
+
+updateRowUI, toggleSidebar, startTicketSubmission, showTicketDetails, filterAndRenderUpcomingTasks, loadEmpData,
+renderEmpTable, handleTaskStart
+
+handleTaskEnd, handleReassignToUser, handleReassignToClient, handleClientResponse, openChatModal,
+loadExpenseHistory, handleExpenseSubmit, loadUsersData
+
+setupFilters, addHeaderFilters, setupDateRangeFilter, renderActionButtons, loadPendingApprovals, cleanRemarksForDisplay,
+startNotificationPolling, stopNotificationPolling
+
+loadReportForTab, handleReportDownload, handleUpdateSchedule, setFmsTeamTabsVisibility, activateFmsTab,
+parseFmsDateClean, isFmsFutureTask, escapeRegExp
+
+matchesFmsUser, isMyFmsTask, isTeamFmsTask, loadFmsViewApp, populateFmsDropdowns, renderFmsTableApp,
+openFmsModalApp, clearFmsFilters
+
+submitFmsTaskApp, closeFmsModalApp, renderAttachmentBadge, loadFormsPortal, populateFormsFilters,
+renderFormsTable, loadClientsPortal, renderClientsTable
+
+checkFormsPortalPermissions, populateClientsDropdownFilters, showClientDetailsPopup, loadClientsPortal,
+renderClientsTable, renderFormsTable, isAppsScriptRuntime, performSubmission
+
+toDateStr, readFile, processUpdate
+
+Pasted code (3).js
+
+Lines: 823; Detected functions/handlers: 30; UI IDs: 0
+
+getSheetData, appendRowsToSheet, updateRowInSheet, saveBase64ImageToDrive, doGet, clientAuthenticate,
+checkPaymentRestriction, createBulkTicketsWithDetails
+
+filterByDate, getClientTickets, getClientChecklists, getClientSocialTasks, getClientInvoices, getClientDashboardData,
+updateTicketStatusByClient, submitClientResponse
+
+updateSocialPostStatusByClient, addClientRemarkToHistoryEntry, getTicketDetails, getChecklistDetails,
+getSocialTaskDetails, getSocialTaskHistory, getClientReportData, getMessagesForTask
+
+postMessage, markTicketMessagesAsRead, checkForNewUpdates, markAsNotified, getLatestPendingDate, isTicketClosed
+
+Pasted text (4).txt
+
+Lines: 3,553; Detected functions/handlers: 53; UI IDs: 101
+
+updateSidebarCounts, setIconTheme, toggleTheme, triggerCelebration, updatePrintDetails, showLoading, showSwalMessage,
+showRestrictionAlert
+
+type, formatDateForDisplay, formatDateForInput, createFilterUI, setView, setupUI, fetchNextAvailableSlot,
+getFormattedDateString
+
+handleLogin, handleLogout, updateNotificationUI, pollForUpdates, loadClientTickets, loadClientChecklists, triggerConfetti, fire
+
+loadClientSocialTasks, loadClientInvoices, renderInvoicesTable, loadClientReports, renderReportCharts,
+renderAllTicketTables, getStatusBadgeClass, renderTicketTable
+
+renderAwaitingResponseTable, getChatButton, renderChecklistTable, renderSocialTable, loadDashboardData,
+renderStatusDonutChart, renderActivityBarChart, renderPendingActions
+
+renderRecentActivity, handleTicketAction, handleClientResponse, handleClientAddRemark, handleSocialPostApprove,
+handleViewTicketDetails, handleViewChecklistDetails, handleViewSocialDetails
+
+openChatModal, addTicketRow, isEffectivelyClosed, filePromise, sendMessage
+
+                                          WorkTrack ERP Developer Handoff Blueprint - confidential implementation specification
+Pasted code (5).js
+
+Lines: 514; Detected functions/handlers: 19; UI IDs: 0
+
+getSpreadsheet, doGet, parseDateSafe, getFlexibleValue, getAdminReports, isTaskTrulyPending, createTicketInSheet,
+createTodoInSheet
+
+getTicketSystemData, getScriptUrl, getSheetData, appendRowToSheet, toYMD, isDateInScope, isDateInLeaveRange,
+isValidTask
+
+fmtDuration, mapTaskFlexible, toYMD
+
+Pasted text (6).txt
+
+Lines: 3,848; Detected functions/handlers: 43; UI IDs: 104
+
+switchTab, getDaysCount, sortTasksByStatusPriority, refreshData, populateTableDropdowns, generateStatusFilters,
+updateStatusBtnLabel, toggleAllStatuses
+
+populateExplorerDropdowns, isUserMatch, applyLocalFilters, renderNewAnalyticsCards, processData,
+renderOverviewMetrics, renderOverviewCharts, getDatesInRange
+
+getDayName, isUserMatchRow, getClientFlexibleValue, loadUserExplorerProfile, calculateSubTableStats,
+loadClientExplorerProfile, renderTable, formatChildRow
+
+loadDropdowns, openBatchModal, addTaskRow, submitBatch, parseDuration, fmtMins, renderClientEffort,
+renderInstantClosures
+
+filterOverviewTables, exportEffortCSV, isClosedGroup, isInProgressGroup, isPendingGroup, fillSelect, filterTask, toYMD
+
+filterByDateRange, getBreakdown, extractTimePart
+
+31. Appendix B - Current Sheet Names Detected
+
+File                Constant                   Sheet/tab
+Pasted text.txt     USERS                      Users
+Pasted text.txt     CLIENTS                    Clients
+Pasted text.txt     TICKETS                    Tickets
+Pasted text.txt     TICKET_HISTORY             Ticket_History
+Pasted text.txt     ATTENDANCE                 Attendance
+Pasted text.txt     EXPENSES                   Expenses
+Pasted text.txt     LEAVE_REQUESTS             Leave Requests
+Pasted text.txt     INTIMATIONS                Intimations
+Pasted text.txt     EMP_MASTER                 EMP Master
+Pasted text.txt     MESSAGES                   Messages
+Pasted text.txt     FMS                        FMS
+Pasted text.txt     TODO                       To-Do
+Pasted text.txt     FORMS                      Forms
+Pasted code (3).js  CLIENTS                    Clients
+Pasted code (3).js  TICKETS                    Tickets
+Pasted code (3).js  CHECKLIST                  CHECKLIST TASK
+Pasted code (3).js  SOCIAL                     Social Media
+Pasted code (3).js  SOCIAL_HISTORY             Social_History
+Pasted code (3).js  MESSAGES                   Messages
+Pasted code (3).js  USERS                      Users
+Pasted code (5).js  USERS                      Users
+Pasted code (5).js  CLIENTS                    Clients
+Pasted code (5).js  TICKETS                    Tickets
+Pasted code (5).js  FMS                        FMS
+Pasted code (5).js  TODO                       To-Do
+Pasted code (5).js  ATTENDANCE                 Attendance
+Pasted code (5).js  LEAVES                     Leave Requests
+Pasted code (5).js  INTIMATIONS                Intimations
+Pasted code (5).js  INVOICES                   Invoices
+Pasted code (5).js  FOLLOWUPS                  Followups
+
+                    WorkTrack ERP Developer Handoff Blueprint - confidential implementation specification
+32. Appendix C - High Risk Technical Debt from Current MVP
+
+Risk                        Why it matters                           Fix
+Plain/default passwords     Account compromise risk                  Hashed passwords and setup links
+Spreadsheet as database     Slow, race conditions, weak constraints  PostgreSQL with indexes and transactions
+Hardcoded business IDs      Developer must edit code for policy      Permission/settings tables
+                            changes
+Repeated utility functions  Bug fixes inconsistent                   Shared backend utility modules
+Row-number IDs              Duplicate/conflict risk after            UUID + readable sequence codes
+                            deletes/sorts/imports
+Public file URLs            Private documents may leak               Signed/permissioned storage
+Free-text statuses          Wrong reports and filters                Status master + mapping
+Large single HTML files     Hard to maintain and test                Component-based frontend
+Direct dashboard scans      Slow as data grows                       Reporting views/cache/materialization
+Limited automated tests     Regression risk                          Unit, integration and role-permission tests
+
+                            WorkTrack ERP Developer Handoff Blueprint - confidential implementation specification
+

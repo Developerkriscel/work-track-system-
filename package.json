@@ -1,0 +1,42 @@
+{
+  "name": "worktrack-mern-migration",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server/scripts/startExactServers.js",
+    "dev:api": "node server.js",
+    "start": "node server/scripts/startExactServers.js",
+    "start:exact": "node server/scripts/startExactServers.js",
+    "open:exact": "node server/scripts/openExactWorkTrack.js",
+    "status": "node server/scripts/statusExactServers.js",
+    "import:sheets": "node server/scripts/importSheets.js",
+    "build": "node server/scripts/verifyExactUi.js",
+    "verify:browser": "node server/scripts/verifyBrowserParity.js",
+    "verify:reference-screens": "powershell -NoProfile -ExecutionPolicy Bypass -File server/scripts/verifyReferenceScreens.ps1",
+    "verify:import": "node server/scripts/verifyImportDryRun.js",
+    "verify:open-exact": "node server/scripts/openExactWorkTrack.js --smoke",
+    "verify:all": "npm run build && npm run verify:import && npm run verify:browser && npm run verify:reference-screens"
+  },
+  "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.3.0",
+    "bcryptjs": "^2.4.3",
+    "canvas-confetti": "^1.9.4",
+    "chart.js": "^4.5.1",
+    "cors": "^2.8.5",
+    "datatables.net": "^2.3.8",
+    "datatables.net-dt": "^2.3.8",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jquery": "^4.0.0",
+    "mongoose": "^8.4.3",
+    "select2": "^4.1.0",
+    "sweetalert2": "^11.26.25",
+    "tailwindcss": "^4.3.2",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.2",
+    "playwright-core": "^1.61.1"
+  }
+}
