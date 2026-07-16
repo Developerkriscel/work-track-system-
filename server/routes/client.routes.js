@@ -1,15 +1,15 @@
 import express from 'express';
 import { getClientDashboard } from '../services/report.service.js';
-import { messages, tickets } from '../data/seed.js';
+import { insertRow, listRows, sheetMessage, sheetTicket, upsertRow } from '../services/legacyStore.service.js';
 
 const router = express.Router();
 
-router.get('/:clientId/dashboard', (req, res) => {
-  res.json(getClientDashboard(req.params.clientId));
+router.get('/:clientId/dashboard', async (req, res) => {
+  res.json(await getClientDashboard(req.params.clientId));
 });
 
-router.post('/:clientId/tickets', (req, res) => {
-  const ticket = {
+router.post('/:clientId/tickets', async (req, res) => {
+  const ticket = sheetTicket({
     ticketId: `TICKET_${Date.now()}`,
     clientId: req.params.clientId,
     clientName: req.body.clientName || 'Client',
@@ -23,26 +23,38 @@ router.post('/:clientId/tickets', (req, res) => {
     planDate: req.body.planDate || '',
     tatMinutes: 0,
     remarks: 'Created from MERN client portal.'
-  };
-  tickets.unshift(ticket);
+  });
+  await insertRow('Ticket', ticket);
   res.status(201).json({ success: true, item: ticket });
 });
 
-router.patch('/:clientId/tickets/:ticketId/status', (req, res) => {
-  const ticket = tickets.find((item) => item.clientId === req.params.clientId && item.ticketId === req.params.ticketId);
+router.patch('/:clientId/tickets/:ticketId/status', async (req, res) => {
+  const tickets = await listRows('Ticket');
+  const ticket = tickets.find((item) => String(item.Client_Id || item['Client ID'] || item.clientId) === String(req.params.clientId) && String(item['Ticket ID'] || item.ticketId) === String(req.params.ticketId));
   if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found.' });
-  ticket.status = req.body.status;
-  ticket.remarks = `${ticket.remarks || ''}\n[[${req.body.status} by Client]] ${req.body.remarks || ''}`.trim();
-  res.json({ success: true, item: ticket });
+  const updated = {
+    ...ticket,
+    Status: req.body.status,
+    Remarks: `${ticket.Remarks || ''}\n[[${req.body.status} by Client]] ${req.body.remarks || ''}`.trim()
+  };
+  await upsertRow('Ticket', 'Ticket ID', updated['Ticket ID'] || updated.ticketId, updated);
+  res.json({ success: true, item: updated });
 });
 
-router.get('/tasks/:taskId/messages', (req, res) => {
-  res.json({ success: true, data: messages.filter((message) => message.taskId === req.params.taskId) });
+router.get('/tasks/:taskId/messages', async (req, res) => {
+  const messages = await listRows('Message');
+  res.json({ success: true, data: messages.filter((message) => String(message.TaskID || message.taskId) === String(req.params.taskId)) });
 });
 
-router.post('/tasks/:taskId/messages', (req, res) => {
-  const message = { messageId: `MSG_${Date.now()}`, taskId: req.params.taskId, sender: req.body.sender || 'Client', message: req.body.message, timestamp: new Date().toISOString() };
-  messages.push(message);
+router.post('/tasks/:taskId/messages', async (req, res) => {
+  const message = sheetMessage({
+    messageId: `MSG_${Date.now()}`,
+    taskId: req.params.taskId,
+    sender: req.body.sender || 'Client',
+    message: req.body.message,
+    timestamp: new Date().toISOString()
+  });
+  await insertRow('Message', message);
   res.status(201).json({ success: true, item: message });
 });
 

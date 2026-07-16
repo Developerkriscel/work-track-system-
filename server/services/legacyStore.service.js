@@ -1,10 +1,8 @@
 import mongoose from 'mongoose';
 import { LegacyModels } from '../models/legacyModels.js';
-import { attendance, clients, fmsTasks, formsPortal, intimations, invoices, leaves, messages, socialHistory, socialPosts, tickets, todos, users } from '../data/seed.js';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const isMongoReady = () => mongoose.connection.readyState === 1;
-const memoryRows = new Map();
 
 const closedTerms = ['closed', 'approved', 'cancelled', 'completed', 'done', 'resolved', 'paid'];
 export const isClosedStatus = (status = '') => closedTerms.some((term) => String(status).toLowerCase().includes(term));
@@ -176,6 +174,9 @@ export function sheetFormPortal(form) {
     'Sheet name': form.sheetName,
     For: form.forText,
     'Form link': form.formLink,
+    'Visibility Type': form.visibilityType || 'ALL',
+    'Visible Users': form.visibleUsers || '',
+    Viewer: form.visibilityType === 'ALL' ? 'ALL' : (form.visibleUsers || ''),
     Status: form.status || 'Active'
   };
 }
@@ -199,6 +200,8 @@ export function sheetAttendance(row) {
     'Timer Elapsed Minutes': row.timerElapsedMinutes || row['Timer Elapsed Minutes'] || '',
     Status: row.status || row.Status || 'Present',
     Duration: row.duration || row.Duration || '',
+    Remarks: row.remarks || row.Remarks || '',
+    'Admin Remarks': row['Admin Remarks'] || row.adminRemarks || '',
     Photo: photo,
     'Photo Url': photo,
     'Photo URL': photo,
@@ -219,117 +222,100 @@ export function sheetMessage(message) {
   };
 }
 
-const seedRows = {
-  User: () => users.map(sheetUser),
-  Client: () => clients.map(sheetClient),
-  Ticket: () => tickets.map(sheetTicket),
-  Attendance: () => attendance.map(sheetAttendance),
-  Leave: () => leaves.map((leave) => ({
-    LeaveID: leave.leaveId,
-    'Employee ID': leave.employeeId,
-    'Employee Name': leave.employeeName,
-    'Start Date': leave.startDate,
-    'End Date': leave.endDate,
-    Status: leave.status,
-    Reason: leave.reason
-  })),
-  Intimation: () => intimations.map((item) => ({
-    IntimationID: item.intimationId,
-    'Employee ID': item.employeeId,
-    'Employee Name': item.employeeName,
-    'Intimation Date': item.date,
-    'Intimation Type': item.type,
-    Status: item.status,
-    Reason: item.reason
-  })),
-  Expense: () => [],
-  FmsTask: () => fmsTasks.map(sheetFms),
-  Todo: () => todos.map(sheetTodo),
-  Invoice: () => invoices.map(sheetInvoice),
-  Message: () => messages.map(sheetMessage),
-  SocialMedia: () => socialPosts.map(sheetSocial),
-  SocialHistory: () => socialHistory.map(sheetSocialHistory),
-  FormsPortal: () => formsPortal.map(sheetFormPortal),
-  TicketHistory: () => [],
-  WhatsAppLog: () => []
-};
-
-function cloneRow(row) {
-  return JSON.parse(JSON.stringify(row));
+function assertMongoReady() {
+  if (!isMongoReady()) {
+    throw new Error('MongoDB is not connected. WorkTrack uses MongoDB data only.');
+  }
 }
 
-function getMemoryRows(modelName) {
-  if (!memoryRows.has(modelName)) {
-    memoryRows.set(modelName, (seedRows[modelName]?.() || []).map(cloneRow));
-  }
-  return memoryRows.get(modelName);
+const legacyIdKeyMap = {
+    User: ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'userId', 'empCode'],
+    Client: ['Client_Id', 'Client ID', 'CustomerID', 'clientId', 'customerId'],
+    Ticket: ['Ticket ID', 'Task ID', 'ID', 'ticketId', 'taskId'],
+    Attendance: ['AttendanceID', 'ID', 'attendanceId'],
+    Leave: ['LeaveID', 'Leave ID', 'ID', 'leaveId'],
+    Intimation: ['IntimationID', 'Intimation ID', 'ID', 'intimationId'],
+    Expense: ['ExpenseID', 'Expense ID', 'ID', 'expenseId'],
+    FmsTask: ['Task ID', 'FMS ID', 'ID', 'rowId', 'taskId', 'fmsId'],
+    Todo: ['Task ID', 'TodoID', 'ID', 'todoId', 'taskId'],
+    Invoice: ['InvoiceID', 'Invoice ID', 'ID', 'invoiceId'],
+    Message: ['MessageID', 'Message ID', 'ID', 'messageId'],
+    SocialMedia: ['Post ID', 'ID', 'postId'],
+    SocialHistory: ['History ID', 'ID', 'historyId'],
+    FormsPortal: ['Form ID', 'Sheet name', 'ID', 'formId', 'sheetName'],
+    TicketHistory: ['History ID', 'Ticket ID', 'ID', 'historyId', 'ticketId'],
+    WhatsAppLog: ['Log ID', 'ID', 'logId']
+  };
+
+export function legacyIdCandidates(modelName) {
+  return legacyIdKeyMap[modelName] || ['ID'];
 }
 
 export function getLegacyId(modelName, row = {}) {
-  const candidates = {
-    User: ['Employee ID', 'User ID', 'EMP Code'],
-    Client: ['Client_Id', 'Client ID', 'CustomerID'],
-    Ticket: ['Ticket ID', 'Task ID', 'ID'],
-    Attendance: ['AttendanceID', 'ID'],
-    Leave: ['LeaveID', 'Leave ID', 'ID'],
-    Intimation: ['IntimationID', 'Intimation ID', 'ID'],
-    Expense: ['ExpenseID', 'Expense ID', 'ID'],
-    FmsTask: ['Task ID', 'FMS ID', 'ID', 'rowId'],
-    Todo: ['Task ID', 'TodoID', 'ID'],
-    Invoice: ['InvoiceID', 'Invoice ID', 'ID'],
-    Message: ['MessageID', 'Message ID', 'ID'],
-    SocialMedia: ['Post ID', 'ID'],
-    SocialHistory: ['History ID', 'ID'],
-    FormsPortal: ['Form ID', 'Sheet name', 'ID'],
-    TicketHistory: ['History ID', 'Ticket ID', 'ID'],
-    WhatsAppLog: ['Log ID', 'ID']
-  }[modelName] || ['ID'];
+  const candidates = legacyIdCandidates(modelName);
 
   for (const key of candidates) {
     if (row[key] !== undefined && row[key] !== null && String(row[key]).trim()) return String(row[key]).trim();
   }
+  if (modelName === 'Attendance') {
+    const employeeId = row['Employee ID'] || row.EmpID || row.employeeId || 'UNKNOWN';
+    const date = row.Date || row.date || today();
+    const action = row.Action || row.action || (row['Punch Out'] || row.outTime ? 'Punch Out' : row['Punch In'] || row.inTime ? 'Punch In' : 'Record');
+    const time = row.Time || row['Punch In'] || row['Punch Out'] || row.inTime || row.outTime || '';
+    return `ATT_${employeeId}_${date}_${String(action).replace(/\s+/g, '_')}_${String(time).replace(/[^A-Za-z0-9]+/g, '')}`;
+  }
   return `${modelName}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+export function stripInternalMetadata(row = {}) {
+  if (!row || typeof row !== 'object') return row;
+  const { _id, _legacyId, __v, createdAt, updatedAt, ...clean } = row;
+  return clean;
+}
+
 export async function listRows(modelName) {
-  if (!isMongoReady()) return getMemoryRows(modelName).map(cloneRow);
+  assertMongoReady();
   const Model = LegacyModels[modelName];
   const docs = await Model.find({}).sort({ createdAt: 1 }).lean();
-  if (!docs.length) return seedRows[modelName]?.() || [];
-  return docs.map((doc) => ({ ...doc.data, _id: String(doc._id), _legacyId: doc.legacyId }));
+  if (!docs.length) return [];
+  return docs.map((doc) => ({ ...stripInternalMetadata(doc.data), _id: String(doc._id), _legacyId: doc.legacyId }));
 }
 
 export async function listMongoRows(modelName) {
-  if (!isMongoReady()) return [];
+  assertMongoReady();
   const Model = LegacyModels[modelName];
   const docs = await Model.find({}).sort({ createdAt: 1 }).lean();
-  return docs.map((doc) => ({ ...doc.data, _id: String(doc._id), _legacyId: doc.legacyId }));
+  return docs.map((doc) => ({ ...stripInternalMetadata(doc.data), _id: String(doc._id), _legacyId: doc.legacyId }));
 }
 
 export async function insertRow(modelName, row) {
-  const legacyId = getLegacyId(modelName, row);
-  if (!isMongoReady()) {
-    getMemoryRows(modelName).push(cloneRow(row));
-    return row;
-  }
-  await LegacyModels[modelName].create({ legacyId, data: row });
-  return row;
+  assertMongoReady();
+  const cleanRow = stripInternalMetadata(row);
+  const legacyId = getLegacyId(modelName, cleanRow);
+  await LegacyModels[modelName].create({ legacyId, data: cleanRow });
+  return cleanRow;
 }
 
 export async function upsertRow(modelName, key, value, updateData) {
-  const rows = await listRows(modelName);
-  const existing = rows.find((row) => String(row[key] || '') === String(value));
-  const next = { ...(existing || {}), ...updateData };
-  const legacyId = getLegacyId(modelName, next);
-  if (!isMongoReady()) {
-    const store = getMemoryRows(modelName);
-    const index = store.findIndex((row) => String(row[key] || '') === String(value));
-    if (index >= 0) store[index] = cloneRow(next);
-    else store.push(cloneRow(next));
-    return next;
-  }
-  await LegacyModels[modelName].findOneAndUpdate(
-    { legacyId },
+  assertMongoReady();
+  const Model = LegacyModels[modelName];
+  const rawValue = String(value ?? '').trim();
+  const idKeys = Array.from(new Set([key, ...(legacyIdCandidates(modelName))].filter(Boolean)));
+  const query = rawValue
+    ? {
+        $or: [
+          { legacyId: rawValue },
+          ...idKeys.map((candidateKey) => ({ [`data.${candidateKey}`]: rawValue }))
+        ]
+      }
+    : { legacyId: getLegacyId(modelName, updateData) };
+  const existingDoc = rawValue ? await Model.findOne(query).lean() : null;
+  const existing = existingDoc?.data ? stripInternalMetadata(existingDoc.data) : null;
+  const cleanUpdate = stripInternalMetadata(updateData);
+  const next = { ...(existing || {}), ...cleanUpdate };
+  const legacyId = existingDoc?.legacyId || getLegacyId(modelName, next);
+  await Model.findOneAndUpdate(
+    existingDoc ? { _id: existingDoc._id } : { legacyId },
     { $set: { legacyId, data: next } },
     { upsert: true, new: true }
   );
@@ -341,12 +327,6 @@ export async function deleteOrDeactivate(modelName, key, value) {
   const row = rows.find((item) => String(item[key] || '') === String(value));
   if (!row) return null;
   const next = { ...row, Status: 'Inactive' };
-  if (!isMongoReady()) {
-    const store = getMemoryRows(modelName);
-    const index = store.findIndex((item) => String(item[key] || '') === String(value));
-    if (index >= 0) store[index] = cloneRow(next);
-    return next;
-  }
   await LegacyModels[modelName].findOneAndUpdate({ legacyId: getLegacyId(modelName, row) }, { $set: { data: next } });
   return next;
 }
@@ -356,50 +336,16 @@ export async function replaceCollection(modelName, rows) {
   const Model = LegacyModels[modelName];
   await Model.deleteMany({});
   if (!rows.length) return 0;
-  await Model.insertMany(rows.map((row) => ({ legacyId: getLegacyId(modelName, row), data: row })), { ordered: false });
+  await Model.insertMany(rows.map((row) => {
+    const cleanRow = stripInternalMetadata(row);
+    return { legacyId: getLegacyId(modelName, cleanRow), data: cleanRow };
+  }), { ordered: false });
   return rows.length;
 }
 
-export function resetMemoryStore() {
-  memoryRows.clear();
-}
-
 export async function resetLegacyStore() {
-  memoryRows.clear();
-  if (!isMongoReady()) return;
-  const demoPassword = '123456';
-  await Promise.all([
-    replaceCollection('User', users.map((user) => sheetUser({ ...user, password: demoPassword }))),
-    replaceCollection('Client', clients.map((client) => sheetClient({ ...client, password: demoPassword }))),
-    replaceCollection('Ticket', tickets.map(sheetTicket)),
-    replaceCollection('Attendance', attendance.map(sheetAttendance)),
-    replaceCollection('Leave', leaves.map((leave) => ({
-      LeaveID: leave.leaveId,
-      'Employee ID': leave.employeeId,
-      'Employee Name': leave.employeeName,
-      'Start Date': leave.startDate,
-      'End Date': leave.endDate,
-      Status: leave.status,
-      Reason: leave.reason
-    }))),
-    replaceCollection('Intimation', intimations.map((item) => ({
-      IntimationID: item.intimationId,
-      'Employee ID': item.employeeId,
-      'Employee Name': item.employeeName,
-      'Intimation Date': item.date,
-      'Intimation Type': item.type,
-      Status: item.status,
-      Reason: item.reason
-    }))),
-    replaceCollection('Expense', []),
-    replaceCollection('FmsTask', fmsTasks.map(sheetFms)),
-    replaceCollection('Todo', todos.map(sheetTodo)),
-    replaceCollection('Invoice', invoices.map(sheetInvoice)),
-    replaceCollection('Message', messages.map(sheetMessage)),
-    replaceCollection('SocialMedia', socialPosts.map(sheetSocial)),
-    replaceCollection('SocialHistory', socialHistory.map(sheetSocialHistory)),
-    replaceCollection('FormsPortal', formsPortal.map(sheetFormPortal)),
-    replaceCollection('TicketHistory', []),
-    replaceCollection('WhatsAppLog', [])
-  ]);
+  assertMongoReady();
+  await Promise.all(Object.keys(LegacyModels).map(async (modelName) => {
+    await LegacyModels[modelName].deleteMany({});
+  }));
 }

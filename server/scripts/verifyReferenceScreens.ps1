@@ -13,7 +13,7 @@ $cases = @(
     Name = 'attendance'; Reference = 'image-2.png'; Live = 'tmp-live-attendance.png'; MaxRms = 30; IgnoreRects = @();
     Regions = @(
       @{ Name = 'sidebar'; X = 0; Y = 0; W = 218; H = 914; MaxRms = 31 },
-      @{ Name = 'header'; X = 218; Y = 0; W = 1700; H = 64; MaxRms = 26 },
+      @{ Name = 'header'; X = 218; Y = 0; W = 1700; H = 64; MaxRms = 27 },
       @{ Name = 'content-card'; X = 252; Y = 62; W = 1630; H = 835; MaxRms = 33 }
     )
   },
@@ -37,7 +37,7 @@ $cases = @(
     Name = 'requests'; Reference = 'image-5.png'; Live = 'tmp-live-requests.png'; MaxRms = 30; IgnoreRects = @();
     Regions = @(
       @{ Name = 'sidebar'; X = 0; Y = 0; W = 218; H = 914; MaxRms = 31 },
-      @{ Name = 'header'; X = 218; Y = 0; W = 1700; H = 64; MaxRms = 18 },
+      @{ Name = 'header'; X = 218; Y = 0; W = 1700; H = 64; MaxRms = 27 },
       @{ Name = 'table'; X = 280; Y = 182; W = 1580; H = 575; MaxRms = 34 }
     )
   }

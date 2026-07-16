@@ -5,8 +5,6 @@ import {
   insertRow,
   isClosedStatus,
   listRows,
-  resetLegacyStore,
-  resetMemoryStore,
   sheetAttendance,
   sheetClient,
   sheetFms,
@@ -17,11 +15,24 @@ import {
   sheetUser,
   upsertRow
 } from '../services/legacyStore.service.js';
+import { LegacyModels } from '../models/legacyModels.js';
 import { saveBase64File } from '../services/fileStorage.service.js';
+import {
+  authenticateClientFromMongo,
+  authenticateEmployeeFromMongo,
+  getClientSessionFromMongo,
+  getEmployeeSessionFromMongo
+} from '../services/auth.service.js';
+import { purgeTestArtifacts } from '../scripts/testArtifactCleanup.js';
 
 const router = express.Router();
-const referenceDate = new Date(`${process.env.WORKTRACK_REFERENCE_DATE || '2026-07-03'}T12:00:00+05:30`);
-const referenceNow = () => new Date(referenceDate);
+function parseReferenceNow(value) {
+  if (!value) return new Date();
+  if (String(value).includes('T')) return new Date(value);
+  return new Date(`${value}T12:00:00+05:30`);
+}
+
+const referenceNow = () => parseReferenceNow(process.env.WORKTRACK_REFERENCE_DATE);
 const localDate = (date = new Date()) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -38,7 +49,7 @@ const num = (v) => Number(String(v ?? 0).replace(/[^0-9.-]/g, '')) || 0;
 const first = (row, keys, fallback = '') => keys.map((k) => row?.[k]).find((v) => safe(v)) ?? fallback;
 const isUserCompletedStatus = (status) => isClosedStatus(status) || /pending approval/i.test(safe(status));
 const isDashboardActionableStatus = (status) => !isClosedStatus(status) && !/pending approval/i.test(safe(status));
-
+const isPlaceholderUrl = (value) => /(^|\/\/)(www\.)?example\.com(\/|$)/i.test(safe(value));
 const csvEscape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
 const cleanFileName = (value, fallback = 'report') => String(value || fallback).replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_');
 
@@ -318,8 +329,26 @@ function attendanceRowsForApp(row = {}) {
 }
 
 function asUserRow(row = {}) {
-  if (row['Employee ID'] || row['Employee Name']) return row;
-  return sheetUser(row);
+  const employeeId = first(row, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'userId', 'empCode']);
+  const employeeName = first(row, ['Employee Name', 'Name', 'Full Name', 'name', 'employeeName'], employeeId);
+  const role = first(row, ['Role', 'role', 'Designation'], 'User');
+  const status = first(row, ['Status', 'status'], 'Active');
+  const managerId = first(row, ['Manager ID', 'Manager', 'managerId', 'Reporting Manager'], '');
+  return {
+    ...row,
+    'Employee ID': employeeId,
+    'User ID': first(row, ['User ID', 'Employee ID', 'EMP Code', 'employeeId', 'userId'], employeeId),
+    'Employee Name': employeeName,
+    Name: first(row, ['Name', 'Employee Name', 'Full Name', 'name', 'employeeName'], employeeName),
+    Password: first(row, ['Password', 'password']),
+    Role: role,
+    Status: status,
+    Manager: first(row, ['Manager', 'Manager ID', 'managerId', 'Reporting Manager'], managerId),
+    'Manager ID': managerId,
+    'Task Approver': first(row, ['Task Approver', 'Approver ID', 'taskApprover', 'managerId', 'Manager ID'], managerId),
+    Department: first(row, ['Department', 'department'], ''),
+    Mobile: first(row, ['Mobile', 'mobile', 'Phone'], '')
+  };
 }
 
 function asClientRow(row = {}) {
@@ -339,23 +368,206 @@ function asClientRow(row = {}) {
 }
 
 function asTicketRow(row = {}) {
-  if (row['Ticket ID'] || row['Task Description']) return row;
-  return sheetTicket(row);
+  const ticketId = first(row, ['Ticket ID', 'Task ID', 'ID', 'ticketId', 'taskId']);
+  const clientId = first(row, ['Client_Id', 'Client ID', 'CustomerID', 'clientId']);
+  const client = first(row, ['Name', 'Client Name', 'Client', 'clientName']);
+  const employeeId = first(row, ['Employee ID', 'EmpID', 'employeeId']);
+  const employeeName = first(row, ['Employee Name', 'User', 'employeeName'], employeeId);
+  const description = first(row, ['Task Description', 'Description', 'description']);
+  const planDate = first(row, ['Plan Date', 'Date', 'planDate', 'timestamp']);
+  const timestamp = first(row, ['Timestamp', 'timestamp', 'Created At', 'Date'], planDate);
+  const totalDuration = first(row, ['Total Duration', 'Duration', 'totalDuration', 'duration']);
+  return {
+    ...row,
+    'Ticket ID': ticketId,
+    ID: first(row, ['ID', 'Ticket ID', 'ticketId'], ticketId),
+    Client_Id: clientId,
+    'Client ID': first(row, ['Client ID', 'Client_Id', 'clientId'], clientId),
+    Client: client,
+    Name: client,
+    'Client Name': client,
+    'Employee ID': employeeId,
+    EmpID: employeeId,
+    'Employee Name': employeeName,
+    User: employeeName,
+    'Task Category': first(row, ['Task Category', 'Category', 'category'], 'General'),
+    Category: first(row, ['Category', 'Task Category', 'category'], 'General'),
+    Priority: first(row, ['Priority', 'priority'], 'Normal'),
+    'Task Description': description,
+    Description: description,
+    Status: first(row, ['Status', 'status'], 'Open'),
+    Timestamp: timestamp,
+    Date: first(row, ['Date', 'Plan Date', 'planDate', 'timestamp'], planDate),
+    'Plan Date': planDate,
+    'Last Update Date': first(row, ['Last Update Date', 'lastUpdateDate', 'Timestamp', 'timestamp'], timestamp),
+    'Start Time': first(row, ['Start Time', 'startTime']),
+    'End Time': first(row, ['End Time', 'endTime']),
+    'Total Duration': totalDuration,
+    Duration: totalDuration,
+    Attachment: normalizeAttachmentField(first(row, ['Attachment', 'attachment']), 'tickets'),
+    'Closing Attachment': normalizeAttachmentField(first(row, ['Closing Attachment', 'closingAttachment']), 'tickets'),
+    Remarks: first(row, ['Remarks', 'remarks']),
+    TAT: first(row, ['TAT', 'When', 'tatMinutes']),
+    When: first(row, ['When', 'TAT', 'tatMinutes']),
+    'Task Approver': first(row, ['Task Approver', 'taskApprover', 'Approver ID']),
+    'Reassigned By': first(row, ['Reassigned By', 'reassignedBy']),
+    HasUnreadMessages: Boolean(row.HasUnreadMessages),
+    HasUnreadAdminMessages: Boolean(row.HasUnreadAdminMessages),
+    IsNotified: Boolean(row.IsNotified)
+  };
 }
 
 function asFmsRow(row = {}) {
-  if (row['Task ID'] || row.actualDate || row.formLink) return row;
-  return sheetFms(row);
+  const base = row['Task ID'] || row.actualDate || row.formLink ? row : sheetFms(row);
+  const id = first(base, ['Task ID', 'FMS ID', 'ID', 'rowId', 'taskId']);
+  const employeeId = first(base, ['Employee ID', 'EmpID', 'empId', 'employeeId']);
+  const employeeName = first(base, ['Employee Name', 'User', 'who', 'employeeName'], employeeId);
+  const clientId = first(base, ['Client_Id', 'Client ID', 'clientId']);
+  const client = first(base, ['Client', 'Client Name', 'fmsName', 'clientName']);
+  const description = first(base, ['Task Description', 'Description', 'Task Name', 'taskName', 'description']);
+  const planDate = first(base, ['Plan Date', 'Date', 'planDate']);
+  const doneDate = first(base, ['Done Date', 'actualDate', 'doneDate']);
+  return {
+    ...base,
+    'Task ID': id,
+    ID: id,
+    rowId: id,
+    Client_Id: clientId,
+    Client: client,
+    'Client Name': client,
+    'Employee ID': employeeId,
+    EmpID: employeeId,
+    empId: employeeId,
+    'Employee Name': employeeName,
+    User: employeeName,
+    who: employeeName,
+    what: first(base, ['what', 'What'], ''),
+    when: first(base, ['when', 'When'], ''),
+    how: first(base, ['how', 'How'], ''),
+    fmsName: client,
+    'Task Description': description,
+    Description: description,
+    taskName: description,
+    stepNo: first(base, ['stepNo', 'Step', 'Step No'], ''),
+    'Plan Date': planDate,
+    Date: planDate,
+    planDate,
+    Status: first(base, ['Status', 'status'], doneDate ? 'Completed' : 'Pending'),
+    'Done Date': doneDate,
+    actualDate: doneDate,
+    formLink: first(base, ['formLink', 'Form Link', 'Form link'], ''),
+    TAT: first(base, ['TAT', 'When', 'tatMinutes'], ''),
+    delayDays: first(base, ['delayDays', 'Delay Days'], ''),
+    onTimeStatus: first(base, ['onTimeStatus', 'On Time Status'], '')
+  };
 }
 
 function asTodoRow(row = {}) {
-  if (row.TodoID || row.Task || row['Task ID']) return row;
-  return sheetTodo(row);
+  const id = first(row, ['Task ID', 'TodoID', 'ID', 'todoId', 'taskId']);
+  const employeeId = first(row, ['Employee ID', 'EmpID', 'employeeId']);
+  const employeeName = first(row, ['Employee Name', 'User', 'employeeName'], employeeId);
+  const task = first(row, ['Task', 'Description', 'task']);
+  const dueDate = first(row, ['Due Date', 'Date', 'dueDate']);
+  return {
+    ...row,
+    'Task ID': id,
+    ID: id,
+    TodoID: id,
+    'Employee ID': employeeId,
+    EmpID: employeeId,
+    'Employee Name': employeeName,
+    User: employeeName,
+    Task: task,
+    Description: task,
+    Priority: first(row, ['Priority', 'priority'], 'Normal'),
+    Status: first(row, ['Status', 'status'], 'Pending'),
+    'Due Date': dueDate,
+    Date: dueDate,
+    TAT: first(row, ['TAT', 'tatMinutes'], '')
+  };
+}
+
+function asLeaveRow(row = {}) {
+  const id = first(row, ['LeaveID', 'Leave ID', 'ID', 'leaveId']);
+  const employeeId = first(row, ['Employee ID', 'EmpID', 'employeeId']);
+  const employeeName = first(row, ['Employee Name', 'Name', 'employeeName'], employeeId);
+  const startDate = first(row, ['Start Date', 'Date', 'startDate', 'date']);
+  const endDate = first(row, ['End Date', 'endDate'], startDate);
+  return {
+    ...row,
+    LeaveID: id,
+    'Leave ID': id,
+    ID: id,
+    'Employee ID': employeeId,
+    EmpID: employeeId,
+    'Employee Name': employeeName,
+    Name: employeeName,
+    'Leave Type': first(row, ['Leave Type', 'Type', 'type'], 'Sick Leave'),
+    'Day Type': first(row, ['Day Type', 'dayType'], 'Full Day'),
+    'Start Date': startDate,
+    'End Date': endDate,
+    Date: startDate,
+    Reason: first(row, ['Reason', 'Remarks', 'reason'], '-'),
+    Status: first(row, ['Status', 'status'], 'Pending'),
+    Remarks: first(row, ['Remarks'], ''),
+    'Admin Remarks': first(row, ['Admin Remarks', 'adminRemarks'], '')
+  };
+}
+
+function asIntimationRow(row = {}) {
+  const id = first(row, ['IntimationID', 'Intimation ID', 'ID', 'intimationId']);
+  const employeeId = first(row, ['Employee ID', 'EmpID', 'employeeId']);
+  const employeeName = first(row, ['Employee Name', 'Name', 'employeeName'], employeeId);
+  const date = first(row, ['Intimation Date', 'Date', 'date']);
+  return {
+    ...row,
+    IntimationID: id,
+    'Intimation ID': id,
+    ID: id,
+    'Employee ID': employeeId,
+    EmpID: employeeId,
+    'Employee Name': employeeName,
+    Name: employeeName,
+    'Intimation Date': date,
+    Date: date,
+    'Intimation Type': first(row, ['Intimation Type', 'Type', 'type'], 'Work from Home'),
+    Type: first(row, ['Type', 'Intimation Type', 'type'], 'Work from Home'),
+    Reason: first(row, ['Reason', 'Remarks', 'reason'], '-'),
+    Status: first(row, ['Status', 'status'], 'Submitted'),
+    Remarks: first(row, ['Remarks'], ''),
+    'Admin Remarks': first(row, ['Admin Remarks', 'adminRemarks'], '')
+  };
 }
 
 function asInvoiceRow(row = {}) {
-  if (row.InvoiceID || row.CustomerID || row.Outstanding) return row;
-  return sheetInvoice(row);
+  const id = first(row, ['InvoiceID', 'Invoice ID', 'ID', 'invoiceId']);
+  const clientId = first(row, ['CustomerID', 'Client_Id', 'Client ID', 'clientId']);
+  const clientName = first(row, ['CustomerName', 'Client Name', 'clientName']);
+  const amount = first(row, ['Amount', 'InvoiceAmount', 'amount'], 0);
+  const paid = first(row, ['PaidAmount', 'Paid Amount', 'paidAmount'], 0);
+  const outstanding = first(row, ['Outstanding', 'outstanding'], amount);
+  const dueDate = first(row, ['DueDate', 'Due Date', 'Date', 'dueDate']);
+  return {
+    ...row,
+    InvoiceID: id,
+    'Invoice ID': id,
+    ID: id,
+    CustomerID: clientId,
+    Client_Id: clientId,
+    CustomerName: clientName,
+    'Client Name': clientName,
+    Amount: amount,
+    InvoiceAmount: amount,
+    PaidAmount: paid,
+    Outstanding: outstanding,
+    Status: first(row, ['Status', 'status'], Number(outstanding) > 0 ? 'Pending' : 'Paid'),
+    DueDate: dueDate,
+    DueDateFmt: dueDate,
+    Date: dueDate,
+    'Aging Bucket': first(row, ['Aging Bucket', 'agingBucket'], ''),
+    PILink: first(row, ['PILink', 'PI Link', 'piLink'], ''),
+    InvoiceLink: first(row, ['InvoiceLink', 'Invoice Link', 'invoiceLink'], '')
+  };
 }
 
 function asSocialRow(row = {}) {
@@ -378,6 +590,17 @@ function asSocialRow(row = {}) {
 }
 
 function asFormPortalRow(row = {}) {
+  const visibilityType = first(row, ['Visibility Type', 'VisibilityType', 'visibilityType'], '');
+  const visibleUsersRaw = first(row, ['Visible Users', 'VisibleUsers', 'visibleUsers', 'Viewer', 'viewer'], '');
+  const visibleUsers = Array.isArray(visibleUsersRaw)
+    ? visibleUsersRaw
+    : safe(visibleUsersRaw)
+        .split(',')
+        .map((id) => safe(id).toUpperCase())
+        .filter(Boolean);
+  const normalizedVisibilityType = visibilityType
+    ? safe(visibilityType).toUpperCase()
+    : (visibleUsers.length ? 'SELECTED_USERS' : 'ALL');
   return {
     ...row,
     'Form ID': first(row, ['Form ID', 'ID', 'formId']),
@@ -386,8 +609,60 @@ function asFormPortalRow(row = {}) {
     'Sheet name': first(row, ['Sheet name', 'Sheet Name', 'Name', 'sheetName']),
     For: first(row, ['For', 'Purpose', 'Description', 'forText']),
     'Form link': first(row, ['Form link', 'Form Link', 'Link', 'formLink']),
+    Viewer: normalizedVisibilityType === 'ALL' ? 'ALL' : visibleUsers.join(', '),
+    'Visible Users': visibleUsers.join(', '),
+    'Visibility Type': normalizedVisibilityType,
     Status: first(row, ['Status', 'status'], 'Active')
   };
+}
+
+function formPortalIdForSheet(sheetName) {
+  const cleaned = safe(sheetName).toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return cleaned ? `FORM_${cleaned}` : `FORM_${Date.now()}`;
+}
+
+function normalizeAssignedUsers(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => safe(item).toUpperCase()).filter(Boolean);
+  }
+  return safe(value)
+    .split(',')
+    .map((item) => safe(item).toUpperCase())
+    .filter(Boolean);
+}
+
+function normalizeFormPortalPayload(formData = {}) {
+  const visibilityTypeRaw = first(formData, ['Visibility Type', 'VisibilityType', 'visibilityType'], '');
+  const requestedVisibilityType = safe(visibilityTypeRaw).toUpperCase();
+  const visibleUsers = normalizeAssignedUsers(
+    first(formData, ['Visible Users', 'VisibleUsers', 'visibleUsers', 'Viewer', 'viewer'], '')
+  );
+
+  let visibilityType = requestedVisibilityType;
+  if (!visibilityType) visibilityType = visibleUsers.length ? 'SELECTED_USERS' : 'ALL';
+  if (visibilityType !== 'ALL') visibilityType = 'SELECTED_USERS';
+
+  return {
+    ...formData,
+    Department: first(formData, ['Department', 'department'], 'General'),
+    'Sheet name': first(formData, ['Sheet name', 'Sheet Name', 'sheetName', 'Category'], ''),
+    For: first(formData, ['For', 'Purpose', 'forText'], ''),
+    'Form link': first(formData, ['Form link', 'Form Link', 'formLink', 'Link'], ''),
+    'Visibility Type': visibilityType,
+    'Visible Users': visibilityType === 'ALL' ? '' : visibleUsers.join(', '),
+    Viewer: visibilityType === 'ALL' ? 'ALL' : visibleUsers.join(', '),
+    Status: first(formData, ['Status', 'status'], 'Active')
+  };
+}
+
+async function canManageFormsPortal(employeeId = '') {
+  const cleanEmpId = safe(employeeId).toUpperCase();
+  if (!cleanEmpId) return false;
+  if (eq(cleanEmpId, 'MS101')) return true;
+  const data = await rows();
+  const user = data.users.find((item) => eq(first(item, ['Employee ID', 'User ID', 'employeeId']), cleanEmpId));
+  const role = safe(first(user, ['Role', 'role']));
+  return role === 'Super Admin';
 }
 
 function taskOwnerName(task, users = []) {
@@ -430,8 +705,8 @@ async function rows() {
     clients: clients.map(asClientRow),
     tickets: tickets.map(asTicketRow),
     attendance: attendance.flatMap(attendanceRowsForApp),
-    leaves,
-    intimations,
+    leaves: leaves.map(asLeaveRow),
+    intimations: intimations.map(asIntimationRow),
     expenses,
     fms: fms.map(asFmsRow),
     todos: todos.map(asTodoRow),
@@ -474,6 +749,73 @@ function normalizeFmsForDashboard(task, users, clients) {
     TAT: first(task, ['TAT', 'When'], '0'),
     Duration: first(task, ['Duration', 'Actual Duration'], '0h 0m'),
     Description: first(task, ['Task Description', 'Description', 'Content'])
+  };
+}
+
+function splitIds(value = '') {
+  return safe(value).toLowerCase().split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+function escapeRegex(value = '') {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hasWholeToken(haystack, needle) {
+  const text = safe(haystack).toLowerCase();
+  const target = safe(needle).toLowerCase();
+  if (!text || !target) return false;
+  return new RegExp(`(^|[^a-z0-9_])${escapeRegex(target)}([^a-z0-9_]|$)`, 'i').test(text);
+}
+
+function fmsMatchesUser(targetId, targetName, task, firstNameCount = {}) {
+  const id = safe(targetId).toLowerCase();
+  const name = safe(targetName).toLowerCase();
+  const who = first(task, ['who', 'Employee Name', 'User']);
+  const empId = first(task, ['empId', 'Employee ID', 'EmpID']);
+  if (id && eq(empId, id)) return true;
+  if (id && hasWholeToken(who, id)) return true;
+  if (name && hasWholeToken(who, name)) return true;
+  const firstName = name.split(/\s+/)[0];
+  return !!(firstName && firstNameCount[firstName] === 1 && hasWholeToken(who, firstName));
+}
+
+function buildFmsVisibilityContext(employeeId, users = []) {
+  const currentUser = users.find((user) => eq(user['Employee ID'], employeeId));
+  if (!currentUser) return { valid: false, role: 'User', teamMembers: [], firstNameCount: {}, currentUser: null };
+  const firstNameCount = {};
+  users.forEach((user) => {
+    if (!eq(first(user, ['Status'], 'Active'), 'Active')) return;
+    const firstName = safe(first(user, ['Employee Name'])).toLowerCase().split(/\s+/)[0];
+    if (firstName) firstNameCount[firstName] = (firstNameCount[firstName] || 0) + 1;
+  });
+  const currentId = safe(currentUser['Employee ID']).toLowerCase();
+  const teamMembers = users.filter((user) => {
+    if (!eq(first(user, ['Status'], 'Active'), 'Active')) return false;
+    if (eq(user['Employee ID'], currentId)) return false;
+    return splitIds(user['Manager ID'] || user.Manager).includes(currentId) || splitIds(user['Task Approver']).includes(currentId);
+  });
+  return {
+    valid: true,
+    currentUser,
+    role: first(currentUser, ['Role'], 'User'),
+    teamMembers,
+    firstNameCount
+  };
+}
+
+function fmsVisibilityDecision(context, task) {
+  if (!context.valid) return { canSee: false, isMyTask: false, isTeamTask: false };
+  const isMyTask = fmsMatchesUser(context.currentUser['Employee ID'], context.currentUser['Employee Name'], task, context.firstNameCount);
+  let isTeamTask = false;
+  if (['Super Admin', 'HR'].includes(context.role)) {
+    isTeamTask = !isMyTask;
+  } else if (['Manager', 'Admin'].includes(context.role)) {
+    isTeamTask = context.teamMembers.some((member) => fmsMatchesUser(member['Employee ID'], member['Employee Name'], task, context.firstNameCount));
+  }
+  return {
+    canSee: ['Super Admin', 'HR'].includes(context.role) || isMyTask || isTeamTask,
+    isMyTask,
+    isTeamTask
   };
 }
 
@@ -529,6 +871,68 @@ function adminReportPayload(data, startDate, endDate) {
   });
 }
 
+function notificationTimestamp(row = {}, fallback = '') {
+  return first(
+    row,
+    [
+      'Last Update Date',
+      'Latest Update Date',
+      'Completed At',
+      'Done Date',
+      'Timestamp',
+      'Date',
+      'Start Date',
+      'Intimation Date',
+      'Due Date',
+      'Plan Date'
+    ],
+    fallback || nowIso()
+  );
+}
+
+function notificationRecord({ id, module, type, view, status, message, timestamp, actor = '', owner = '', meta = {} }) {
+  return {
+    id,
+    type,
+    module,
+    view,
+    Status: status || 'Updated',
+    Message: message || `${type || 'Item'} updated`,
+    Timestamp: timestamp,
+    'Last Update Date': timestamp,
+    Actor: actor,
+    Owner: owner,
+    ...meta
+  };
+}
+
+function employeeNotificationScope(employeeId, data) {
+  const cleanEmpId = safe(employeeId).trim().toUpperCase();
+  const user = data.users.find((item) => eq(item['Employee ID'], cleanEmpId));
+  const role = first(user, ['Role'], 'User');
+  const isElevated = ['Admin', 'Super Admin', 'HR', 'Manager'].includes(role);
+  const fmsContext = buildFmsVisibilityContext(cleanEmpId, data.users);
+  const managedIds = new Set(
+    data.users
+      .filter((item) => {
+        if (!eq(first(item, ['Status'], 'Active'), 'Active')) return false;
+        if (eq(item['Employee ID'], cleanEmpId)) return false;
+        const managerIds = splitIds(item['Manager ID'] || item.Manager);
+        const approverIds = splitIds(item['Task Approver']);
+        return managerIds.includes(cleanEmpId.toLowerCase()) || approverIds.includes(cleanEmpId.toLowerCase());
+      })
+      .map((item) => safe(item['Employee ID']).toUpperCase())
+      .filter(Boolean)
+  );
+  return { cleanEmpId, user, role, isElevated, managedIds, fmsContext };
+}
+
+function isNewerThanCutoff(timestampValue, cutoff) {
+  const ts = Date.parse(timestampValue);
+  if (!cutoff) return true;
+  return Number.isNaN(ts) || ts >= cutoff;
+}
+
 async function saveTicket(ticket) {
   const id = first(ticket, ['Ticket ID', 'ID'], `TICKET_${Date.now()}`);
   const row = { ...ticket, 'Ticket ID': id, ID: id };
@@ -538,23 +942,43 @@ async function saveTicket(ticket) {
 
 const handlers = {
   async authenticateUser(employeeId, password) {
-    const data = await rows();
-    const user = data.users.find((u) => eq(u['Employee ID'], employeeId) || eq(u['User ID'], employeeId));
-    if (!user || !eq(user.Status || 'Active', 'Active')) return fail('Invalid Employee ID or Password.');
-    if (safe(user.Password) !== safe(password)) return fail('Invalid Employee ID or Password.');
-    const safeUser = { ...user };
-    delete safeUser.Password;
-    return ok({ user: safeUser });
+    try {
+      const user = await authenticateEmployeeFromMongo(employeeId, password);
+      if (!user) return fail('Invalid Employee ID or Password.');
+      return ok({ user });
+    } catch (error) {
+      return fail(error.message);
+    }
+  },
+
+  async validateCurrentUser(employeeId) {
+    try {
+      const user = await getEmployeeSessionFromMongo(employeeId);
+      if (!user) return fail('Employee session is no longer valid. Please login again.');
+      return ok({ user });
+    } catch (error) {
+      return fail(error.message);
+    }
   },
 
   async clientAuthenticate(clientId, password) {
-    const data = await rows();
-    const client = data.clients.find((c) => eq(c.Client_Id, clientId) || eq(c['Client ID'], clientId));
-    if (!client || !eq(client.Status || 'Active', 'Active')) return fail('Invalid Client ID or Password, or account is inactive.');
-    if (safe(client.Password) !== safe(password)) return fail('Invalid Client ID or Password, or account is inactive.');
-    const safeClient = { ...client };
-    delete safeClient.Password;
-    return ok({ client: safeClient });
+    try {
+      const client = await authenticateClientFromMongo(clientId, password);
+      if (!client) return fail('Invalid Client ID or Password, or account is inactive.');
+      return ok({ client });
+    } catch (error) {
+      return fail(error.message);
+    }
+  },
+
+  async validateCurrentClient(clientId) {
+    try {
+      const client = await getClientSessionFromMongo(clientId);
+      if (!client) return fail('Client session is no longer valid. Please login again.');
+      return ok({ client });
+    } catch (error) {
+      return fail(error.message);
+    }
   },
 
   async checkPaymentRestriction(clientId) {
@@ -605,19 +1029,19 @@ const handlers = {
     const myTodos = allMyTodos.filter((t) => dateInRange(t.Date, start, end));
     const allTasks = [...allMyTickets, ...allMyFms, ...allMyTodos];
     const todaysTasks = allTasks.filter((t) => t.Date === today());
-    const dashboardTickets = todaysTasks.filter((t) => t.Type === 'Ticket' || t['Ticket ID']);
-    const dashboardFms = todaysTasks.filter((t) => t.Type === 'FMS' || t['Task ID'] || t['Task Description'] && eq(t.Source, 'FMS'));
-    const dashboardTodos = todaysTasks.filter((t) => t.Type === 'To-Do' || t['Task ID'] || t.Task);
+    const dashboardTickets = myTickets;
+    const dashboardFms = myFms;
+    const dashboardTodos = myTodos;
     const dashboardTasks = [...dashboardTickets, ...dashboardFms, ...dashboardTodos];
     const upcomingTasks = dashboardTasks.filter((t) => isDashboardActionableStatus(t.Status));
     const pendingTickets = dashboardTickets.filter((t) => isDashboardActionableStatus(t.Status)).length;
-    const doneTickets = dashboardTickets.filter((t) => isClosedStatus(t.Status)).length;
+    const doneTickets = dashboardTickets.filter((t) => isUserCompletedStatus(t.Status)).length;
     const pendingFms = dashboardFms.filter((t) => isDashboardActionableStatus(t.Status)).length;
     const doneFms = dashboardFms.filter((t) => isClosedStatus(t.Status)).length;
     const pendingTodos = dashboardTodos.filter((t) => isDashboardActionableStatus(t.Status)).length;
     const plannedMinutes = dashboardTasks.reduce((sum, task) => sum + num(task.TAT), 0);
     const productiveMinutes = [...dashboardTickets, ...dashboardFms].reduce((sum, task) => {
-      if (isClosedStatus(task.Status) || /in progress/i.test(task.Status)) return sum + (durationToMinutes(task.Duration) || num(task.TAT));
+      if (isUserCompletedStatus(task.Status) || /in progress/i.test(task.Status)) return sum + (durationToMinutes(task.Duration) || num(task.TAT));
       return sum;
     }, 0);
     const occupied = plannedMinutes ? Math.min(100, Math.round((productiveMinutes / Math.max(plannedMinutes, 1)) * 100)) : 0;
@@ -632,7 +1056,7 @@ const handlers = {
       lastSevenLabels.push(d.toLocaleDateString('en-US', { weekday: 'short' }));
       lastSevenCompleted.push([...allMyTickets, ...allMyFms].filter((task) => task.Date === ymd && isUserCompletedStatus(task.Status)).length);
     }
-    const referenceSeries = eq(employeeId, 'VK') ? [1, 0, 2, 2, 2, 4, 0] : lastSevenCompleted;
+    const referenceSeries = lastSevenCompleted;
     return ok({
       data: {
         currentUser: user,
@@ -710,7 +1134,7 @@ const handlers = {
       employeeName: attendanceData['Employee Name'],
       date: attendanceData.Date || today(),
       action,
-      status: attendanceData.Status || 'Present',
+      status: action === 'Punch Out' ? 'Completed' : (attendanceData.Status || 'Present'),
       inTime: action === 'Punch In' ? punchTime : '',
       outTime: action === 'Punch Out' ? punchTime : ''
     });
@@ -742,25 +1166,25 @@ const handlers = {
     const attendance = data.attendance.filter((r) => eq(r['Employee ID'] || r.EmpID, employeeId));
     const leaves = data.leaves.filter((r) => eq(r['Employee ID'], employeeId));
     const intimations = data.intimations.filter((r) => eq(r['Employee ID'], employeeId));
-    const todayRow = attendance.find((r) => normalizedDate(r.Date) === today() && r.Action === 'Punch In');
-    const yesterday = (() => {
-      const d = referenceNow();
-      d.setDate(d.getDate() - 1);
-      return localDate(d);
-    })();
-    const yesterdayOut = attendance.find((r) => normalizedDate(r.Date) === yesterday && r.Action === 'Punch Out');
-    const yesterdayIn = attendance.find((r) => normalizedDate(r.Date) === yesterday && r.Action === 'Punch In');
-    const attendanceRequests = [todayRow, yesterdayOut, yesterdayIn].filter(Boolean);
+    const attendanceRequests = attendance.filter((r) => {
+      const status = first(r, ['Status'], '');
+      const remarks = first(r, ['Admin Remarks', 'Remarks'], '');
+      return /pending|approved|rejected|submitted|need approval|hr approved/i.test(status) || safe(remarks);
+    });
     const tableData = [
       ...attendanceRequests.map((r) => ({
+        ID: first(r, ['AttendanceID', 'ID']),
+        AttendanceID: first(r, ['AttendanceID', 'ID']),
         Type: 'Attendance',
         SubType: r.Action || 'Punch Approval',
         Date: displayDate(r.Date),
         Reason: 'Punch Approval',
-        Status: 'Pending',
+        Status: first(r, ['Status'], 'Pending'),
         Remarks: first(r, ['Admin Remarks', 'Remarks'], '-')
       })),
       ...intimations.map((r) => ({
+        ID: first(r, ['IntimationID', 'Intimation ID', 'ID']),
+        IntimationID: first(r, ['IntimationID', 'Intimation ID', 'ID']),
         Type: 'Intimation',
         SubType: first(r, ['Intimation Type', 'Type'], 'Work from Home'),
         Date: displayDate(first(r, ['Intimation Date', 'Date'])),
@@ -769,6 +1193,8 @@ const handlers = {
         Remarks: first(r, ['Admin Remarks', 'Remarks'], '-')
       })),
       ...leaves.map((r) => ({
+        ID: first(r, ['LeaveID', 'Leave ID', 'ID']),
+        LeaveID: first(r, ['LeaveID', 'Leave ID', 'ID']),
         Type: 'Leave',
         SubType: first(r, ['Leave Type', 'Type'], 'Sick Leave'),
         Date: `${displayDate(first(r, ['Start Date', 'Date']))}${first(r, ['End Date']) && first(r, ['End Date']) !== first(r, ['Start Date']) ? ` to ${displayDate(first(r, ['End Date']))}` : ''}`,
@@ -777,28 +1203,6 @@ const handlers = {
         Remarks: first(r, ['Admin Remarks', 'Remarks'], '-')
       }))
     ];
-    const historicalTypes = [
-      ['Intimation', 'Work from Home', 'Visited client office for discussion', 'HR Approved'],
-      ['Intimation', 'Late Arrival', 'Traffic delay', 'HR Approved'],
-      ['Leave', 'Casual Leave', 'Personal work', 'HR Approved'],
-      ['Intimation', 'Work from Home', 'Network work from hometown', 'HR Approved'],
-      ['Attendance', 'Punch In', 'Punch Approval', 'Pending'],
-      ['Attendance', 'Punch Out', 'Punch Approval', 'Pending'],
-      ['Intimation', 'Work from Home', 'Family function', 'Rejected'],
-      ['Leave', 'Sick Leave', 'Not feeling well', 'HR Approved']
-    ];
-    for (let i = 0; tableData.length < 70; i += 1) {
-      const [Type, SubType, Reason, Status] = historicalTypes[i % historicalTypes.length];
-      const date = new Date(2026, i % 2 === 0 ? 3 : 2, 28 - (i % 25));
-      tableData.push({
-        Type,
-        SubType,
-        Date: displayDate(localDate(date)),
-        Reason,
-        Status,
-        Remarks: '-'
-      });
-    }
     return ok({
       data: tableData,
       leaves,
@@ -808,13 +1212,13 @@ const handlers = {
   },
 
   async submitLeaveRequest(leaveData = {}) {
-    const row = { LeaveID: leaveData.LeaveID || `LEAVE_${Date.now()}`, Status: 'Pending', ...leaveData };
+    const row = { LeaveID: leaveData.LeaveID || `LEAVE_${Date.now()}`, Status: 'Pending', 'Last Update Date': nowIso(), ...leaveData };
     await insertRow('Leave', row);
     return ok({ message: 'Leave request submitted.', item: row });
   },
 
   async submitIntimation(intimationData = {}) {
-    const row = { IntimationID: intimationData.IntimationID || `INT_${Date.now()}`, Status: 'Submitted', ...intimationData };
+    const row = { IntimationID: intimationData.IntimationID || `INT_${Date.now()}`, Status: 'Submitted', 'Last Update Date': nowIso(), ...intimationData };
     await insertRow('Intimation', row);
     return ok({ message: 'Intimation submitted.', item: row });
   },
@@ -822,7 +1226,7 @@ const handlers = {
   async recordExpense(expenseData = {}) {
     const gate = await requireAttendanceActive(expenseData['Employee ID']);
     if (gate) return gate;
-    const row = { ExpenseID: expenseData.ExpenseID || `EXP_${Date.now()}`, Status: 'Pending', ...expenseData };
+    const row = { ExpenseID: expenseData.ExpenseID || `EXP_${Date.now()}`, Status: 'Pending', 'Last Update Date': nowIso(), ...expenseData };
     row['Receipt URL'] = normalizeAttachmentField(expenseData.Receipt || expenseData['Receipt URL'], 'expenses');
     await insertRow('Expense', row);
     return ok({ message: 'Expense recorded.', item: row });
@@ -850,9 +1254,9 @@ const handlers = {
       tickets: data.tickets.map((ticket) => ({
         ...asTicketRow(ticket),
         Name: first(ticket, ['Name', 'Client Name', 'Client'], clientName(ticket, data.clients)),
-        'Start Time': first(ticket, ['Start Time'], ticket.Status === 'In Progress' ? '10:36:58' : ''),
+        'Start Time': first(ticket, ['Start Time']),
         'End Time': first(ticket, ['End Time']),
-        'Total Duration': first(ticket, ['Total Duration', 'Duration'], ticket.Status === 'In Progress' ? '2h 51m' : '')
+        'Total Duration': first(ticket, ['Total Duration', 'Duration'])
       })),
       categories,
       dropdowns
@@ -860,9 +1264,11 @@ const handlers = {
   },
 
   async createTicketInSheet(ticketData = {}) {
-    const creatorId = first(ticketData, ['Creator ID', 'createdBy', 'Employee ID']);
-    const gate = await requireAttendanceActive(creatorId);
-    if (gate) return gate;
+    const creatorId = first(ticketData, ['Creator ID', 'createdBy', 'Created By']);
+    if (creatorId) {
+      const gate = await requireAttendanceActive(creatorId);
+      if (gate) return gate;
+    }
     const id = ticketData['Ticket ID'] || ticketData.ID || `TICKET_${Date.now()}`;
     const description = first(ticketData, ['Task Description', 'Description']);
     const clientId = first(ticketData, ['Client_Id', 'Client ID']);
@@ -1006,6 +1412,9 @@ const handlers = {
   async reassignTicket(ticketId, reassignToId, reassignById, remarks) {
     const gate = await requireAttendanceActive(reassignById);
     if (gate) return gate;
+    const data = await rows();
+    const ticket = data.tickets.find((item) => eq(item['Ticket ID'], ticketId));
+    if (!ticket) return fail('Ticket not found.');
     const row = await upsertRow('Ticket', 'Ticket ID', ticketId, {
       'Ticket ID': ticketId,
       'Employee ID': reassignToId === 'client' ? '' : reassignToId,
@@ -1018,6 +1427,9 @@ const handlers = {
   },
 
   async processClientResponse(ticketId, clientResponse, newPlanDate, attachment) {
+    const data = await rows();
+    const ticket = data.tickets.find((item) => eq(item['Ticket ID'], ticketId));
+    if (!ticket) return fail('Ticket not found.');
     const attachmentUrl = attachment?.base64 ? saveBase64File(attachment, 'client_responses') : '';
     const row = await upsertRow('Ticket', 'Ticket ID', ticketId, {
       'Ticket ID': ticketId,
@@ -1032,6 +1444,9 @@ const handlers = {
   async transferTicketApproval(ticketId, targetManagerId, currentManagerId, remarks) {
     const gate = await requireAttendanceActive(currentManagerId);
     if (gate) return gate;
+    const data = await rows();
+    const ticket = data.tickets.find((item) => eq(item['Ticket ID'], ticketId));
+    if (!ticket) return fail('Ticket not found.');
     const row = await upsertRow('Ticket', 'Ticket ID', ticketId, {
       'Ticket ID': ticketId,
       'Task Approver': targetManagerId,
@@ -1042,6 +1457,11 @@ const handlers = {
   },
 
   async updateTicketSchedule(ticketId, newTAT, newPlanDate, reason, empId) {
+    const gate = await requireAttendanceActive(empId);
+    if (gate) return gate;
+    const data = await rows();
+    const ticket = data.tickets.find((item) => eq(item['Ticket ID'], ticketId));
+    if (!ticket) return fail('Ticket not found.');
     const row = await upsertRow('Ticket', 'Ticket ID', ticketId, {
       'Ticket ID': ticketId,
       TAT: newTAT,
@@ -1125,14 +1545,39 @@ const handlers = {
       acc[status] = (acc[status] || 0) + 1;
       return acc;
     }, {});
-    return ok({
+    const toClientTaskType = (task) => first(task, ['TaskType', 'taskType'], task['Ticket ID'] ? 'Ticket' : task['Post ID'] ? 'Social Media' : 'Checklist');
+    const toClientTaskId = (task) => first(task, ['Ticket ID', 'Task ID', 'Post ID', 'ID']);
+    const toClientTaskDescription = (task) => first(task, ['Description', 'Task Description', 'Task', 'Caption', 'Post Title'], 'Task');
+    const pendingActions = allTasks
+      .filter((task) => !isClosedStatus(task.Status))
+      .slice(0, 8)
+      .map((task) => {
+        const taskType = toClientTaskType(task);
+        return {
+          ...task,
+          id: toClientTaskId(task),
+          taskType,
+          type: `${taskType} ${first(task, ['Status'], 'Open')}`,
+          description: toClientTaskDescription(task)
+        };
+      });
+    const recentActivity = allTasks.slice(0, 8).map((task) => ({
+      ...task,
+      id: toClientTaskId(task),
+      type: toClientTaskType(task),
+      status: first(task, ['Status'], 'Open'),
+      message: `${toClientTaskDescription(task)} updated to ${first(task, ['Status'], 'Open')}`,
+      timestamp: first(task, ['Date', 'Plan Date', 'Timestamp'])
+    }));
+    const dashboardData = {
       kpis: { openTickets, pendingChecklists, pendingSocial, completedTasks, totalTasks: allTasks.length, outstandingAmount },
       summary: { openTickets, pendingChecklists, pendingSocial, completedTasks, totalTasks: allTasks.length, outstandingAmount },
       statusChartData: { labels: Object.keys(statusCounts), data: Object.values(statusCounts) },
       activityChartData: { labels: [today()], data: [allTasks.length] },
-      pendingActions: allTasks.filter((t) => !isClosedStatus(t.Status)).slice(0, 8),
-      recentActivity: allTasks.slice(0, 8).map((task) => ({ message: `${first(task, ['Description', 'Task Description', 'Task'], 'Task')} updated to ${task.Status || 'Open'}`, date: first(task, ['Date', 'Plan Date', 'Timestamp']) }))
-    });
+      pendingActions,
+      recentActivity
+    };
+    return ok({ ...dashboardData, data: dashboardData });
   },
 
   async getClientReportData(clientId, startDate, endDate) {
@@ -1233,22 +1678,74 @@ const handlers = {
 
   async getFmsTasksForApp(employeeId) {
     const data = await rows();
+    const context = buildFmsVisibilityContext(employeeId, data.users);
+    if (!context.valid) return fail('Access denied: user not found.');
     const items = data.fms.map((f) => {
       const row = normalizeFmsForDashboard(f, data.users, data.clients);
-      row._isMyTask = eq(row['Employee ID'] || row.empId, employeeId);
+      const decision = fmsVisibilityDecision(context, row);
+      row._isMyTask = decision.isMyTask;
+      row._isTeamTask = decision.isTeamTask;
+      row._role = context.role;
       return row;
-    });
-    return ok({ data: items });
+    }).filter((row) => row._isMyTask || row._isTeamTask || ['Super Admin', 'HR'].includes(context.role));
+    return ok({ data: items, meta: { role: context.role, teamCount: context.teamMembers.length } });
+  },
+
+  async saveFmsTaskForApp(taskData = {}) {
+    const id = first(taskData, ['Task ID', 'ID', 'rowId'], `FMS_${Date.now()}`);
+    const row = {
+      ...taskData,
+      'Task ID': id,
+      ID: id,
+      rowId: id,
+      'Employee ID': first(taskData, ['Employee ID', 'empId']),
+      empId: first(taskData, ['empId', 'Employee ID']),
+      'Employee Name': first(taskData, ['Employee Name', 'who']),
+      who: first(taskData, ['who', 'Employee Name']),
+      'Task Description': first(taskData, ['Task Description', 'Description', 'taskName']),
+      Description: first(taskData, ['Description', 'Task Description', 'taskName']),
+      'Plan Date': first(taskData, ['Plan Date', 'Date', 'planDate'], today()),
+      Date: first(taskData, ['Date', 'Plan Date', 'planDate'], today()),
+      Status: first(taskData, ['Status'], 'Pending'),
+      'Last Update Date': nowIso(),
+      actualDate: first(taskData, ['actualDate', 'Done Date']),
+      'Done Date': first(taskData, ['Done Date', 'actualDate'])
+    };
+    await upsertRow('FmsTask', 'Task ID', id, row);
+    return ok({ message: 'FMS task saved.', item: row });
   },
 
   async markFmsTaskDoneInApp(rowId, remarks, employeeId) {
     const gate = await requireAttendanceActive(employeeId);
     if (gate) return gate;
+    const data = await rows();
+    const context = buildFmsVisibilityContext(employeeId, data.users);
+    if (!context.valid) return fail('Access denied: user not found.');
+    const existing = data.fms.map((item) => normalizeFmsForDashboard(item, data.users, data.clients)).find((item) => eq(item['Task ID'] || item.ID || item.rowId, rowId));
+    if (!existing) return fail('FMS task not found.');
+    const decision = fmsVisibilityDecision(context, existing);
+    if (!decision.canSee) {
+      return fail('Access denied: this FMS task is not assigned to you or your hierarchy.');
+    }
+    if (!decision.isMyTask) {
+      return fail('View only: manager/team FMS tasks can be viewed, but only assigned user can complete them.');
+    }
+    if (first(existing, ['Done Date', 'actualDate'])) {
+      return fail('Task is already completed.');
+    }
+    const planDate = normalizedDate(first(existing, ['Plan Date', 'Date'], today()));
+    const actualDate = today();
+    const delayDays = Math.max(0, Math.ceil((new Date(`${actualDate}T00:00:00+05:30`) - new Date(`${planDate}T00:00:00+05:30`)) / (24 * 60 * 60 * 1000)));
     const row = await upsertRow('FmsTask', 'Task ID', rowId, {
       'Task ID': rowId,
       Status: 'Completed',
-      'Done Date': today(),
-      actualDate: today(),
+      'Done Date': actualDate,
+      'Last Update Date': nowIso(),
+      actualDate,
+      'Delay Days': delayDays,
+      delayDays,
+      'On Time Status': delayDays > 0 ? 'Late' : 'On Time',
+      onTimeStatus: delayDays > 0 ? 'Late' : 'On Time',
       Remarks: remarks || '',
       'Completed By': employeeId
     });
@@ -1277,7 +1774,8 @@ const handlers = {
       'Due Date': dueDate,
       Date: dueDate,
       TAT: tat || '',
-      Status: 'Pending'
+      Status: 'Pending',
+      'Last Update Date': nowIso()
     };
     await insertRow('Todo', row);
     return ok({ item: row });
@@ -1295,7 +1793,8 @@ const handlers = {
       'Due Date': first(todoData, ['Due Date', 'Plan Date', 'Date']),
       Date: first(todoData, ['Plan Date', 'Due Date', 'Date']),
       TAT: first(todoData, ['TAT', 'When']),
-      Status: first(todoData, ['Status'], 'Pending')
+      Status: first(todoData, ['Status'], 'Pending'),
+      'Last Update Date': nowIso()
     };
     await insertRow('Todo', row);
     return ok({ message: 'To-Do created.', item: row });
@@ -1304,28 +1803,31 @@ const handlers = {
   async toggleTodoStatus(taskId, currentStatus) {
     const data = await rows();
     const todo = data.todos.find((item) => eq(item['Task ID'] || item.TodoID, taskId));
+    if (!todo) return fail('To-Do task not found.');
     const gate = await requireAttendanceActive(todo?.['Employee ID']);
     if (gate) return gate;
     const nextStatus = isClosedStatus(currentStatus) ? 'Pending' : 'Completed';
-    const row = await upsertRow('Todo', 'Task ID', taskId, { 'Task ID': taskId, Status: nextStatus });
+    const row = await upsertRow('Todo', 'Task ID', taskId, { 'Task ID': taskId, Status: nextStatus, 'Last Update Date': nowIso() });
     return ok({ item: row });
   },
 
   async editTodoItem(taskId, newTask, newPriority, newDueDate, newTAT) {
     const data = await rows();
     const todo = data.todos.find((item) => eq(item['Task ID'] || item.TodoID, taskId));
+    if (!todo) return fail('To-Do task not found.');
     const gate = await requireAttendanceActive(todo?.['Employee ID']);
     if (gate) return gate;
-    const row = await upsertRow('Todo', 'Task ID', taskId, { 'Task ID': taskId, Task: newTask, Priority: newPriority, 'Due Date': newDueDate, TAT: newTAT });
+    const row = await upsertRow('Todo', 'Task ID', taskId, { 'Task ID': taskId, Task: newTask, Priority: newPriority, 'Due Date': newDueDate, TAT: newTAT, 'Last Update Date': nowIso() });
     return ok({ item: row });
   },
 
   async deleteTodoItem(taskId) {
     const data = await rows();
     const todo = data.todos.find((item) => eq(item['Task ID'] || item.TodoID, taskId));
+    if (!todo) return fail('To-Do task not found.');
     const gate = await requireAttendanceActive(todo?.['Employee ID']);
     if (gate) return gate;
-    const row = await upsertRow('Todo', 'Task ID', taskId, { 'Task ID': taskId, Status: 'Deleted' });
+    const row = await upsertRow('Todo', 'Task ID', taskId, { 'Task ID': taskId, Status: 'Deleted', 'Last Update Date': nowIso() });
     return ok({ item: row });
   },
 
@@ -1334,15 +1836,17 @@ const handlers = {
     if (gate) return gate;
     const created = [];
     for (const item of todosList) {
-      created.push((await handlers.addTodo(
+      const result = await handlers.addTodo(
         employeeId,
         item.task || item.Task,
         item.priority || item.Priority,
         item.dueDate || item['Due Date'],
         item.tat || item.TAT
-      )).item);
+      );
+      if (!result.success) return result;
+      created.push(result.item);
     }
-    return ok({ data: created });
+    return ok({ message: `${created.length} to-do task(s) added.`, data: created });
   },
 
   async getTaskMessages(taskId) {
@@ -1396,20 +1900,149 @@ const handlers = {
   async checkForNewNotifications(employeeId, lastCheckTimestamp = 0) {
     const data = await rows();
     const cutoff = Number(lastCheckTimestamp) || Date.parse(lastCheckTimestamp) || 0;
-    const notifications = data.tickets
-      .filter((ticket) => !employeeId || eq(ticket['Employee ID'], employeeId) || eq(ticket['Task Approver'], employeeId))
-      .filter((ticket) => {
-        const updateTime = Date.parse(first(ticket, ['Last Update Date', 'Timestamp', 'Date']));
-        return !cutoff || Number.isNaN(updateTime) || updateTime >= cutoff;
-      })
-      .slice(0, 10)
-      .map((ticket) => ({
-        ...ticket,
-        'Ticket ID': first(ticket, ['Ticket ID', 'ID']),
-        'Last Update Date': first(ticket, ['Last Update Date', 'Timestamp', 'Date'], nowIso()),
-        Message: `${first(ticket, ['Task Description', 'Description'], 'Ticket')} is ${first(ticket, ['Status'], 'Updated')}`
-      }));
-    return ok({ notifications, updates: notifications, serverTime: Date.now() });
+    const scope = employeeNotificationScope(employeeId, data);
+    const notifications = [];
+
+    const pushIfVisible = (item, visible) => {
+      if (!visible || !isNewerThanCutoff(item.Timestamp || item['Last Update Date'], cutoff)) return;
+      notifications.push(item);
+    };
+
+    data.tickets.forEach((ticket) => {
+      const ticketId = first(ticket, ['Ticket ID', 'ID']);
+      const ownerId = safe(first(ticket, ['Employee ID'])).toUpperCase();
+      const approvers = splitIds(first(ticket, ['Task Approver']));
+      const isMine = ownerId === scope.cleanEmpId;
+      const isApprover = approvers.includes(scope.cleanEmpId.toLowerCase());
+      const isTeam = scope.managedIds.has(ownerId);
+      const visible = scope.isElevated ? (isMine || isApprover || isTeam) : (isMine || isApprover);
+      if (!visible) return;
+      pushIfVisible(notificationRecord({
+        id: ticketId,
+        module: 'tickets',
+        type: 'Ticket',
+        view: 'ticket-system-view',
+        status: first(ticket, ['Status'], 'Updated'),
+        message: `${first(ticket, ['Task Description', 'Description'], 'Ticket')} is ${first(ticket, ['Status'], 'Updated')}`,
+        timestamp: notificationTimestamp(ticket),
+        actor: first(ticket, ['Last Action By'], ''),
+        owner: first(ticket, ['Employee Name'], ownerId),
+        meta: { 'Ticket ID': ticketId }
+      }), true);
+    });
+
+    data.leaves.forEach((leave) => {
+      const ownerId = safe(first(leave, ['Employee ID'])).toUpperCase();
+      const ownerName = first(leave, ['Employee Name', 'Name'], ownerId);
+      const status = first(leave, ['Status'], 'Pending');
+      const visibleToOwner = ownerId === scope.cleanEmpId;
+      const visibleToApprover = /pending/i.test(status) && (['Super Admin', 'HR'].includes(scope.role) || scope.managedIds.has(ownerId));
+      pushIfVisible(notificationRecord({
+        id: first(leave, ['LeaveID', 'Leave ID', 'ID']),
+        module: 'leave',
+        type: 'Leave',
+        view: visibleToOwner ? 'my-requests-view' : 'approvals-view',
+        status,
+        message: visibleToOwner
+          ? `Leave request is ${status}`
+          : `New leave request from ${ownerName}`,
+        timestamp: notificationTimestamp(leave, first(leave, ['Start Date', 'Date'])),
+        owner: ownerName
+      }), visibleToOwner || visibleToApprover);
+    });
+
+    data.intimations.forEach((item) => {
+      const ownerId = safe(first(item, ['Employee ID'])).toUpperCase();
+      const ownerName = first(item, ['Employee Name', 'Name'], ownerId);
+      const status = first(item, ['Status'], 'Submitted');
+      const visibleToOwner = ownerId === scope.cleanEmpId;
+      const visibleToApprover = /pending|submitted/i.test(status) && (['Super Admin', 'HR'].includes(scope.role) || scope.managedIds.has(ownerId));
+      pushIfVisible(notificationRecord({
+        id: first(item, ['IntimationID', 'Intimation ID', 'ID']),
+        module: 'intimation',
+        type: 'Intimation',
+        view: visibleToOwner ? 'my-requests-view' : 'approvals-view',
+        status,
+        message: visibleToOwner
+          ? `Intimation is ${status}`
+          : `New intimation from ${ownerName}`,
+        timestamp: notificationTimestamp(item, first(item, ['Intimation Date', 'Date'])),
+        owner: ownerName
+      }), visibleToOwner || visibleToApprover);
+    });
+
+    data.attendance.forEach((item) => {
+      const ownerId = safe(first(item, ['Employee ID', 'EmpID'])).toUpperCase();
+      const ownerName = first(item, ['Employee Name', 'Name'], ownerId);
+      const status = first(item, ['Status'], first(item, ['Action'], 'Present'));
+      const visibleToOwner = ownerId === scope.cleanEmpId;
+      const visibleToApprover = /pending|need approval/i.test(status) && (['Super Admin', 'HR'].includes(scope.role) || scope.managedIds.has(ownerId));
+      pushIfVisible(notificationRecord({
+        id: first(item, ['AttendanceID', 'ID']),
+        module: 'attendance',
+        type: 'Attendance',
+        view: visibleToOwner ? 'attendance-view' : 'approvals-view',
+        status,
+        message: visibleToOwner
+          ? `Attendance update: ${status}`
+          : `Attendance approval needed for ${ownerName}`,
+        timestamp: notificationTimestamp(item, first(item, ['Date'])),
+        owner: ownerName
+      }), visibleToOwner || visibleToApprover);
+    });
+
+    data.expenses.forEach((item) => {
+      const ownerId = safe(first(item, ['Employee ID', 'EmpID'])).toUpperCase();
+      const ownerName = first(item, ['Employee Name', 'Name'], ownerId);
+      const status = first(item, ['Status'], 'Pending');
+      const visibleToOwner = ownerId === scope.cleanEmpId;
+      const visibleToApprover = /pending/i.test(status) && ['Super Admin', 'HR', 'Admin'].includes(scope.role);
+      pushIfVisible(notificationRecord({
+        id: first(item, ['ExpenseID', 'ID']),
+        module: 'expense',
+        type: 'Expense',
+        view: 'expense-view',
+        status,
+        message: visibleToOwner
+          ? `Expense request is ${status}`
+          : `Expense approval needed for ${ownerName}`,
+        timestamp: notificationTimestamp(item, first(item, ['Date'])),
+        owner: ownerName
+      }), visibleToOwner || visibleToApprover);
+    });
+
+    data.fms.forEach((task) => {
+      const decision = fmsVisibilityDecision(scope.fmsContext, task);
+      if (!decision.canSee) return;
+      pushIfVisible(notificationRecord({
+        id: first(task, ['Task ID', 'ID', 'rowId']),
+        module: 'fms',
+        type: 'FMS',
+        view: 'fms-view',
+        status: first(task, ['Status'], 'Pending'),
+        message: `${first(task, ['Task Description', 'Description'], 'FMS task')} is ${first(task, ['Status'], 'Pending')}`,
+        timestamp: notificationTimestamp(task, first(task, ['Done Date', 'Plan Date', 'Date'])),
+        owner: first(task, ['Employee Name', 'User', 'who'], '')
+      }), decision.isMyTask || decision.isTeamTask || ['Super Admin', 'HR'].includes(scope.role));
+    });
+
+    data.todos.forEach((todo) => {
+      const ownerId = safe(first(todo, ['Employee ID', 'EmpID'])).toUpperCase();
+      if (ownerId !== scope.cleanEmpId) return;
+      pushIfVisible(notificationRecord({
+        id: first(todo, ['Task ID', 'TodoID', 'ID']),
+        module: 'todo',
+        type: 'To-Do',
+        view: 'todo-view',
+        status: first(todo, ['Status'], 'Pending'),
+        message: `${first(todo, ['Task', 'Description'], 'To-do')} is ${first(todo, ['Status'], 'Pending')}`,
+        timestamp: notificationTimestamp(todo, first(todo, ['Due Date', 'Date']))
+      }), true);
+    });
+
+    notifications.sort((a, b) => (Date.parse(b.Timestamp || b['Last Update Date']) || 0) - (Date.parse(a.Timestamp || a['Last Update Date']) || 0));
+    const sliced = notifications.slice(0, 20);
+    return ok({ notifications: sliced, updates: sliced, serverTime: Date.now() });
   },
 
   async checkForNewUpdates(clientId, lastCheckTimestamp = new Date(0).toISOString()) {
@@ -1427,6 +2060,18 @@ const handlers = {
         message: `${first(ticket, ['Task Description', 'Description'], 'Ticket')} is ${first(ticket, ['Status'], 'Updated')}`,
         timestamp: first(ticket, ['Last Update Date', 'Timestamp', 'Date'], nowIso())
       }));
+    const checklistUpdates = data.fms
+      .filter((task) => eq(first(task, ['Client_Id', 'Client ID']), clientId) && !task.IsNotified)
+      .filter((task) => {
+        const updateTime = Date.parse(notificationTimestamp(task, first(task, ['Done Date', 'Plan Date', 'Date'])));
+        return !cutoff || Number.isNaN(updateTime) || updateTime >= cutoff;
+      })
+      .map((task) => ({
+        id: first(task, ['Task ID', 'ID', 'rowId']),
+        type: 'Checklist',
+        message: `${first(task, ['Task Description', 'Description'], 'Checklist task')} is ${first(task, ['Status'], 'Updated')}`,
+        timestamp: notificationTimestamp(task, first(task, ['Done Date', 'Plan Date', 'Date']))
+      }));
     const socialUpdates = data.social
       .filter((post) => eq(post.Client_Id, clientId) && !post.IsNotified)
       .filter((post) => {
@@ -1439,11 +2084,17 @@ const handlers = {
         message: `${first(post, ['Description', 'Caption'], 'Social post')} is ${first(post, ['Status'], 'Updated')}`,
         timestamp: first(post, ['Latest Update Date', 'Planned Post Date', 'Date'], nowIso())
       }));
-    return ok({ updates: [...ticketUpdates, ...socialUpdates].slice(0, 10), serverTime: nowIso() });
+    return ok({ updates: [...ticketUpdates, ...checklistUpdates, ...socialUpdates].slice(0, 10), serverTime: nowIso() });
   },
 
   async markAsNotified(sheetName, keyColumn, id, updateData = {}) {
-    const model = /ticket/i.test(sheetName) ? 'Ticket' : /social/i.test(sheetName) ? 'SocialMedia' : 'Message';
+    const model = /ticket/i.test(sheetName)
+      ? 'Ticket'
+      : /social/i.test(sheetName)
+        ? 'SocialMedia'
+        : /fms|checklist/i.test(sheetName)
+          ? 'FmsTask'
+          : 'Message';
     const row = await upsertRow(model, keyColumn, id, { [keyColumn]: id, ...updateData });
     return ok({ item: row });
   },
@@ -1482,7 +2133,19 @@ const handlers = {
 
   async exportReportForWeb(format = 'csv', sheetName = 'Report') {
     const data = await rows();
-    const source = /ticket/i.test(sheetName) ? data.tickets : /fms/i.test(sheetName) ? data.fms : /attendance/i.test(sheetName) ? data.attendance : data.tickets;
+    const sheetKey = safe(sheetName).toLowerCase();
+    const source =
+      /ticket/.test(sheetKey) ? data.tickets :
+      /fms/.test(sheetKey) ? data.fms :
+      /attendance/.test(sheetKey) ? data.attendance :
+      /expense/.test(sheetKey) ? data.expenses :
+      /todo|to-do|to do/.test(sheetKey) ? data.todos :
+      /leave/.test(sheetKey) ? data.leaves :
+      /intimation/.test(sheetKey) ? data.intimations :
+      /user|employee/.test(sheetKey) ? data.users :
+      /client/.test(sheetKey) ? data.clients :
+      /form/.test(sheetKey) ? data.forms :
+      data.tickets;
     const headers = [...new Set(source.flatMap((row) => Object.keys(row)))];
     const normalizedFormat = safe(format).toLowerCase();
     const fileBase = cleanFileName(sheetName, 'report');
@@ -1586,26 +2249,76 @@ const handlers = {
     return data.users.filter((u) => /manager|admin|super admin|hr/i.test(safe(u.Role))).map((u) => ({ id: u['Employee ID'], name: u['Employee Name'], role: u.Role }));
   },
 
-  async getFormsData() {
+  async getFormsData(employeeId) {
     const data = await rows();
-    return ok({ data: data.forms });
+    const cleanEmpId = safe(employeeId).trim().toUpperCase();
+    const isFormsAdmin = await canManageFormsPortal(cleanEmpId);
+    return ok({
+      data: data.forms
+        .filter((form) => !eq(form.Status, 'Inactive'))
+        .filter((form) => {
+          if (!cleanEmpId) return false;
+          if (isFormsAdmin) return true;
+          const visibilityType = safe(first(form, ['Visibility Type', 'VisibilityType'], 'ALL')).toUpperCase();
+          if (visibilityType === 'ALL') return true;
+          const visibleUsers = normalizeAssignedUsers(first(form, ['Visible Users', 'VisibleUsers', 'Viewer', 'viewer'], ''));
+          return visibleUsers.includes(cleanEmpId);
+        })
+        .map((form) => ({
+          ...form,
+          'Visibility Type': safe(first(form, ['Visibility Type', 'VisibilityType'], 'ALL')).toUpperCase() || 'ALL',
+          'Visible Users': first(form, ['Visible Users', 'VisibleUsers', 'Viewer', 'viewer'], ''),
+          Viewer: safe(first(form, ['Visibility Type', 'VisibilityType'], 'ALL')).toUpperCase() === 'ALL'
+            ? 'ALL'
+            : first(form, ['Visible Users', 'VisibleUsers', 'Viewer', 'viewer'], ''),
+          'Form link': isPlaceholderUrl(form['Form link'] || form.formLink) ? '' : (form['Form link'] || form.formLink || '')
+        }))
+    });
   },
 
-  async saveFormsPortalData(formData = {}) {
-    const key = first(formData, ['Form ID', 'Sheet name'], `FORM_${Date.now()}`);
-    const row = await upsertRow('FormsPortal', 'Sheet name', key, { ...formData, 'Sheet name': key });
+  async getFormsPortalAssignableUsers(adminId = '') {
+    if (!(await canManageFormsPortal(adminId))) return fail('Access Denied: Only Super Admin can manage form access.');
+    const data = await rows();
+    return ok({
+      data: data.users
+        .filter((user) => !eq(user.Status, 'Inactive'))
+        .map((user) => ({
+          id: first(user, ['Employee ID', 'User ID']),
+          name: first(user, ['Employee Name', 'Name']),
+          department: first(user, ['Department'], ''),
+          role: first(user, ['Role'], ''),
+          status: first(user, ['Status'], 'Active')
+        }))
+        .filter((user) => safe(user.id))
+        .sort((a, b) => `${a.name} ${a.id}`.localeCompare(`${b.name} ${b.id}`))
+    });
+  },
+
+  async saveFormsPortalData(formData = {}, adminId = '') {
+    if (!(await canManageFormsPortal(adminId))) return fail('Access Denied: Only Super Admin has rights to update Forms.');
+    const sheetName = first(formData, ['Sheet name', 'sheetName', 'Category'], `FORM_${Date.now()}`);
+    const formId = first(formData, ['Form ID', 'ID'], formPortalIdForSheet(sheetName));
+    const normalized = normalizeFormPortalPayload(formData);
+    const row = await upsertRow('FormsPortal', 'Sheet name', sheetName, { ...normalized, 'Form ID': formId, 'Sheet name': sheetName });
     return ok({ message: 'Form saved.', item: row });
   },
 
-  async addFormsPortalData(formData = {}) {
-    const row = { 'Form ID': `FORM_${Date.now()}`, ...formData };
+  async addFormsPortalData(formData = {}, adminId = '') {
+    if (!(await canManageFormsPortal(adminId))) return fail('Access Denied: Only Super Admin can add forms.');
+    const sheetName = first(formData, ['Sheet name', 'sheetName', 'Category'], `FORM_${Date.now()}`);
+    const normalized = normalizeFormPortalPayload(formData);
+    const row = { 'Form ID': first(formData, ['Form ID', 'ID'], formPortalIdForSheet(sheetName)), ...normalized, 'Sheet name': sheetName };
     await insertRow('FormsPortal', row);
     return ok({ message: 'Form added.', item: row });
   },
 
-  async deleteFormsPortalData(sheetName) {
-    const row = await deleteOrDeactivate('FormsPortal', 'Sheet name', sheetName);
-    return ok({ message: 'Form deleted.', item: row });
+  async deleteFormsPortalData(sheetName, adminId = '') {
+    if (!(await canManageFormsPortal(adminId))) return fail('Access Denied: Only Super Admin can delete records.');
+    const forms = await listRows('FormsPortal');
+    const target = forms.find((form) => eq(first(form, ['Sheet name', 'Sheet Name', 'sheetName']), sheetName));
+    if (!target) return fail('Form record not found.');
+    await LegacyModels.FormsPortal.deleteOne({ _id: target._id });
+    return ok({ message: 'Form deleted successfully.', item: target });
   },
 
   async getClientsPortalData() {
@@ -1638,7 +2351,7 @@ const handlers = {
   async processExpenseApproval(expenseId, status, remarks, adminId) {
     const gate = await requireAttendanceActive(adminId);
     if (gate) return gate;
-    const row = await upsertRow('Expense', 'ExpenseID', expenseId, { ExpenseID: expenseId, Status: status, Remarks: remarks, 'Approved By': adminId });
+    const row = await upsertRow('Expense', 'ExpenseID', expenseId, { ExpenseID: expenseId, Status: status, Remarks: remarks, 'Approved By': adminId, 'Last Update Date': nowIso() });
     return ok({ item: row });
   },
 
@@ -1669,14 +2382,23 @@ const handlers = {
   }
 };
 
-router.post('/resetDemoData', async (_req, res) => {
+router.post('/purgeTestArtifacts', async (_req, res) => {
   try {
-    await resetLegacyStore();
-    res.json(ok({ message: 'Demo data reset.' }));
+    if (process.env.WORKTRACK_ALLOW_ARTIFACT_CLEANUP !== '1') {
+      return res.status(403).json(fail('Artifact cleanup is disabled in this environment.'));
+    }
+
+    const removed = await purgeTestArtifacts();
+
+    return res.json(ok({ message: 'Test artifacts purged.', removed }));
   } catch (error) {
     console.error(error);
-    res.status(500).json(fail(error.message));
+    return res.status(500).json(fail(error.message));
   }
+});
+
+router.post('/resetDemoData', async (_req, res) => {
+  res.status(410).json(fail('Demo reset has been removed. WorkTrack uses MongoDB data only.'));
 });
 
 router.post('/:functionName', async (req, res) => {

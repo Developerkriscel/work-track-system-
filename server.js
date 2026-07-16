@@ -93,7 +93,6 @@ app.get(['/reset-localhost', '/reset-cache', '/clear-cache'], (_req, res) => {
             const keys = await caches.keys();
             await Promise.all(keys.map(key => caches.delete(key)));
           }
-          await fetch('/api/apps-script/resetDemoData', { method: 'POST' }).catch(() => {});
           localStorage.clear();
           sessionStorage.clear();
           document.cookie.split(';').forEach(cookie => {
@@ -111,7 +110,7 @@ app.get(['/reset-localhost', '/reset-cache', '/clear-cache'], (_req, res) => {
 });
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'worktrack-mern', mode: process.env.MONGO_URI ? 'mongo' : 'seed' });
+  res.json({ ok: true, service: 'worktrack-mern', mode: 'mongo' });
 });
 
 app.get('/favicon.ico', (_req, res) => {
@@ -132,6 +131,7 @@ const exactPages = {
 
 function renderExactPage(fileName) {
   const filePath = path.join(__dirname, 'appscript', fileName);
+  const referenceStamp = process.env.WORKTRACK_REFERENCE_DATE || new Date().toISOString();
   const cacheCleanupTag = `<script id="mern-cache-cleanup">
     (() => {
       if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(registrations => registrations.forEach(registration => registration.unregister())).catch(() => {});
@@ -145,7 +145,7 @@ function renderExactPage(fileName) {
     body { min-width: calc(100vw / 0.85); }
     #app-views { padding-top: 1rem !important; }
   </style>`;
-  const referenceDateTag = `<script>window.WORKTRACK_REFERENCE_DATE = '${process.env.WORKTRACK_REFERENCE_DATE || '2026-07-03T12:00:00+05:30'}';</script>`;
+  const referenceDateTag = `<script>window.WORKTRACK_REFERENCE_DATE = window.WORKTRACK_REFERENCE_DATE || '${referenceStamp}';</script>`;
   return fs
     .readFileSync(filePath, 'utf8')
     .replace(/<base\s+target="_top"\s*\/?>/i, '')

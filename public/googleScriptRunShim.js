@@ -18,7 +18,7 @@
       })
       .catch(function (error) {
         if (typeof failureHandler === 'function') failureHandler(error, userObject);
-        else console.error('google.script.run bridge error:', functionName, error);
+        else console.error('mernApi bridge error:', functionName, error);
       });
   }
 
@@ -55,5 +55,6 @@
       focus: function () {}
     }
   };
-  window.google.script.run = createRunner();
+  window.mernApi = createRunner();
+  window.google.script.run = window.mernApi;
 })();

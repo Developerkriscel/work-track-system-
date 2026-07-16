@@ -2252,7 +2252,7 @@ function fetchNextAvailableSlot() {
     if (!currentClient) return;
     
     // Call server to get latest pending date
-    google.script.run.withSuccessHandler(r => {
+    mernApi.withSuccessHandler(r => {
         if (r.success) {
             const today = new Date();
             let baseDate;
@@ -2292,7 +2292,7 @@ function getFormattedDateString(dateObj) {
                 const password = $('#login-password').val().trim();
                 if (!clientId || !password) return showSwalMessage('Input Required', 'warning', 'Please enter Client ID and Password.');
                 showLoading(true);
-                google.script.run.withSuccessHandler(r => {
+                mernApi.withSuccessHandler(r => {
                     showLoading(false);
                     if (r && r.success) {
                         setupUI(r.client);
@@ -2336,6 +2336,7 @@ function getFormattedDateString(dateObj) {
 
             // Icons based on Type
             if (item.type === 'Ticket') { iconClass = 'fa-ticket-alt'; iconColor = 'text-orange-500'; }
+            if (item.type === 'Checklist') { iconClass = 'fa-list-check'; iconColor = 'text-emerald-500'; }
             if (item.type === 'Social Media') { iconClass = 'fa-share-alt'; iconColor = 'text-purple-500'; }
             
             // HTML Structure
@@ -2361,7 +2362,7 @@ function getFormattedDateString(dateObj) {
             function pollForUpdates() {
                 if (!currentClient) return;
                 const lastCheck = sessionStorage.getItem('lastCheckTimestamp') || new Date(0).toISOString();
-                google.script.run.withSuccessHandler(response => {
+                mernApi.withSuccessHandler(response => {
                     sessionStorage.setItem('lastCheckTimestamp', new Date().toISOString());
                     if (response.success && response.updates && response.updates.length > 0) {
                         response.updates.forEach(update => {
@@ -2372,7 +2373,12 @@ function getFormattedDateString(dateObj) {
                         updateNotificationUI();
 
                         response.updates.forEach(update => {
-                            google.script.run.markAsNotified('Tickets', 'Ticket ID', update.id, { 'IsNotified': true });
+                            const target = update.type === 'Social Media'
+                                ? { sheet: 'SocialMedia', key: 'Post ID' }
+                                : update.type === 'Checklist'
+                                    ? { sheet: 'FmsTask', key: 'Task ID' }
+                                    : { sheet: 'Tickets', key: 'Ticket ID' };
+                            mernApi.markAsNotified(target.sheet, target.key, update.id, { 'IsNotified': true });
                         });
 
                         const activeViewId = $('.app-view:not(.hidden)').attr('id');
@@ -2390,7 +2396,7 @@ function getFormattedDateString(dateObj) {
                 return new Promise((resolve, reject) => {
                     if (!currentClient) return reject();
                     showLoading(true);
-                    google.script.run.withSuccessHandler(r => {
+                    mernApi.withSuccessHandler(r => {
                         showLoading(false);
                         if (r && r.success) {
                             resolve(r.data);
@@ -2410,7 +2416,7 @@ function getFormattedDateString(dateObj) {
                 const resolved = resolveStoredFilterArgs('checklist-filters', filterRange, startDate, endDate);
                 if (!currentClient) return;
                 showLoading(true);
-                google.script.run.withSuccessHandler(r => {
+                mernApi.withSuccessHandler(r => {
                     showLoading(false);
                     if (r && r.success) {
                         renderChecklistTable(r.data);
@@ -2445,7 +2451,7 @@ function getFormattedDateString(dateObj) {
                 const resolved = resolveStoredFilterArgs('social-filters', filterRange, startDate, endDate);
                 if (!currentClient) return;
                 showLoading(true);
-                google.script.run.withSuccessHandler(r => {
+                mernApi.withSuccessHandler(r => {
                     showLoading(false);
                     if (r && r.success) {
                         renderSocialTable(r.data);
@@ -2462,7 +2468,7 @@ function getFormattedDateString(dateObj) {
             function loadClientInvoices() {
                 if (!currentClient) return;
                 showLoading(true);
-                google.script.run.withSuccessHandler(r => {
+                mernApi.withSuccessHandler(r => {
                     showLoading(false);
                     if (r && r.success) {
                         renderInvoicesTable(r.data);
@@ -2558,7 +2564,7 @@ function getFormattedDateString(dateObj) {
                 if (!currentClient) return;
                 showLoading(true);
                 
-                google.script.run.withSuccessHandler(r => {
+                mernApi.withSuccessHandler(r => {
                     showLoading(false);
                     if (r.success && r.data) {
                         const allTasks = r.data.details; // All tasks data
@@ -3024,7 +3030,7 @@ function getFormattedDateString(dateObj) {
               
     if (!currentClient) return;
     showLoading(true);
-    google.script.run.withSuccessHandler(r => {
+    mernApi.withSuccessHandler(r => {
         showLoading(false);
         if (r.success && r.data) {
             const kpis = r.data.kpis;
@@ -3225,11 +3231,12 @@ function renderActivityBarChart(chartData) {
                     inputAttributes: { class: 'border border-gray-300 dark:border-gray-600 rounded-xl bg-bg-light dark:bg-card-dark text-text-light dark:text-text-dark' },
                     preConfirm: (remarks) => {
                         showLoading(true);
-                        google.script.run.withSuccessHandler(r => {
+                        mernApi.withSuccessHandler(r => {
                             showLoading(false);
                             if (r && r.success) {
                                 showSwalMessage('Success!', 'success', `Ticket has been ${actionText}d.`);
                                 loadClientTickets(null, null, null).then(data => renderAllTicketTables(data));
+                                loadDashboardData();
                             } else {
                                 // 🔥 CHECK FOR RESTRICTION MESSAGE 🔥
                                 if (r.message && r.message.includes('Restricted')) {
@@ -3259,11 +3266,12 @@ function renderActivityBarChart(chartData) {
                 }).then(result => {
                     if (result.isConfirmed && result.value) {
                         showLoading(true);
-                        google.script.run.withSuccessHandler(res => {
+                        mernApi.withSuccessHandler(res => {
                             showLoading(false);
                             if (res.success) {
                                 showSwalMessage('Response Sent!', 'success', 'Your response has been submitted to the team.');
                                 loadClientTickets(null, null, null).then(data => renderAllTicketTables(data));
+                                loadDashboardData();
                                 $('#ticket-tabs button[data-tab="open"]').click();
                             } else {
                                 showSwalMessage('Error', 'error', res.message);
@@ -3283,12 +3291,13 @@ function renderActivityBarChart(chartData) {
                     preConfirm: (remark) => {
                         if (!remark) { Swal.showValidationMessage('Remark cannot be empty'); return false; }
                         showLoading(true);
-                        google.script.run.withSuccessHandler(res => {
+                        mernApi.withSuccessHandler(res => {
                             showLoading(false);
                             if (res.success) {
                                 Swal.close();
                                 showSwalMessage('Success!', 'success', 'Your feedback has been submitted.');
                                 loadClientSocialTasks(null, null, null);
+                                loadDashboardData();
                             } else { Swal.showValidationMessage(`Error: ${res.message}`); }
                         }).withFailureHandler(err => {
                             showLoading(false);
@@ -3305,11 +3314,12 @@ function renderActivityBarChart(chartData) {
                 }).then((result) => {
                     if (result.isConfirmed) {
                         showLoading(true);
-                        google.script.run.withSuccessHandler(r => {
+                        mernApi.withSuccessHandler(r => {
                             showLoading(false);
                             if (r.success) {
                                 showSwalMessage('Approved!', 'success', 'The post has been marked as approved.');
                                 loadClientSocialTasks(null, null, null);
+                                loadDashboardData();
                             } else { 
                                 // 🔥 CHECK FOR RESTRICTION MESSAGE 🔥
                                 if (r.message && r.message.includes('Restricted')) {
@@ -3334,7 +3344,7 @@ if (r.success) {
 
             function handleViewTicketDetails(ticketId) {
     showLoading(true);
-    google.script.run.withSuccessHandler(response => {
+    mernApi.withSuccessHandler(response => {
         showLoading(false);
         if (response.success) {
             const d = response.data;
@@ -3411,7 +3421,7 @@ if (r.success) {
 
             function handleViewChecklistDetails(checklistId) {
                 showLoading(true);
-                google.script.run.withSuccessHandler(response => {
+                mernApi.withSuccessHandler(response => {
                     showLoading(false);
                     if (response.success) {
                         const d = response.data;
@@ -3424,7 +3434,7 @@ if (r.success) {
             function handleViewSocialDetails(rowData) {
                 const postId = rowData.ID;
                 showLoading(true);
-                google.script.run.withSuccessHandler(r => {
+                mernApi.withSuccessHandler(r => {
                     showLoading(false);
                     if (r.success) {
                         let mainPostHtml = `<div class="mb-4 p-4 border rounded-xl bg-card-light dark:bg-gray-800 text-sm space-y-3"><h4 class="font-bold text-lg text-text-light dark:text-text-dark mb-3">Post Details</h4><div class="grid grid-cols-2 gap-x-4"><div><strong class="font-medium">Post ID:</strong> ${rowData.ID}</div><div><strong class="font-medium">Platform:</strong> ${rowData.Platform || 'N/A'}</div><div><strong class="font-medium">Content Type:</strong> ${rowData['Content Type'] || 'N/A'}</div><div><strong class="font-medium">Status:</strong> <span class="status-badge ${getStatusBadgeClass(rowData.Status)}">${rowData.Status || 'N/A'}</span></div></div><div class="pt-2"><strong class="font-medium">Planned Date:</strong> ${formatDateForDisplay(rowData.Date)}</div><div class="mt-3"><strong class="block mb-2 font-medium">Content:</strong><div class="p-3 bg-bg-light dark:bg-card-dark border border-gray-300 dark:border-gray-600 rounded-xl whitespace-pre-wrap max-h-40 overflow-y-auto">${rowData.Description || 'No content'}</div></div>`;
@@ -3467,12 +3477,12 @@ if (r.success) {
             }
 
             function openChatModal(taskId) {
-                google.script.run.withSuccessHandler(() => {
+                mernApi.withSuccessHandler(() => {
                     const rowNode = $(`#tickets-view a.view-ticket-details[data-id="${taskId}"]`).closest('tr');
                     if (rowNode) { $(rowNode).removeClass('highlight-new-message'); }
                 }).markTicketMessagesAsRead(taskId, currentClient.Client_Id);
                 showLoading(true);
-                google.script.run.withSuccessHandler(response => {
+                mernApi.withSuccessHandler(response => {
                     showLoading(false);
                     if (!response.success) return showSwalMessage('Error', 'error', response.message);
                     let chatHistoryHtml = '<div id="chat-history" class="h-80 overflow-y-auto bg-card-light dark:bg-gray-800 p-4 rounded-xl space-y-4">';
@@ -3495,7 +3505,7 @@ if (r.success) {
                                 const messageText = messageInput.value.trim();
                                 if (messageText) {
                                     sendBtn.disabled = true; sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-                                    google.script.run.withSuccessHandler(res => {
+                                    mernApi.withSuccessHandler(res => {
                                         if (res.success) { openChatModal(taskId); }
                                         else { showSwalMessage('Error', 'error', res.message); sendBtn.disabled = false; sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>'; }
                                     }).postMessage(taskId, messageText, currentClient);
@@ -3581,8 +3591,17 @@ if (r.success) {
             if (storedClient) {
                 try {
                     const parsedClient = JSON.parse(storedClient);
-                    if (parsedClient && parsedClient.Client_Id && parsedClient['Client Name']) {
-                        setupUI(parsedClient);
+                    const clientId = parsedClient && (parsedClient.Client_Id || parsedClient['Client ID'] || parsedClient.clientId);
+                    if (clientId) {
+                        mernApi.withSuccessHandler(response => {
+                            if (response && response.success && response.client) {
+                                setupUI(response.client);
+                            } else {
+                                sessionStorage.removeItem('currentClient');
+                            }
+                        }).withFailureHandler(() => {
+                            sessionStorage.removeItem('currentClient');
+                        }).validateCurrentClient(clientId);
                     } else {
                         sessionStorage.removeItem('currentClient');
                     }
@@ -3742,7 +3761,7 @@ if (r.success) {
                 showLoading(true); 
                 
                 Promise.all(fileReadPromises).then(() => { 
-                    google.script.run.withSuccessHandler(r => { 
+                    mernApi.withSuccessHandler(r => { 
                         showLoading(false); 
                         if (r.success) { 
                             Swal.close(); 
@@ -3751,6 +3770,7 @@ if (r.success) {
                             // Switch back to list view
                             $('#tab-view-tickets').click();
                             loadClientTickets(null, null, null).then(data => renderAllTicketTables(data)); 
+                            loadDashboardData();
                         } else { 
                             if (r.message && r.message.includes('Access Restricted')) {
                                 showRestrictionAlert();
@@ -3795,12 +3815,13 @@ if (r.success) {
                 }).then((result) => {
                     if (result.isConfirmed) {
                         showLoading(true);
-                        google.script.run
+                        mernApi
                             .withSuccessHandler(r => {
                                 showLoading(false);
                                 if (r.success) {
                                     showSwalMessage('Approved!', 'success', 'The post has been approved.');
                                     loadClientSocialTasks(null, null, null); 
+                                    loadDashboardData();
                                 } else {
                                     // 🔥 SHOW RESTRICTION ALERT IF NEEDED
                                     if (r.message && r.message.includes('Restricted')) {
@@ -3925,7 +3946,7 @@ $('#notification-bell-btn').on('click', function(e) {
                 updateNotificationUI(); 
 
                 // 3. Backend Update (Optional: Mark as read permanent karne ke liye)
-                // google.script.run.markAsNotified(...) 
+                // mernApi.markAsNotified(...) 
 
                 // 4. Navigate to specific View based on Type
                 if (type === 'Ticket') { 
@@ -3958,7 +3979,7 @@ $('#notification-bell-btn').on('click', function(e) {
                 else if (itemType === 'Checklist') { handleViewChecklistDetails(itemId); }
                 else if (itemType === 'Social Media') {
                     showLoading(true);
-                    google.script.run.withSuccessHandler(response => { showLoading(false); if (response.success && response.data) { handleViewSocialDetails(response.data); } else { showSwalMessage('Error', 'error', 'Could not fetch social post details.'); } }).withFailureHandler(err => { showLoading(false); showSwalMessage('Server Error', 'error', err.message); }).getSocialTaskDetails(itemId);
+                    mernApi.withSuccessHandler(response => { showLoading(false); if (response.success && response.data) { handleViewSocialDetails(response.data); } else { showSwalMessage('Error', 'error', 'Could not fetch social post details.'); } }).withFailureHandler(err => { showLoading(false); showSwalMessage('Server Error', 'error', err.message); }).getSocialTaskDetails(itemId);
                 }
             });
             $(document).on('click', '.kpi-card', function(e) {
@@ -3977,7 +3998,7 @@ $('#notification-bell-btn').on('click', function(e) {
                 } else return;
 
                 $('#kpi-table-title').text(title);
-                google.script.run.withSuccessHandler(r => {
+                mernApi.withSuccessHandler(r => {
                     if (r.success) {
                         if ($.fn.dataTable.isDataTable('#kpi-filtered-table')) $('#kpi-filtered-table').DataTable().destroy();
                         $('#kpi-filtered-table').empty();
@@ -4050,3 +4071,4 @@ $('#notification-bell-btn').on('click', function(e) {
 </body>
 
 </html>
+

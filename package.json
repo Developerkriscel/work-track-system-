@@ -12,11 +12,14 @@
     "status": "node server/scripts/statusExactServers.js",
     "import:sheets": "node server/scripts/importSheets.js",
     "build": "node server/scripts/verifyExactUi.js",
-    "verify:browser": "node server/scripts/verifyBrowserParity.js",
+    "verify:browser": "node server/scripts/runBrowserParity.js",
+    "verify:mongo-persistence": "node server/scripts/verifyMongoPersistence.js",
+    "sync:forms-portal": "node server/scripts/syncFormsPortalLinks.js",
+    "verify:user-panel": "node server/scripts/verifyUserPanelSafeInteractions.js",
     "verify:reference-screens": "powershell -NoProfile -ExecutionPolicy Bypass -File server/scripts/verifyReferenceScreens.ps1",
     "verify:import": "node server/scripts/verifyImportDryRun.js",
     "verify:open-exact": "node server/scripts/openExactWorkTrack.js --smoke",
-    "verify:all": "npm run build && npm run verify:import && npm run verify:browser && npm run verify:reference-screens"
+    "verify:all": "npm run build && npm run verify:import && npm run verify:browser && npm run verify:user-panel && npm run verify:reference-screens"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.3.0",

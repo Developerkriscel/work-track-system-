@@ -96,8 +96,7 @@ async function expandSrvUri(uri) {
 
 export async function connectDatabase() {
   if (!process.env.MONGO_URI) {
-    console.log('MONGO_URI not provided. Running with migration seed data.');
-    return;
+    throw new Error('MONGO_URI is required. MongoDB is the only supported live database.');
   }
 
   const uri = process.env.MONGO_URI.startsWith('mongodb+srv://')

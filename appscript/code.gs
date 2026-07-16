@@ -146,7 +146,7 @@ function syncToAppUsers(empData, category) {
         'Employee ID': loginId,
         'Employee Name': empData['Name'],
         'Role': defaultRole,
-        'Password': '123456',   // Default Password
+        'Password': empData['Password'] || '',
         'Status': loginStatus,
         'Mobile Number': empData['Phone No'] || '',
         'Email': empData['Official mail id if any'] || empData['Personal Email ID'] || '',
@@ -165,7 +165,7 @@ function syncToAppUsers(empData, category) {
           `Welcome to the team! Your official Work Track Portal account has been created successfully.\n\n` +
           `🔐 *Your Login Credentials:*\n` +
           `• *Employee ID:* *${newUser['Employee ID']}*\n` +
-          `• *Default Password:* *123456*\n\n` +
+          `• Password admin/Mongo employee master me set hone ke baad login active hoga.\n\n` +
           `👉 Kripya niche diye gaye link par click karke login karein aur profile me jaakar apna password turant change karein.\n\n` +
           `~ Work Track System`;
         sendWhatsAppMessage(newUser['Mobile Number'], welcomeMsg);
@@ -4847,7 +4847,7 @@ function saveEmpMasterData(category, formData) {
         } else if (header === 'Email') {
           val = formData['Official mail id if any'] || formData['Personal Email ID'] || formData['Email'] || '';
         } else if (header === 'Password') {
-          val = '123456';
+          val = formData['Password'] || '';
         } else if (header === 'Status') {
           val = formData['Status'] || 'Active';
         }

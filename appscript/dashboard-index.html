@@ -1712,7 +1712,7 @@
             title: 'custom-loader-title'
           }
         });
-        google.script.run.withSuccessHandler(res => { 
+        mernApi.withSuccessHandler(res => { 
             Swal.close(); 
             if (res.success) { 
                 globalData = res.data; 
@@ -3395,7 +3395,7 @@ function loadUserExplorerProfile() {
 
     // Load Dropdowns
     function loadDropdowns() { 
-        google.script.run.withSuccessHandler(r => { 
+        mernApi.withSuccessHandler(r => { 
             if (r.success) { 
                 listClients = r.dropdowns.clients; 
                 listUsers = r.dropdowns.users; 
@@ -3526,7 +3526,7 @@ function loadUserExplorerProfile() {
         
         for (const task of tasks) {
             await new Promise((res, rej) => { 
-                google.script.run.withSuccessHandler(res).withFailureHandler(rej)[task.func](task.data); 
+                mernApi.withSuccessHandler(res).withFailureHandler(rej)[task.func](task.data); 
             });
         }
         
@@ -3957,3 +3957,4 @@ function loadUserExplorerProfile() {
 </body>
 
 </html>
+
