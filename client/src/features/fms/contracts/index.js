@@ -1,0 +1,1 @@
+export { fmsManifest } from '../manifest';

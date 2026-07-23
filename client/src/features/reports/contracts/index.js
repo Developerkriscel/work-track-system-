@@ -1,0 +1,1 @@
+export { reportsManifest } from '../manifest';

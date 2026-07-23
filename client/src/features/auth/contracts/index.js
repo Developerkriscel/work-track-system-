@@ -1,0 +1,1 @@
+export { authManifest } from '../manifest';

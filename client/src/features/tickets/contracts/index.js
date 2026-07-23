@@ -1,0 +1,1 @@
+export { ticketsManifest } from '../manifest';

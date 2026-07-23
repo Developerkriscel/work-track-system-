@@ -1,0 +1,344 @@
+import { useEffect, useMemo, useState } from 'react';
+import {
+  createTicket,
+  createBulkTickets,
+  fetchTicketMessages,
+  fetchTicketSystemData,
+  markTicketMessagesRead,
+  postTicketMessage,
+  reassignTicket,
+  submitTicketApprovalAction,
+  submitClientResponse,
+  transferTicketApproval,
+  updateTicket,
+  updateTicketSchedule
+} from '@/features/tickets/api';
+import { useAuth } from '@/features/auth/AuthProvider';
+
+function sortStatusWeight(status) {
+  const value = String(status || '').trim().toLowerCase();
+  if (value === 'in progress') return 1;
+  if (value === 'open') return 2;
+  if (value === 'paused') return 3;
+  if (value === 'rework' || value === 'reassigned' || value.includes('rework')) return 4;
+  if (value === 'pending approval' || value.includes('pending')) return 5;
+  if (value === 'closed' || value.includes('approved') || value === 'cancelled') return 6;
+  return 7;
+}
+
+export const ticketStatusOptions = [
+  'In Progress',
+  'Open',
+  'Paused',
+  'Rework / Reassigned',
+  'Pending Approval',
+  'Closed'
+];
+
+function normalizeDate(value) {
+  if (!value) return null;
+  const raw = String(value).trim();
+  const ymd = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (ymd) return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function filterTickets(tickets, filters) {
+  const clientIds = filters.clientIds;
+  const statuses = filters.statuses;
+  const search = filters.search.trim().toLowerCase();
+
+  function matchesPeriod(ticket) {
+    if (!filters.timePeriod || filters.timePeriod === 'All Time') return true;
+    const rawDate = ticket['Plan Date'] || ticket.Date || ticket.Timestamp;
+    const date = normalizeDate(rawDate);
+    if (!date) return false;
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const value = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const day = today.getDay();
+    const mondayOffset = day === 0 ? 6 : day - 1;
+    const startThisWeek = new Date(today);
+    startThisWeek.setDate(today.getDate() - mondayOffset);
+    const startLastWeek = new Date(startThisWeek);
+    startLastWeek.setDate(startThisWeek.getDate() - 7);
+    const endLastWeek = new Date(startThisWeek);
+    endLastWeek.setDate(startThisWeek.getDate() - 1);
+    const startThisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const startLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const endLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+    if (filters.timePeriod === 'Today') return value.getTime() === today.getTime();
+    if (filters.timePeriod === 'This Week') return value >= startThisWeek && value <= today;
+    if (filters.timePeriod === 'Last Week') return value >= startLastWeek && value <= endLastWeek;
+    if (filters.timePeriod === 'This Month') return value >= startThisMonth && value <= today;
+    if (filters.timePeriod === 'Last Month') return value >= startLastMonth && value <= endLastMonth;
+    return true;
+  }
+
+  return tickets.filter((ticket) => {
+    const matchesClient =
+      !clientIds.length ||
+      clientIds.some((clientId) => [ticket.Client_Id, ticket['Client ID']].some((value) => String(value || '').toLowerCase() === String(clientId).toLowerCase()));
+
+    const ticketStatus = String(ticket.Status || '');
+    const matchesStatus = !statuses.length || statuses.some((status) => {
+      if (status === 'Rework / Reassigned') return /rework|reassigned/i.test(ticketStatus);
+      return status.trim().toLowerCase() === ticketStatus.trim().toLowerCase();
+    });
+
+    const matchesSearch =
+      !search ||
+      [
+        ticket['Ticket ID'],
+        ticket['Task Description'],
+        ticket.Name,
+        ticket['Employee Name'],
+        ticket.Status,
+        ticket.Priority
+      ]
+        .join(' ')
+        .toLowerCase()
+        .includes(search);
+
+    return matchesClient && matchesStatus && matchesSearch && matchesPeriod(ticket);
+  });
+}
+
+function sortTickets(tickets) {
+  return [...tickets].sort((a, b) => {
+    const statusDiff = sortStatusWeight(a.Status) - sortStatusWeight(b.Status);
+    if (statusDiff !== 0) return statusDiff;
+    const dateA = normalizeDate(a['Plan Date'])?.getTime() || 0;
+    const dateB = normalizeDate(b['Plan Date'])?.getTime() || 0;
+    return dateB - dateA;
+  });
+}
+
+export function useTicketSystemData() {
+  const { user } = useAuth();
+  const employeeId = user?.['Employee ID'] || '';
+  const [state, setState] = useState({
+    loading: true,
+    error: null,
+    payload: null
+  });
+  const [filters, setFilters] = useState({
+    clientIds: [],
+    statuses: [],
+    search: '',
+    timePeriod: 'All Time'
+  });
+  const [appliedFilters, setAppliedFilters] = useState(filters);
+  const [submitting, setSubmitting] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const reload = () => {
+    setRefreshKey((current) => current + 1);
+  };
+
+  useEffect(() => {
+    if (!employeeId) {
+      setState({
+        loading: false,
+        error: null,
+        payload: null
+      });
+      return undefined;
+    }
+
+    let alive = true;
+
+    async function load() {
+      setState((current) => ({ ...current, loading: true, error: null }));
+      try {
+        const payload = await fetchTicketSystemData(employeeId);
+        if (!alive) return;
+        setState({
+          loading: false,
+          error: null,
+          payload
+        });
+      } catch (error) {
+        if (!alive) return;
+        setState({
+          loading: false,
+          error: error.message || 'Failed to load ticket system.',
+          payload: null
+        });
+      }
+    }
+
+    load();
+    return () => {
+      alive = false;
+    };
+  }, [employeeId, refreshKey]);
+
+  const rawTickets = state.payload?.tickets || [];
+  const clients = state.payload?.clients?.length
+    ? state.payload.clients
+    : state.payload?.dropdowns?.clients || [];
+  const users = state.payload?.users || [];
+  const categories = state.payload?.categories || [];
+
+  const filteredTickets = useMemo(
+    () => sortTickets(filterTickets(rawTickets, appliedFilters)),
+    [rawTickets, appliedFilters]
+  );
+
+  function applyFilters() {
+    setAppliedFilters(filters);
+  }
+
+  function resetFilters() {
+    const next = { clientIds: [], statuses: [], search: '', timePeriod: 'All Time' };
+    setFilters(next);
+    setAppliedFilters(next);
+  }
+
+  async function submitNewTicket(payload) {
+    setSubmitting(true);
+    try {
+      const response = await createTicket(payload);
+      reload();
+      return { success: true, response };
+    } catch (error) {
+      return { success: false, message: error.message || 'Ticket create failed.' };
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitNewTickets(tickets) {
+    setSubmitting(true);
+    try {
+      const response = await createBulkTickets(tickets);
+      reload();
+      return { success: true, response };
+    } catch (error) {
+      return { success: false, message: error.message || 'Bulk ticket create failed.' };
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitTicketStatus(ticketId, updatePayload) {
+    setSubmitting(true);
+    try {
+      const response = await updateTicket(ticketId, updatePayload);
+      reload();
+      return { success: true, response };
+    } catch (error) {
+      return { success: false, message: error.message || 'Ticket update failed.' };
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitSchedule(ticketId, tat, planDate, reason) {
+    setSubmitting(true);
+    try {
+      const response = await updateTicketSchedule(ticketId, tat, planDate, reason, employeeId);
+      reload();
+      return { success: true, response };
+    } catch (error) {
+      return { success: false, message: error.message || 'Schedule update failed.' };
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitReassign(ticketId, targetId, remarks) {
+    setSubmitting(true);
+    try {
+      const response = await reassignTicket(ticketId, targetId, employeeId, remarks);
+      reload();
+      return { success: true, response };
+    } catch (error) {
+      return { success: false, message: error.message || 'Ticket reassignment failed.' };
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitApprovalAction(ticketId, action, remarks) {
+    setSubmitting(true);
+    try {
+      const response = await submitTicketApprovalAction(ticketId, action, remarks);
+      reload();
+      return { success: true, response };
+    } catch (error) {
+      return { success: false, message: error.message || 'Approval action failed.' };
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitApprovalTransfer(ticketId, targetManagerId, remarks) {
+    setSubmitting(true);
+    try {
+      const response = await transferTicketApproval(ticketId, targetManagerId, remarks);
+      reload();
+      return { success: true, response };
+    } catch (error) {
+      return { success: false, message: error.message || 'Approval transfer failed.' };
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitClientTicketResponse(ticketId, responseText, planDate, attachment) {
+    setSubmitting(true);
+    try {
+      const response = await submitClientResponse(ticketId, responseText, planDate, attachment);
+      reload();
+      return { success: true, response };
+    } catch (error) {
+      return { success: false, message: error.message || 'Client response could not be saved.' };
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function loadTicketMessages(ticketId) {
+    return fetchTicketMessages(ticketId);
+  }
+
+  async function submitTicketMessage(ticketId, messageText) {
+    try {
+      const response = await postTicketMessage(ticketId, messageText, employeeId);
+      await markTicketMessagesRead(ticketId);
+      return { success: true, response };
+    } catch (error) {
+      return { success: false, message: error.message || 'Message could not be sent.' };
+    }
+  }
+
+  return {
+    employeeId,
+    currentUser: user || null,
+    loading: state.loading,
+    error: state.error,
+    submitting,
+    clients,
+    users,
+    categories,
+    tickets: filteredTickets,
+    filters,
+    setFilters,
+    applyFilters,
+    resetFilters,
+    reload,
+    submitNewTicket,
+    submitNewTickets,
+    submitTicketStatus,
+    submitSchedule,
+    submitReassign,
+    submitApprovalAction,
+    submitApprovalTransfer,
+    submitClientTicketResponse,
+    loadTicketMessages,
+    submitTicketMessage
+  };
+}

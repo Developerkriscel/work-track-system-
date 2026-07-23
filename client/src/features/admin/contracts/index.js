@@ -1,0 +1,1 @@
+export { adminManifest } from '../manifest';

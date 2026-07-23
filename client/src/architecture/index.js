@@ -1,0 +1,11 @@
+export { appscriptUiInventory, featureFolderBlueprint, screenOwnershipMap } from './appscriptUiInventory';
+export { coverageMatrix, getCoverageForFeature } from './coverageMatrix';
+export { featureContracts } from './featureContracts';
+export { featureStructureAudit, featureStructurePattern } from './featureStructureAudit';
+export { legacyInteractionMap } from './legacyInteractionMap';
+export { legacySelectorRegistry } from './legacySelectorRegistry';
+export { reactFrontendBlueprint } from './reactFrontendBlueprint';
+export { reactModuleOwnershipMatrix } from './reactModuleOwnershipMatrix';
+export { routeMigrationMatrix } from './routeMigrationMatrix';
+export { surfaceRegistry, getFeatureSurfaces } from './surfaceRegistry';
+export { uiSurfaceOwnershipMatrix } from './uiSurfaceOwnershipMatrix';

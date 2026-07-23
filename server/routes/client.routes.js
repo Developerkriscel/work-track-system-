@@ -5,13 +5,13 @@ import { insertRow, listRows, sheetMessage, sheetTicket, upsertRow } from '../se
 const router = express.Router();
 
 router.get('/:clientId/dashboard', async (req, res) => {
-  res.json(await getClientDashboard(req.params.clientId));
+  res.json(await getClientDashboard(req.auth.sub));
 });
 
 router.post('/:clientId/tickets', async (req, res) => {
   const ticket = sheetTicket({
     ticketId: `TICKET_${Date.now()}`,
-    clientId: req.params.clientId,
+    clientId: req.auth.sub,
     clientName: req.body.clientName || 'Client',
     employeeId: '',
     employeeName: 'Unassigned',
@@ -30,7 +30,7 @@ router.post('/:clientId/tickets', async (req, res) => {
 
 router.patch('/:clientId/tickets/:ticketId/status', async (req, res) => {
   const tickets = await listRows('Ticket');
-  const ticket = tickets.find((item) => String(item.Client_Id || item['Client ID'] || item.clientId) === String(req.params.clientId) && String(item['Ticket ID'] || item.ticketId) === String(req.params.ticketId));
+  const ticket = tickets.find((item) => String(item.Client_Id || item['Client ID'] || item.clientId) === String(req.auth.sub) && String(item['Ticket ID'] || item.ticketId) === String(req.params.ticketId));
   if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found.' });
   const updated = {
     ...ticket,

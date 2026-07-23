@@ -10,6 +10,7 @@ const legacyRowSchema = new mongoose.Schema(
 
 export const legacyModuleSpecs = {
   User: { collection: 'users_legacy', label: 'Users', aliases: ['Users', 'Employee', 'Emp', 'Master'] },
+  EmpMaster: { collection: 'emp_master_legacy', label: 'EMP Master', aliases: ['EMP Master', 'EMP', 'Intern', 'Freelancer'] },
   Client: { collection: 'clients_legacy', label: 'Clients', aliases: ['Clients', 'Customer'] },
   Ticket: { collection: 'tickets_legacy', label: 'Tickets', aliases: ['Tickets'] },
   Attendance: { collection: 'attendance_legacy', label: 'Attendance', aliases: ['Attendance'] },

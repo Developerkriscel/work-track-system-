@@ -1,0 +1,1 @@
+export { managementDashboardManifest } from '../manifest';

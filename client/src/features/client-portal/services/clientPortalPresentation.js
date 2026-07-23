@@ -1,0 +1,39 @@
+export function clientNumber(value) {
+  return Number(String(value ?? 0).replace(/[^0-9.-]/g, '')) || 0;
+}
+
+export function clientCurrency(value) {
+  return `Rs. ${clientNumber(value).toFixed(2)}`;
+}
+
+export function ticketStatusTone(status) {
+  const value = String(status || '').toLowerCase();
+  if (value.includes('auto-approved')) return 'info';
+  if (value.includes('closed')) return 'success';
+  if (value.includes('pending client response')) return 'warning';
+  if (value.includes('approval')) return 'warning';
+  if (value.includes('progress')) return 'info';
+  return 'neutral';
+}
+
+export function invoiceTone(status) {
+  const value = String(status || '').toLowerCase();
+  if (value.includes('paid')) return 'success';
+  if (value.includes('cancel')) return 'danger';
+  if (value.includes('outstanding') || value.includes('pending')) return 'warning';
+  return 'neutral';
+}
+
+export function reportTypeTone(taskType) {
+  const value = String(taskType || '').toLowerCase();
+  if (value.includes('ticket')) return 'info';
+  if (value.includes('checklist')) return 'neutral';
+  if (value.includes('social')) return 'warning';
+  if (value.includes('invoice')) return 'success';
+  return 'neutral';
+}
+
+export function shortIsoDate(value) {
+  if (!value) return '-';
+  return String(value).slice(0, 10);
+}

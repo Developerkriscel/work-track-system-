@@ -1,0 +1,151 @@
+import { useEffect, useMemo, useState } from 'react';
+import { StatusPill } from '@/components/common/StatusPill';
+import { formatPlanDate, toneForTicketPriority, toneForTicketStatus } from '@/features/tickets/services/ticketPresentation';
+
+export function TicketTable({ tickets, role, submitting, onStatusAction, onScheduleAction, onReassign, onChat, onApprovalAction, onApprovalTransfer, onClientResponse, onDetails }) {
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(1, Math.ceil(tickets.length / pageSize));
+
+  useEffect(() => {
+    setPage(1);
+  }, [tickets, pageSize]);
+
+  const pageTickets = useMemo(() => {
+    const start = (Math.min(page, pageCount) - 1) * pageSize;
+    return tickets.slice(start, start + pageSize);
+  }, [page, pageCount, pageSize, tickets]);
+
+  const firstEntry = tickets.length ? (Math.min(page, pageCount) - 1) * pageSize + 1 : 0;
+  const lastEntry = tickets.length ? Math.min(Math.min(page, pageCount) * pageSize, tickets.length) : 0;
+  return (
+    <div className="react-data-table">
+      <div className="react-data-table__toolbar">
+        <label className="react-data-table__length">
+          <span>Show</span>
+          <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
+            <option value="10">10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+          </select>
+          <span>entries</span>
+        </label>
+      </div>
+
+      <div className="dashboard-table-wrap">
+      <table className="dashboard-table ticket-table">
+        <thead>
+          <tr>
+            <th>Ticket ID</th>
+            <th>Client Name</th>
+            <th>Description</th>
+            <th>Priority</th>
+            <th>TAT</th>
+            <th>Start</th>
+            <th>End</th>
+            <th>Duration</th>
+            <th>Assigned To</th>
+            <th>Status</th>
+            <th>Plan Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tickets.length ? (
+            pageTickets.map((ticket) => (
+              <tr key={ticket['Ticket ID']}>
+                <td>
+                  <button type="button" className="ticket-id-chip ticket-id-chip--button" onClick={() => onDetails(ticket)}>{ticket['Ticket ID']}</button>
+                </td>
+                <td>{ticket.Name || '-'}</td>
+                <td>{ticket['Task Description'] || '-'}</td>
+                <td>
+                  <StatusPill tone={toneForTicketPriority(ticket.Priority)}>{ticket.Priority || 'Normal'}</StatusPill>
+                </td>
+                <td>{ticket.TAT || '-'}</td>
+                <td>{ticket['Start Time'] || '-'}</td>
+                <td>{ticket['End Time'] || '-'}</td>
+                <td>{ticket['Total Duration'] || ticket.Duration || '-'}</td>
+                <td>{ticket['Employee Name'] || ticket['Employee ID'] || '-'}</td>
+                <td>
+                  <StatusPill tone={toneForTicketStatus(ticket.Status)}>{ticket.Status || 'Open'}</StatusPill>
+                </td>
+                <td>{formatPlanDate(ticket['Plan Date'])}</td>
+                <td>
+                  <div className="ticket-actions">
+                    {!['Closed', 'Approved by Client', 'Pending Approval'].includes(String(ticket.Status || '').trim()) &&
+                    ticket.Status !== 'In Progress' ? (
+                      <button
+                        type="button"
+                        className="ticket-action-btn ticket-action-btn--start"
+                        disabled={submitting}
+                        onClick={() => onStatusAction(ticket, 'In Progress')}
+                      >
+                        {['Paused', 'Rework', 'Reassigned'].includes(String(ticket.Status || '').trim()) ? 'Restart' : 'Start'}
+                      </button>
+                    ) : null}
+                    {ticket.Status === 'In Progress' ? (
+                      <>
+                        <button
+                          type="button"
+                          className="ticket-action-btn ticket-action-btn--pause"
+                          disabled={submitting}
+                          onClick={() => onStatusAction(ticket, 'Paused')}
+                        >
+                          Pause
+                        </button>
+                        <button
+                          type="button"
+                          className="ticket-action-btn ticket-action-btn--done"
+                          disabled={submitting}
+                          onClick={() => onStatusAction(ticket, 'Completed')}
+                        >
+                          Complete
+                        </button>
+                      </>
+                    ) : null}
+                    {!['Closed', 'Pending Approval', 'Approved by Client', 'Pending Client Response'].includes(String(ticket.Status || '').trim()) ? (
+                      <>
+                        <button
+                          type="button"
+                          className="ticket-action-btn ticket-action-btn--schedule"
+                          disabled={submitting}
+                          onClick={() => onScheduleAction(ticket)}
+                        >
+                          Schedule
+                        </button>
+                        <button type="button" className="ticket-action-btn ticket-action-btn--assign" disabled={submitting} onClick={() => onReassign(ticket)}>Reassign</button>
+                        <button type="button" className="ticket-action-btn ticket-action-btn--chat" disabled={submitting} onClick={() => onChat(ticket)}>Chat</button>
+                        <button type="button" className="ticket-action-btn ticket-action-btn--client" disabled={submitting} onClick={() => onClientResponse(ticket, 'client-send')}>Client</button>
+                      </>
+                    ) : <span className={`ticket-action-state ticket-action-state--${['Closed', 'Approved by Client'].includes(String(ticket.Status || '').trim()) ? 'closed' : 'pending'}`}>{['Closed', 'Approved by Client'].includes(String(ticket.Status || '').trim()) ? 'Approved' : 'Waiting'}</span>}
+                  </div>
+                </td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan="12" className="dashboard-table__empty">
+                No tickets found.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      </div>
+
+      <div className="react-data-table__footer">
+        <span className="react-data-table__info">
+          Showing {firstEntry} to {lastEntry} of {tickets.length} entries
+        </span>
+        <div className="react-data-table__pager">
+          <button type="button" disabled={page <= 1} onClick={() => setPage(1)} aria-label="First page">«</button>
+          <button type="button" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} aria-label="Previous page">‹</button>
+          <span className="react-data-table__pager-current">{Math.min(page, pageCount)}</span>
+          <button type="button" disabled={page >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))} aria-label="Next page">›</button>
+          <button type="button" disabled={page >= pageCount} onClick={() => setPage(pageCount)} aria-label="Last page">»</button>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,89 @@
+import { useState } from 'react';
+import { StatusPill } from '@/components/common/StatusPill';
+import { ConfirmDialog } from '@/components/modals';
+import { FormsPortalEditor } from '@/features/forms-portal/components/FormsPortalEditor';
+import { FormsPortalFilterPanel } from '@/features/forms-portal/components/FormsPortalFilterPanel';
+import { FormsPortalHeader } from '@/features/forms-portal/components/FormsPortalHeader';
+import { FormsPortalTable } from '@/features/forms-portal/components/FormsPortalTable';
+import { useFormsPortalData } from '@/features/forms-portal/useFormsPortalData';
+
+export function FormsPortalPage() {
+  const {
+    employeeId,
+    currentUser,
+    error,
+    forms,
+    allFormsCount,
+    filters,
+    updateFilters,
+    resetFilters,
+    refresh,
+    isAdmin,
+    assignableUsers,
+    submitting,
+    message,
+    departmentOptions,
+    sheetOptions,
+    editor,
+    openAddEditor,
+    openEditEditor,
+    closeEditor,
+    updateEditor,
+    submitEditor,
+    removeForm
+  } = useFormsPortalData();
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  return (
+    <section className="page-card">
+      <FormsPortalHeader
+        employeeLabel={`${currentUser?.['Employee Name'] || currentUser?.Name || 'Employee'}${employeeId ? ` | ${employeeId}` : ''}`}
+        isAdmin={isAdmin}
+        onRefresh={refresh}
+        onAddForm={openAddEditor}
+      />
+
+      {error ? (
+        <div className="dashboard-banner dashboard-banner--error">{error}</div>
+      ) : null}
+
+      {message ? (
+        <div className={`dashboard-banner${message.tone === 'danger' ? ' dashboard-banner--error' : ''}`}>
+          <StatusPill tone={message.tone === 'danger' ? 'danger' : 'success'}>
+            {message.tone === 'danger' ? 'Update failed' : 'Update complete'}
+          </StatusPill>
+          <span>{message.text}</span>
+        </div>
+      ) : null}
+
+      <FormsPortalFilterPanel
+        filters={filters}
+        departmentOptions={departmentOptions}
+        sheetOptions={sheetOptions}
+        onUpdateFilters={updateFilters}
+        onResetFilters={resetFilters}
+      />
+
+      {editor.open && isAdmin ? (
+        <FormsPortalEditor
+          editor={editor}
+          assignableUsers={assignableUsers}
+          submitting={submitting}
+          onUpdate={updateEditor}
+          onClose={closeEditor}
+          onSubmit={submitEditor}
+        />
+      ) : null}
+
+      <FormsPortalTable
+        forms={forms}
+        allFormsCount={allFormsCount}
+        isAdmin={isAdmin}
+        submitting={submitting}
+        onOpenEdit={openEditEditor}
+        onRequestRemove={setDeleteTarget}
+      />
+      {deleteTarget ? <ConfirmDialog title="Delete Form" message={`Delete ${deleteTarget['Sheet name']}? This removes the form record from the portal.`} busy={submitting} onClose={() => setDeleteTarget(null)} onConfirm={async () => { await removeForm(deleteTarget['Sheet name']); setDeleteTarget(null); }} confirmLabel="Delete Form" /> : null}
+    </section>
+  );
+}

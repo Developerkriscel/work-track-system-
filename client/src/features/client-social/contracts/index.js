@@ -1,0 +1,1 @@
+export { clientSocialManifest } from '../manifest';

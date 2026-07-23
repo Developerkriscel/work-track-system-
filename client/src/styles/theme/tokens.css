@@ -1,0 +1,25 @@
+:root {
+  --wt-font-sans: Inter, "Segoe UI", Arial, sans-serif;
+  --wt-bg: #eaf6ff;
+  --wt-surface: #ffffff;
+  --wt-surface-muted: #f8fbff;
+  --wt-sidebar: #16245f;
+  --wt-sidebar-border: rgba(255, 255, 255, 0.08);
+  --wt-primary: #5640a8;
+  --wt-primary-strong: #4a34a1;
+  --wt-primary-soft: #ece8ff;
+  --wt-accent: #24c3f1;
+  --wt-success: #1fb24a;
+  --wt-danger: #e73d3d;
+  --wt-text: #14213d;
+  --wt-text-muted: #6d7b99;
+  --wt-border: #d7e3f0;
+  --wt-shadow-soft: 0 10px 24px rgba(16, 24, 40, 0.08);
+  --wt-shadow-medium: 0 18px 38px rgba(21, 36, 79, 0.12);
+  --wt-radius-card: 20px;
+  --wt-radius-button: 14px;
+  --wt-radius-pill: 999px;
+  --wt-content-max: 1520px;
+  --wt-sidebar-width: 256px;
+  --wt-topbar-height: 64px;
+}

@@ -3,6 +3,7 @@ import { LegacyModels } from '../models/legacyModels.js';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const isMongoReady = () => mongoose.connection.readyState === 1;
+const appendOnlyModels = new Set(['Attendance', 'Message', 'TicketHistory', 'SocialHistory', 'WhatsAppLog']);
 
 const closedTerms = ['closed', 'approved', 'cancelled', 'completed', 'done', 'resolved', 'paid'];
 export const isClosedStatus = (status = '') => closedTerms.some((term) => String(status).toLowerCase().includes(term));
@@ -222,14 +223,40 @@ export function sheetMessage(message) {
   };
 }
 
-function assertMongoReady() {
-  if (!isMongoReady()) {
+async function waitForMongoReady(timeoutMs = 8000) {
+  if (isMongoReady()) return true;
+  await new Promise((resolve, reject) => {
+    const onConnected = () => done(resolve, true);
+    const onOpen = () => done(resolve, true);
+    const onError = (error) => done(reject, error);
+    const timer = setTimeout(() => done(resolve, false), timeoutMs);
+
+    function done(callback, value) {
+      clearTimeout(timer);
+      mongoose.connection.off('connected', onConnected);
+      mongoose.connection.off('open', onOpen);
+      mongoose.connection.off('error', onError);
+      callback(value);
+    }
+
+    mongoose.connection.on('connected', onConnected);
+    mongoose.connection.on('open', onOpen);
+    mongoose.connection.on('error', onError);
+  });
+  return isMongoReady();
+}
+
+async function assertMongoReady() {
+  if (isMongoReady()) return;
+  const recovered = await waitForMongoReady();
+  if (!recovered) {
     throw new Error('MongoDB is not connected. WorkTrack uses MongoDB data only.');
   }
 }
 
 const legacyIdKeyMap = {
     User: ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'userId', 'empCode'],
+    EmpMaster: ['EMP Code', 'Employee ID', 'User ID', 'empCode', 'employeeId', 'userId'],
     Client: ['Client_Id', 'Client ID', 'CustomerID', 'clientId', 'customerId'],
     Ticket: ['Ticket ID', 'Task ID', 'ID', 'ticketId', 'taskId'],
     Attendance: ['AttendanceID', 'ID', 'attendanceId'],
@@ -274,7 +301,7 @@ export function stripInternalMetadata(row = {}) {
 }
 
 export async function listRows(modelName) {
-  assertMongoReady();
+  await assertMongoReady();
   const Model = LegacyModels[modelName];
   const docs = await Model.find({}).sort({ createdAt: 1 }).lean();
   if (!docs.length) return [];
@@ -282,22 +309,36 @@ export async function listRows(modelName) {
 }
 
 export async function listMongoRows(modelName) {
-  assertMongoReady();
+  await assertMongoReady();
   const Model = LegacyModels[modelName];
   const docs = await Model.find({}).sort({ createdAt: 1 }).lean();
   return docs.map((doc) => ({ ...stripInternalMetadata(doc.data), _id: String(doc._id), _legacyId: doc.legacyId }));
 }
 
 export async function insertRow(modelName, row) {
-  assertMongoReady();
+  await assertMongoReady();
   const cleanRow = stripInternalMetadata(row);
   const legacyId = getLegacyId(modelName, cleanRow);
-  await LegacyModels[modelName].create({ legacyId, data: cleanRow });
+  const Model = LegacyModels[modelName];
+  if (!appendOnlyModels.has(modelName)) {
+    const existingDoc = await Model.findOne({ legacyId }).sort({ updatedAt: -1, createdAt: -1 }).lean();
+    const next = existingDoc?.data ? { ...stripInternalMetadata(existingDoc.data), ...cleanRow } : cleanRow;
+    await Model.findOneAndUpdate(
+      existingDoc ? { _id: existingDoc._id } : { legacyId },
+      { $set: { legacyId, data: next } },
+      { upsert: true, new: true }
+    );
+    if (existingDoc) {
+      await Model.deleteMany({ legacyId, _id: { $ne: existingDoc._id } });
+    }
+    return next;
+  }
+  await Model.create({ legacyId, data: cleanRow });
   return cleanRow;
 }
 
 export async function upsertRow(modelName, key, value, updateData) {
-  assertMongoReady();
+  await assertMongoReady();
   const Model = LegacyModels[modelName];
   const rawValue = String(value ?? '').trim();
   const idKeys = Array.from(new Set([key, ...(legacyIdCandidates(modelName))].filter(Boolean)));
@@ -309,7 +350,7 @@ export async function upsertRow(modelName, key, value, updateData) {
         ]
       }
     : { legacyId: getLegacyId(modelName, updateData) };
-  const existingDoc = rawValue ? await Model.findOne(query).lean() : null;
+  const existingDoc = rawValue ? await Model.findOne(query).sort({ updatedAt: -1, createdAt: -1 }).lean() : null;
   const existing = existingDoc?.data ? stripInternalMetadata(existingDoc.data) : null;
   const cleanUpdate = stripInternalMetadata(updateData);
   const next = { ...(existing || {}), ...cleanUpdate };
@@ -319,6 +360,9 @@ export async function upsertRow(modelName, key, value, updateData) {
     { $set: { legacyId, data: next } },
     { upsert: true, new: true }
   );
+  if (existingDoc) {
+    await Model.deleteMany({ legacyId, _id: { $ne: existingDoc._id } });
+  }
   return next;
 }
 
@@ -332,7 +376,7 @@ export async function deleteOrDeactivate(modelName, key, value) {
 }
 
 export async function replaceCollection(modelName, rows) {
-  if (!isMongoReady()) throw new Error('MongoDB is not connected. Set MONGO_URI before importing.');
+  await assertMongoReady();
   const Model = LegacyModels[modelName];
   await Model.deleteMany({});
   if (!rows.length) return 0;
@@ -344,7 +388,7 @@ export async function replaceCollection(modelName, rows) {
 }
 
 export async function resetLegacyStore() {
-  assertMongoReady();
+  await assertMongoReady();
   await Promise.all(Object.keys(LegacyModels).map(async (modelName) => {
     await LegacyModels[modelName].deleteMany({});
   }));

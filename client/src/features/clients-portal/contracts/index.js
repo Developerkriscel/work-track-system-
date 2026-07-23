@@ -1,0 +1,1 @@
+export { clientsPortalManifest } from '../manifest';

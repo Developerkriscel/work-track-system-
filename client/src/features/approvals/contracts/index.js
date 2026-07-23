@@ -1,0 +1,1 @@
+export { approvalsManifest } from '../manifest';

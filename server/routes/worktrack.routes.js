@@ -1,32 +1,32 @@
 import express from 'express';
 import { getEmployeeDashboard } from '../services/report.service.js';
-import { insertRow, listRows, sheetAttendance, sheetTodo, upsertRow } from '../services/legacyStore.service.js';
+import { insertRow, listRows, sheetTodo, upsertRow } from '../services/legacyStore.service.js';
+import { recordAttendance } from '../services/attendance.service.js';
 
 const router = express.Router();
 
 router.get('/:employeeId/dashboard', async (req, res) => {
-  res.json(await getEmployeeDashboard(req.params.employeeId));
+  res.json(await getEmployeeDashboard(req.auth.sub));
 });
 
 router.post('/:employeeId/attendance', async (req, res) => {
-  const row = sheetAttendance({
-    employeeId: req.params.employeeId,
-    employeeName: req.body.employeeName,
-    date: new Date().toISOString().slice(0, 10),
-    action: req.body.action === 'out' ? 'Punch Out' : 'Punch In',
-    status: req.body.action === 'out' ? 'Completed' : 'Present',
-    inTime: req.body.inTime || new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-    outTime: req.body.action === 'out' ? new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '',
-    duration: req.body.duration || ''
+  const result = await recordAttendance({
+    ...req.body,
+    'Employee ID': req.auth.sub,
+    'Employee Name': req.body.employeeName,
+    Action: req.body.action === 'out' ? 'Punch Out' : 'Punch In',
+    Photo: req.body.Photo || req.body.photo,
+    Lattitude: req.body.Lattitude ?? req.body.Latitude ?? req.body.latitude,
+    Longitude: req.body.Longitude ?? req.body.longitude
   });
-  await insertRow('Attendance', row);
-  res.status(201).json({ success: true, item: row });
+  if (!result.success) return res.status(400).json(result);
+  res.status(201).json(result);
 });
 
 router.post('/:employeeId/todos', async (req, res) => {
   const todo = sheetTodo({
     taskId: `TODO_${Date.now()}`,
-    employeeId: req.params.employeeId,
+    employeeId: req.auth.sub,
     employeeName: req.body.employeeName,
     task: req.body.task,
     priority: req.body.priority || 'Medium',

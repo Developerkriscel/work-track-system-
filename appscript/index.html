@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 
 <head>
@@ -326,8 +326,68 @@
       display: flex;
       flex-wrap: nowrap;
       align-items: center;
-      gap: 1.25rem !important;
+      gap: 1rem !important;
     }
+
+    /* ── User Profile Pill & Dropdown ── */
+    .upm-pill {
+      display: flex; align-items: center; gap: 9px;
+      padding: 5px 12px 5px 5px; border-radius: 9999px;
+      border: 1.5px solid rgba(190,205,226,0.9);
+      background: #fff; cursor: pointer;
+      transition: box-shadow 160ms ease, border-color 160ms ease;
+      color: #1e293b; position: relative;
+    }
+    .upm-pill:hover, .upm-pill.open {
+      border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+    }
+    .upm-avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);
+      color: #fff; font-weight: 800; font-size: 13px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; letter-spacing: 0.02em; user-select: none;
+    }
+    .upm-info { display: flex; flex-direction: column; line-height: 1.2; }
+    .upm-name { font-size: 13px; font-weight: 700; color: #1e293b; white-space: nowrap; }
+    .upm-role { font-size: 11px; color: #7b89a5; font-weight: 500; }
+    .upm-chevron { width:15px; height:15px; flex-shrink:0; transition:transform 200ms; color:#94a3b8; }
+    .upm-pill.open .upm-chevron { transform:rotate(180deg); }
+    .upm-dropdown {
+      position: absolute; top: calc(100% + 10px); right: 0; width: 265px;
+      background: #fff; border: 1px solid rgba(190,205,226,0.8);
+      border-radius: 18px; box-shadow: 0 16px 48px rgba(16,24,40,0.14);
+      overflow: hidden; z-index: 999; display: none;
+      animation: upm-pop 160ms cubic-bezier(0.22,1,0.36,1) both;
+    }
+    .upm-dropdown.open { display: block; }
+    @keyframes upm-pop {
+      from { opacity:0; transform:translateY(-6px) scale(0.97); }
+      to   { opacity:1; transform:translateY(0) scale(1); }
+    }
+    .upm-dropdown-header {
+      display: flex; align-items: center; gap: 12px; padding: 16px 16px 12px;
+    }
+    .upm-dropdown-avatar {
+      width: 46px; height: 46px; border-radius: 50%;
+      background: linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);
+      color: #fff; font-weight: 800; font-size: 17px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .upm-dropdown-name { font-size: 15px; font-weight: 700; color: #1e293b; margin: 0 0 2px; }
+    .upm-dropdown-email { font-size: 12px; color: #7b89a5; margin: 0 0 5px; }
+    .upm-dropdown-role-badge { font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; color: #6366f1; }
+    .upm-divider { height:1px; background:rgba(190,205,226,0.5); margin:0; }
+    .upm-menu-item {
+      width: 100%; display: flex; align-items: center; gap: 11px;
+      padding: 12px 16px; background: transparent; border: none;
+      cursor: pointer; font-size: 14px; font-weight: 500; color: #374151;
+      transition: background 120ms ease, color 120ms ease; text-align: left;
+    }
+    .upm-menu-item:hover { background:#f1f5f9; color:#1e293b; }
+    .upm-menu-item.danger { color:#dc2626; }
+    .upm-menu-item.danger:hover { background:#fff1f1; color:#b91c1c; }
+    .upm-menu-icon { width:17px; height:17px; flex-shrink:0; }
 
     /* Notification Bell */
     .notification-bell-container {
@@ -3164,10 +3224,13 @@
 
               <!-- Header -->
               <div
-                class="flex flex-col sm:flex-row justify-between items-center mb-6 border-b border-gray-100 pb-4 gap-4">
+              class="flex flex-col sm:flex-row justify-between items-center mb-6 border-b border-gray-100 pb-4 gap-4">
                 <h2 class="text-2xl font-bold text-gray-800 flex items-center w-full">
                   <i class="fas fa-handshake text-emerald-500 mr-3"></i> Clients Portal
                 </h2>
+                <button id="btn-add-client-portal" type="button" onclick="openAddClientRowInApp()" class="hidden w-full sm:w-auto bg-emerald-600 text-white py-2.5 px-4 rounded-lg font-semibold hover:bg-emerald-700 shadow-md text-sm transition whitespace-nowrap">
+                  <i class="fas fa-user-plus mr-2"></i>Add Client
+                </button>
               </div>
 
               <!-- Bộ lọc tìm kiếm nâng cao (Dropdown Version) -->
@@ -3402,16 +3465,28 @@
     </button>
                 </div>
               </div>
-              <!-- Tabs -->
+              <!-- Category Dropdown -->
               <div class="border-b border-gray-200 mb-6">
-                <nav class="-mb-px flex space-x-6 overflow-x-auto" id="emp-tabs">
-                  <!-- 🟢 FIX 1: 'Users' ki jagah ab sidha 'Master' sheet use hogi -->
-                  <button data-cat="Master" class="emp-tab-btn active whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-indigo-500 text-indigo-600">Master Data</button>
-
-                  <button data-cat="EMP" class="emp-tab-btn whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700">Employees</button>
-                  <button data-cat="Freelancer" class="emp-tab-btn whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700">Freelancers</button>
-                  <button data-cat="Intern" class="emp-tab-btn whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700">Interns</button>
-                  <button data-cat="Inactive" class="emp-tab-btn whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm border-transparent text-red-500 hover:text-red-700">Inactive Users</button>
+                <div class="flex justify-end">
+                  <div class="relative w-full sm:w-[260px]">
+                    <select id="emp-category-select" class="w-full appearance-none rounded-lg border border-slate-200 bg-white py-2.5 pl-4 pr-10 text-sm font-medium text-slate-700 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+                      <option value="Master">Master Data</option>
+                      <option value="EMP">Employees</option>
+                      <option value="Freelancer">Freelancers</option>
+                      <option value="Intern">Interns</option>
+                      <option value="Inactive">Inactive Users</option>
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400">
+                      <i class="fas fa-chevron-down text-xs"></i>
+                    </div>
+                  </div>
+                </div>
+                <nav class="hidden" id="emp-tabs" aria-hidden="true">
+                  <button data-cat="Master" class="emp-tab-btn active">Master Data</button>
+                  <button data-cat="EMP" class="emp-tab-btn">Employees</button>
+                  <button data-cat="Freelancer" class="emp-tab-btn">Freelancers</button>
+                  <button data-cat="Intern" class="emp-tab-btn">Interns</button>
+                  <button data-cat="Inactive" class="emp-tab-btn">Inactive Users</button>
                 </nav>
               </div>
               <!-- Table -->
@@ -4069,7 +4144,12 @@ const attendanceRangeStorageKey = 'worktrackAttendanceRange';
 const attendanceStartStorageKey = 'worktrackAttendanceStart';
 const attendanceEndStorageKey = 'worktrackAttendanceEnd';
 const attendanceTabStorageKey = 'worktrackAttendanceTab';
-let currentAttendanceRange = localStorage.getItem(attendanceRangeStorageKey) || 'last_month';
+function getStoredAttendanceRange() {
+    const storedRange = localStorage.getItem(attendanceRangeStorageKey) || '';
+    if (!storedRange || storedRange === 'last_month') return 'today';
+    return storedRange;
+}
+let currentAttendanceRange = getStoredAttendanceRange();
 let currentAttendanceStartDate = localStorage.getItem(attendanceStartStorageKey) || '';
 let currentAttendanceEndDate = localStorage.getItem(attendanceEndStorageKey) || '';
 let currentAttendanceTab = localStorage.getItem(attendanceTabStorageKey) || 'punch';
@@ -4442,7 +4522,7 @@ function syncAttendanceSection() {
 }
 
 function saveAttendanceUiState() {
-    localStorage.setItem(attendanceRangeStorageKey, currentAttendanceRange || 'last_month');
+    localStorage.setItem(attendanceRangeStorageKey, currentAttendanceRange || 'today');
     localStorage.setItem(attendanceStartStorageKey, currentAttendanceStartDate || '');
     localStorage.setItem(attendanceEndStorageKey, currentAttendanceEndDate || '');
     localStorage.setItem(attendanceTabStorageKey, currentAttendanceTab || 'punch');
@@ -5223,7 +5303,7 @@ if (storedUser) {
         $('#refresh-app-btn').on('click', () => { 
             const actions = { 
                 'home-view': () => loadDashboard(getActiveDashboardRange()), 
-                'attendance-view': ()=> { loadAttendanceHistory(currentAttendanceRange || 'last_month', currentAttendanceStartDate || null, currentAttendanceEndDate || null); }, 
+                'attendance-view': ()=> { loadAttendanceHistory(currentAttendanceRange || 'today', currentAttendanceStartDate || null, currentAttendanceEndDate || null); }, 
                 'ticket-system-view': loadTicketSystemData, 
                 'expense-view': loadExpenseHistory,
                 'users-view': loadUsersData, 
@@ -5553,7 +5633,7 @@ function handlePunch(action) {
     resetPunchPhotoUI();
     $('#attendance-form-container').addClass('hidden');
                 
-                loadAttendanceHistory(currentAttendanceRange || 'last_month', currentAttendanceStartDate || null, currentAttendanceEndDate || null);
+                loadAttendanceHistory(currentAttendanceRange || 'today', currentAttendanceStartDate || null, currentAttendanceEndDate || null);
                 checkAttendanceStatus();
                 loadDashboard(getActiveDashboardRange());
             } else {
@@ -5651,7 +5731,10 @@ function setupUI(user) {
 
     // --- 3. USERS, CLIENTS & REPORTS (केवल अधिकृत भूमिकाओं के लिए) ---
     if (['Admin', 'Super Admin', 'HR', 'Manager'].includes(role)) {
-        $('#nav-reports-link, #nav-users-link, #nav-clients-link').removeClass('hidden');
+        $('#nav-reports-link, #nav-users-link').removeClass('hidden');
+    }
+    if (['Admin', 'Super Admin', 'HR'].includes(role)) {
+        $('#nav-clients-link').removeClass('hidden');
     }
 
     // --- 4. TO-DO TAB LOGIC (FOR DIRECTORS) ---
@@ -5676,6 +5759,7 @@ function setupUI(user) {
     $('#nav-fms-link').removeClass('hidden');
 
     checkFormsPortalPermissions();
+    checkClientsPortalPermissions();
 
     setView(localStorage.getItem(appLastViewStorageKey) || 'home-view'); 
     startNotificationPolling(); 
@@ -5715,7 +5799,7 @@ function setView(viewToShow) {
     }
     if (viewToShow === 'clients-view') {
         const role = currentUser ? String(currentUser.Role).trim() : 'User';
-        if (!['Admin', 'Super Admin', 'HR', 'Manager'].includes(role)) {
+        if (!['Admin', 'Super Admin', 'HR'].includes(role)) {
             viewToShow = 'home-view'; // ब्लॉक करके सीधे होम स्क्रीन पर रीडायरेक्ट करें
             showSwalMessage('Access Denied', 'error', 'Aapko is page को देखने की अनुमति नहीं है।');
         }
@@ -5759,7 +5843,7 @@ function setView(viewToShow) {
         syncAttendanceTab(currentAttendanceTab);
         syncAttendanceSection();
         syncAttendanceRangeButtons(currentAttendanceRange);
-        loadAttendanceHistory(currentAttendanceRange || 'last_month', currentAttendanceStartDate || null, currentAttendanceEndDate || null);
+        loadAttendanceHistory(currentAttendanceRange || 'today', currentAttendanceStartDate || null, currentAttendanceEndDate || null);
         checkAttendanceStatus();
     } else { stopCamera(); stopPunchInTimer(); } 
     if (viewToShow === 'expense-view') { $('#expense-form-container').addClass('hidden'); loadExpenseHistory(); } 
@@ -5826,7 +5910,7 @@ function setView(viewToShow) {
     localStorage.removeItem(myRequestsSearchStorageKey);
     currentApprovalTab = 'approve-tickets';
     currentDashboardRange = 'month';
-    currentAttendanceRange = 'last_month';
+    currentAttendanceRange = 'today';
     currentAttendanceStartDate = '';
     currentAttendanceEndDate = '';
     currentAttendanceTab = 'punch';
@@ -8210,19 +8294,34 @@ function filterAndRenderUpcomingTasks(range, customStartStr = null, customEndStr
 let empMasterTable;
 let currentEmpCategory = 'Master'; // 🟢 Default category 'Master' कर दी गई है
 
+function syncEmpCategoryUi(category) {
+    currentEmpCategory = category || 'Master';
+    $('#emp-category-select').val(currentEmpCategory);
+    $('#emp-tabs .emp-tab-btn').removeClass('active border-indigo-500 text-indigo-600 text-red-500 hover:text-gray-700 hover:text-red-700').addClass('border-transparent text-gray-500');
+    const $activeBtn = $(`#emp-tabs .emp-tab-btn[data-cat="${currentEmpCategory}"]`);
+    $activeBtn.addClass('active border-indigo-500 text-indigo-600').removeClass('border-transparent text-gray-500');
+    if (currentEmpCategory === 'Inactive') {
+        $activeBtn.addClass('text-red-500').removeClass('text-indigo-600 text-gray-500');
+    }
+}
+
 // 1. Sidebar Link Logic
 $(document).on('click', '#nav-emp-master-link', function(e) {
     e.preventDefault();
     setView('emp-master-view');
-    setTimeout(() => { loadEmpData('Master'); }, 200); // 🟢 यहाँ भी 'Master' करें
+    setTimeout(() => { syncEmpCategoryUi('Master'); loadEmpData('Master'); }, 200); // 🟢 यहाँ भी 'Master' करें
 });
 
 // 2. Tab Switcher Logic
 $(document).on('click', '#emp-tabs .emp-tab-btn', function() {
-    $('#emp-tabs .emp-tab-btn').removeClass('active border-indigo-500 text-indigo-600').addClass('border-transparent text-gray-500');
-    $(this).addClass('active border-indigo-500 text-indigo-600').removeClass('border-transparent text-gray-500');
-    
-    currentEmpCategory = $(this).data('cat');
+    const nextCategory = $(this).data('cat');
+    syncEmpCategoryUi(nextCategory);
+    loadEmpData(currentEmpCategory);
+});
+
+$(document).on('change', '#emp-category-select', function() {
+    const nextCategory = $(this).val() || 'Master';
+    syncEmpCategoryUi(nextCategory);
     loadEmpData(currentEmpCategory);
 });
 
@@ -8472,15 +8571,12 @@ $('#emp-master-form').off('submit').on('submit', async function(e) {
                 $('#emp-form-modal').addClass('hidden');
                 
                 // 🟢 FIX: Check karein ki hum abhi kis tab par hain
-                const activeTabCat = $('#emp-tabs .active').data('cat');
+                const activeTabCat = $('#emp-category-select').val() || currentEmpCategory || 'Master';
                 
                 // Agar hum Inactive par the, to Inactive hi load karein, warna uski category load karein
                 const categoryToLoad = (activeTabCat === 'Inactive') ? 'Inactive' : category;
                 
-                currentEmpCategory = categoryToLoad;
-                $('#emp-tabs .emp-tab-btn').removeClass('active border-indigo-500 text-indigo-600').addClass('border-transparent text-gray-500');
-                $(`#emp-tabs .emp-tab-btn[data-cat="${categoryToLoad}"]`).addClass('active border-indigo-500 text-indigo-600').removeClass('border-transparent text-gray-500');
-                
+                syncEmpCategoryUi(categoryToLoad);
                 loadEmpData(categoryToLoad); // Data refresh karega
             } else {
                 Swal.fire('Error', res.message, 'error');
@@ -11256,53 +11352,32 @@ async function openFormsPortalEditorModal(mode, row = null) {
 }
 
 // 4. CLIENT EDIT MODAL (SweetAlert2)
-// 🟢 सुधारा गया कोड (Index.html में 'editClientRowInApp' के अंदर बदलें)
+window.openAddClientRowInApp = function() {
+    if (!isClientsPortalAdmin()) {
+        Swal.fire('Access Denied', 'Only authorized admin users can add clients.', 'error');
+        return;
+    }
+    showLoading(true);
+    mernApi.withSuccessHandler(res => {
+        showLoading(false);
+        if (!res.success) {
+            Swal.fire('Error', res.message, 'error');
+            return;
+        }
+        openClientPortalEditorModal('add', { 'Client_Id': res.clientId, Status: 'Active', 'Detail Shared': 'Yes' });
+    }).withFailureHandler(err => {
+        showLoading(false);
+        Swal.fire('Error', err.message || 'Unable to generate a client ID.', 'error');
+    }).getNextClientPortalId(currentUser['Employee ID']);
+};
+
 window.editClientRowInApp = function(encodedRow) {
     const r = JSON.parse(decodeURIComponent(encodedRow));
-    Swal.fire({
-        title: `Edit Client: ${r.Client_Id}`,
-        html: `
-            <div class="text-left space-y-3">
-                <div><label class="text-xs font-bold text-gray-500 uppercase">Client Name *</label><input id="sw-cli-name" class="swal2-input w-full m-0" value="${r['Client Name'] || ''}"></div>
-                <div><label class="text-xs font-bold text-gray-500 uppercase">Mobile Number</label><input id="sw-cli-mobile" class="swal2-input w-full m-0" value="${r['Mobile Number'] || ''}"></div>
-                <div><label class="text-xs font-bold text-gray-500 uppercase">Client Email ID</label><input id="sw-cli-email" type="email" class="swal2-input w-full m-0" value="${r['Client Email ID'] || ''}"></div>
-                <div><label class="text-xs font-bold text-gray-500 uppercase">Address</label><input id="sw-cli-address" class="swal2-input w-full m-0" value="${r['Address'] || ''}"></div>
-                <div><label class="text-xs font-bold text-gray-500 uppercase">Status</label><select id="sw-cli-status" class="swal2-select w-full m-0"><option value="Active" ${r.Status==='Active'?'selected':''}>Active</option><option value="In-Active" ${r.Status==='In-Active'?'selected':''}>In-Active</option></select></div>
-                <div><label class="text-xs font-bold text-gray-500 uppercase">Password</label><input id="sw-cli-password" class="swal2-input w-full m-0" value="${r['Password'] || ''}"></div>
-                <div><label class="text-xs font-bold text-gray-500 uppercase">Detail Shared</label><input id="sw-cli-shared" class="swal2-input w-full m-0" value="${r['Detail Shared'] || ''}"></div>
-                <div><label class="text-xs font-bold text-gray-500 uppercase">Services / Categories</label><input id="sw-cli-services" class="swal2-input w-full m-0" value="${r['Services'] || ''}" placeholder="e.g. Google Sheet, Development"></div>
-            </div>
-        `,
-        showCancelButton: true,
-        confirmButtonText: 'Save Details',
-        preConfirm: () => {
-            const name = document.getElementById('sw-cli-name').value;
-            if (!name.trim()) return Swal.showValidationMessage('Client Name is required');
-            return {
-                'Client_Id': r.Client_Id,
-                'Client Name': name,
-                'Mobile Number': document.getElementById('sw-cli-mobile').value,
-                'Address': document.getElementById('sw-cli-address').value,
-                'Status': document.getElementById('sw-cli-status').value,
-                'Password': document.getElementById('sw-cli-password').value,
-                'Detail Shared': document.getElementById('sw-cli-shared').value,
-                'Services': document.getElementById('sw-cli-services').value,
-                'Client Email ID': document.getElementById('sw-cli-email').value
-            }
-        }
-    }).then(res => {
-        // 🟢 सुधार: Implicit global variable को हटाया गया
-        if (res.value) {
-            showLoading(true);
-            mernApi.withSuccessHandler(response => {
-                showLoading(false);
-                if (response.success) {
-                    Swal.fire('Updated!', response.message, 'success');
-                    loadClientsPortal();
-                } else Swal.fire('Error', response.message, 'error');
-            }).saveClientPortalData(res.value, currentUser['Employee ID']);
-        }
-    });
+    if (!isClientsPortalAdmin()) {
+        Swal.fire('Access Denied', 'Only authorized admin users can edit clients.', 'error');
+        return;
+    }
+    openClientPortalEditorModal('edit', r);
 };
 
 // 5. CLIENT DELETE
@@ -11403,6 +11478,21 @@ function checkFormsPortalPermissions() {
         $('#btn-add-form-portal').addClass('hidden');
     } else {
         $('#btn-add-form-portal').removeClass('hidden');
+    }
+}
+
+function isClientsPortalAdmin() {
+    if (!currentUser) return false;
+    const employeeId = String(currentUser['Employee ID'] || '').toUpperCase();
+    const role = String(currentUser.Role || '').trim();
+    return employeeId === 'MS101' || role === 'Super Admin';
+}
+
+function checkClientsPortalPermissions() {
+    if (isClientsPortalAdmin()) {
+        $('#btn-add-client-portal').removeClass('hidden');
+    } else {
+        $('#btn-add-client-portal').addClass('hidden');
     }
 }
 
@@ -11508,10 +11598,69 @@ function showClientDetailsPopup(clientData) {
     });
 }
 
+function openClientPortalEditorModal(mode, row = {}) {
+    const isEdit = mode === 'edit';
+    const clientId = row['Client_Id'] || row['Client ID'] || '';
+    const modalTitle = isEdit ? `Edit Client: ${clientId}` : 'Add New Client';
+    Swal.fire({
+        title: modalTitle,
+        html: `
+            <div class="text-left space-y-3">
+                <div><label class="text-xs font-bold text-gray-500 uppercase">Client ID *</label><input id="sw-cli-id" class="swal2-input w-full m-0 ${isEdit ? 'bg-gray-100' : ''}" value="${clientId || ''}" ${isEdit ? 'readonly' : 'readonly'}></div>
+                <div><label class="text-xs font-bold text-gray-500 uppercase">Client Name *</label><input id="sw-cli-name" class="swal2-input w-full m-0" value="${row['Client Name'] || ''}"></div>
+                <div><label class="text-xs font-bold text-gray-500 uppercase">Mobile Number</label><input id="sw-cli-mobile" class="swal2-input w-full m-0" value="${row['Mobile Number'] || ''}"></div>
+                <div><label class="text-xs font-bold text-gray-500 uppercase">Client Email ID</label><input id="sw-cli-email" type="email" class="swal2-input w-full m-0" value="${row['Client Email ID'] || ''}"></div>
+                <div><label class="text-xs font-bold text-gray-500 uppercase">Address</label><input id="sw-cli-address" class="swal2-input w-full m-0" value="${row['Address'] || ''}"></div>
+                <div><label class="text-xs font-bold text-gray-500 uppercase">Status</label><select id="sw-cli-status" class="swal2-select w-full m-0"><option value="Active" ${(row.Status || 'Active') === 'Active' ? 'selected' : ''}>Active</option><option value="In-Active" ${row.Status === 'In-Active' ? 'selected' : ''}>In-Active</option></select></div>
+                <div><label class="text-xs font-bold text-gray-500 uppercase">Password</label><input id="sw-cli-password" class="swal2-input w-full m-0" value="${row['Password'] || ''}"></div>
+                <div><label class="text-xs font-bold text-gray-500 uppercase">Detail Shared</label><input id="sw-cli-shared" class="swal2-input w-full m-0" value="${row['Detail Shared'] || ''}" placeholder="Yes / No"></div>
+                <div><label class="text-xs font-bold text-gray-500 uppercase">Services / Categories</label><input id="sw-cli-services" class="swal2-input w-full m-0" value="${row['Services'] || ''}" placeholder="e.g. Website, Social Media"></div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: isEdit ? 'Save Details' : 'Add Client',
+        width: 640,
+        preConfirm: () => {
+            const id = document.getElementById('sw-cli-id').value;
+            const name = document.getElementById('sw-cli-name').value;
+            if (!String(id || '').trim()) return Swal.showValidationMessage('Client ID is required');
+            if (!String(name || '').trim()) return Swal.showValidationMessage('Client Name is required');
+            return {
+                'Client_Id': id.trim(),
+                'Client Name': name.trim(),
+                'Mobile Number': document.getElementById('sw-cli-mobile').value.trim(),
+                'Address': document.getElementById('sw-cli-address').value.trim(),
+                'Status': document.getElementById('sw-cli-status').value,
+                'Password': document.getElementById('sw-cli-password').value.trim(),
+                'Detail Shared': document.getElementById('sw-cli-shared').value.trim(),
+                'Services': document.getElementById('sw-cli-services').value.trim(),
+                'Client Email ID': document.getElementById('sw-cli-email').value.trim()
+            };
+        }
+    }).then(res => {
+        if (res.value) {
+            showLoading(true);
+            mernApi.withSuccessHandler(response => {
+                showLoading(false);
+                if (response.success) {
+                    Swal.fire(isEdit ? 'Updated!' : 'Added!', response.message, 'success');
+                    loadClientsPortal();
+                } else {
+                    Swal.fire('Error', response.message, 'error');
+                }
+            }).withFailureHandler(err => {
+                showLoading(false);
+                Swal.fire('Error', err.message || 'Unable to save client.', 'error');
+            }).saveClientPortalData(res.value, currentUser['Employee ID']);
+        }
+    });
+}
+
 // Clean up and keep only this optimized block for Forms and Clients
 
 function loadClientsPortal() {
     if ($('#clients-view').hasClass('hidden')) return;
+    checkClientsPortalPermissions();
     showLoading(true);
     mernApi.withSuccessHandler(res => {
         showLoading(false);
@@ -11528,7 +11677,7 @@ function loadClientsPortal() {
 }
 
 function renderClientsTable(data) {
-    const isMS101 = currentUser && currentUser['Employee ID'].toUpperCase() === 'MS101';
+    const isClientsAdmin = isClientsPortalAdmin();
     
     if ($.fn.dataTable.isDataTable('#table-clients-portal')) {
         clientsTableInstance.clear().rows.add(data).draw();
@@ -11558,7 +11707,7 @@ function renderClientsTable(data) {
                 {
                     data: null, className: 'text-center align-middle', orderable: false,
                     render: function(d, type, r) {
-                        if (!isMS101) return '<span class="text-gray-400 italic text-[10px]">View Only</span>';
+                        if (!isClientsAdmin) return '<span class="text-gray-400 italic text-[10px]">View Only</span>';
                         const safeRow = encodeURIComponent(JSON.stringify(r));
                         return `
                             <div class="flex gap-2 justify-center">

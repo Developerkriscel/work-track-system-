@@ -8,13 +8,32 @@ import { connectDatabase } from './server/config/database.js';
 import authRoutes from './server/routes/auth.routes.js';
 import worktrackRoutes from './server/routes/worktrack.routes.js';
 import clientRoutes from './server/routes/client.routes.js';
+import clientPortalRoutes from './server/routes/clientPortal.routes.js';
+import clientsPortalRoutes from './server/routes/clientsPortal.routes.js';
+import clientSocialRoutes from './server/routes/clientSocial.routes.js';
 import analyticsRoutes from './server/routes/analytics.routes.js';
-import appsScriptRoutes from './server/routes/appsScript.routes.js';
+import adminRoutes from './server/routes/admin.routes.js';
+import empMasterRoutes from './server/routes/empMaster.routes.js';
+import attendanceRoutes from './server/routes/attendance.routes.js';
+import approvalsRoutes from './server/routes/approvals.routes.js';
+import dashboardRoutes from './server/routes/dashboard.routes.js';
+import expensesRoutes from './server/routes/expenses.routes.js';
+import fmsRoutes from './server/routes/fms.routes.js';
+import formsPortalRoutes from './server/routes/formsPortal.routes.js';
+import managementDashboardRoutes from './server/routes/managementDashboard.routes.js';
+import notificationsRoutes from './server/routes/notifications.routes.js';
+import reportsRoutes from './server/routes/reports.routes.js';
+import ticketRoutes from './server/routes/ticket.routes.js';
+import todoRoutes from './server/routes/todo.routes.js';
+import { assertAuthConfiguration, requireAuth } from './server/middleware/auth.middleware.js';
 
 const app = express();
 const port = process.env.PORT || 5000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const clientDistPath = path.join(__dirname, 'client', 'dist');
+const hasClientDist = fs.existsSync(clientDistPath);
+assertAuthConfiguration();
 
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || true, credentials: true }));
 app.use(express.json({ limit: '25mb' }));
@@ -50,6 +69,21 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+if (hasClientDist) {
+  app.use('/mern', express.static(clientDistPath, {
+    index: false,
+    setHeaders(res) {
+      res.set('Cache-Control', 'no-store');
+    }
+  }));
+  app.use(express.static(clientDistPath, {
+    index: false,
+    setHeaders(res) {
+      res.set('Cache-Control', 'no-store');
+    }
+  }));
+}
+
 app.get(['/service-worker.js', '/sw.js'], (_req, res) => {
   res
     .type('application/javascript')
@@ -79,7 +113,7 @@ app.get(['/reset-localhost', '/reset-cache', '/clear-cache'], (_req, res) => {
     <main>
       <h1>Resetting WorkTrack local cache</h1>
       <p id="status">Removing old localhost prototype cache and service workers...</p>
-      <code>Redirecting to exact Apps Script WorkTrack UI.</code>
+      <code>Redirecting to WorkTrack runtime.</code>
     </main>
     <script>
       (async () => {
@@ -98,11 +132,11 @@ app.get(['/reset-localhost', '/reset-cache', '/clear-cache'], (_req, res) => {
           document.cookie.split(';').forEach(cookie => {
             document.cookie = cookie.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date(0).toUTCString() + ';path=/');
           });
-          status.textContent = 'Cache reset complete. Opening exact WorkTrack UI...';
+          status.textContent = 'Cache reset complete. Opening WorkTrack runtime...';
         } catch (error) {
-          status.textContent = 'Reset attempted. Opening exact WorkTrack UI...';
+          status.textContent = 'Reset attempted. Opening WorkTrack runtime...';
         }
-        setTimeout(() => location.replace('/?exact=' + Date.now()), 900);
+        setTimeout(() => location.replace('/login?reset=' + Date.now()), 900);
       })();
     </script>
   </body>
@@ -113,91 +147,105 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'worktrack-mern', mode: 'mongo' });
 });
 
+app.get(['/mern', '/mern/*'], (_req, res, next) => {
+  if (!hasClientDist) {
+    res.status(503).type('html').send(`<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WorkTrack MERN Frontend Not Built</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: Inter, "Segoe UI", Arial, sans-serif; background: #eef8ff; color: #14213d; }
+      main { width: min(620px, calc(100vw - 32px)); background: #fff; border: 1px solid #d7e4ef; border-radius: 18px; box-shadow: 0 20px 50px rgba(15, 23, 42, .12); padding: 28px; }
+      h1 { margin: 0 0 12px; font-size: 28px; }
+      p { margin: 0 0 14px; color: #57627d; line-height: 1.6; }
+      code { display: inline-block; padding: 4px 8px; border-radius: 8px; background: #f3f7fd; color: #3f2d95; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>MERN frontend is not built yet</h1>
+      <p>The new React app lives under <code>client/src</code>.</p>
+      <p>Build it with <code>npm run client:build</code>, then reopen <code>/mern</code>.</p>
+      <p>The current exact WorkTrack UI remains available on the main routes.</p>
+    </main>
+  </body>
+</html>`);
+    return;
+  }
+  res.redirect('/login');
+});
+
 app.get('/favicon.ico', (_req, res) => {
   res.status(204).end();
 });
 
 app.use('/api/auth', authRoutes);
-app.use('/api/worktrack', worktrackRoutes);
-app.use('/api/client', clientRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/apps-script', appsScriptRoutes);
+// All application APIs require a signed MERN session. Login and session refresh
+// routes are mounted above this guard and perform their own checks.
+app.use('/api', (req, res, next) => {
+  return requireAuth()(req, res, next);
+});
+app.use('/api/admin', requireAuth({ kind: 'employee', roles: ['Admin', 'HR', 'Super Admin'] }), adminRoutes);
+app.use('/api/emp-master', requireAuth({ kind: 'employee', roles: ['HR', 'Super Admin'] }), empMasterRoutes);
+app.use('/api/worktrack', requireAuth({ kind: 'employee' }), worktrackRoutes);
+app.use('/api/client', requireAuth({ kind: 'client' }), clientRoutes);
+app.use('/api/client-portal', requireAuth({ kind: 'client' }), clientPortalRoutes);
+app.use('/api/clients-portal', requireAuth({ kind: 'employee', roles: ['Admin', 'Super Admin'] }), clientsPortalRoutes);
+app.use('/api/client-social', requireAuth({ kind: 'client' }), clientSocialRoutes);
+app.use('/api/analytics', requireAuth({ kind: 'employee', roles: ['Admin', 'HR', 'Manager', 'Super Admin'] }), analyticsRoutes);
+app.use('/api/approvals', requireAuth({ kind: 'employee' }), approvalsRoutes);
+app.use('/api/attendance', requireAuth({ kind: 'employee' }), attendanceRoutes);
+app.use('/api/dashboard', requireAuth({ kind: 'employee' }), dashboardRoutes);
+app.use('/api/expenses', requireAuth({ kind: 'employee' }), expensesRoutes);
+app.use('/api/fms', requireAuth({ kind: 'employee' }), fmsRoutes);
+// Every employee may read forms assigned to them. The service layer keeps
+// create, edit, delete, and access-management actions Super Admin-only.
+app.use('/api/forms-portal', requireAuth({ kind: 'employee' }), formsPortalRoutes);
+app.use('/api/management-dashboard', requireAuth({ kind: 'employee', roles: ['Manager', 'Admin', 'HR', 'Super Admin'] }), managementDashboardRoutes);
+app.use('/api/notifications', requireAuth(), notificationsRoutes);
+app.use(
+  '/api/reports',
+  requireAuth({ kind: 'employee', roles: ['Manager', 'Admin', 'HR', 'Super Admin'] }),
+  reportsRoutes
+);
+app.use('/api/tickets', requireAuth({ kind: 'employee' }), ticketRoutes);
+app.use('/api/todo', requireAuth({ kind: 'employee' }), todoRoutes);
 
-const exactPages = {
-  worktrack: 'index.html',
-  client: 'client-index.html',
-  dashboard: 'dashboard-index.html'
-};
-
-function renderExactPage(fileName) {
-  const filePath = path.join(__dirname, 'appscript', fileName);
-  const referenceStamp = process.env.WORKTRACK_REFERENCE_DATE || new Date().toISOString();
-  const cacheCleanupTag = `<script id="mern-cache-cleanup">
-    (() => {
-      if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(registrations => registrations.forEach(registration => registration.unregister())).catch(() => {});
-      if ('caches' in window) caches.keys().then(keys => keys.forEach(key => caches.delete(key))).catch(() => {});
-    })();
-  </script>`;
-  const shimTag = '<script src="/googleScriptRunShim.js"></script>';
-  const scaleStyle = `<style id="mern-appscript-viewport-scale">
-    html { zoom: 0.85; }
-    body, #app-container, #sidebar, #main-content { min-height: calc(100vh / 0.85); }
-    body { min-width: calc(100vw / 0.85); }
-    #app-views { padding-top: 1rem !important; }
-  </style>`;
-  const referenceDateTag = `<script>window.WORKTRACK_REFERENCE_DATE = window.WORKTRACK_REFERENCE_DATE || '${referenceStamp}';</script>`;
-  return fs
-    .readFileSync(filePath, 'utf8')
-    .replace(/<base\s+target="_top"\s*\/?>/i, '')
-    .replaceAll('https://i.ibb.co/mVJGYh3w/Untitled-design-1.png', '/worktrack-logo.png')
-    .replaceAll('https://cdn.tailwindcss.com', '/vendor/tailwindcss.js')
-    .replaceAll('https://code.jquery.com/jquery-3.7.0.js', '/vendor/jquery/jquery.min.js')
-    .replaceAll('https://code.jquery.com/jquery-3.7.0.min.js', '/vendor/jquery/jquery.min.js')
-    .replaceAll('https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css', '/vendor/datatables-net-dt/css/dataTables.dataTables.css')
-    .replaceAll('https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js', '/vendor/datatables-net-dt/js/dataTables.dataTables.min.js')
-    .replaceAll('https://cdn.jsdelivr.net/npm/chart.js', '/vendor/chartjs/chart.umd.min.js')
-    .replaceAll('https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css', '/vendor/sweetalert2/sweetalert2.min.css')
-    .replaceAll('https://cdn.jsdelivr.net/npm/sweetalert2@11', '/vendor/sweetalert2/sweetalert2.min.js')
-    .replaceAll('https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css', '/vendor/select2-dist/css/select2.min.css')
-    .replaceAll('https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js', '/vendor/select2-dist/js/select2.min.js')
-    .replaceAll('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css', '/vendor/fontawesome-free/css/all.min.css')
-    .replaceAll('https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js', '/vendor/canvas-confetti/confetti.browser.min.js')
-    .replaceAll('https://assets.mixkit.co/active_storage/sfx/2869/2869-84.wav', '/vendor/silence.wav')
-    .replace(/<link[^>]+fonts\.googleapis[^>]*>\s*/gi, '')
-    .replace(/@import url\('https:\/\/fonts\.googleapis\.com[^']+'\);\s*/gi, '')
-    .replace('</head>', `${scaleStyle}\n${referenceDateTag}\n${cacheCleanupTag}\n${shimTag}\n</head>`);
+function renderReactApp() {
+  const indexPath = path.join(clientDistPath, 'index.html');
+  return fs.readFileSync(indexPath, 'utf8');
 }
 
-app.get('/exact', (_req, res) => {
-  res.redirect('/exact/worktrack');
-});
+app.get(/^\/(?!api\/|uploads\/).*/, (_req, res) => {
+  if (hasClientDist) {
+    res.type('html').send(renderReactApp());
+    return;
+  }
 
-app.get(['/', '/worktrack'], (_req, res) => {
-  res.type('html').send(renderExactPage(exactPages.worktrack));
-});
-
-app.get('/client', (_req, res) => {
-  res.type('html').send(renderExactPage(exactPages.client));
-});
-
-app.get('/dashboard', (_req, res) => {
-  res.type('html').send(renderExactPage(exactPages.dashboard));
-});
-
-app.get('/exact/:portal', (req, res) => {
-  const fileName = exactPages[req.params.portal];
-  if (!fileName) return res.status(404).send('Exact portal not found.');
-  res.type('html').send(renderExactPage(fileName));
-});
-
-app.get(/^\/(?!api\/|uploads\/).*/, (req, res) => {
-  const page =
-    /^\/client(?:\/|$)/.test(req.path)
-      ? exactPages.client
-      : /^\/dashboard(?:\/|$)/.test(req.path)
-        ? exactPages.dashboard
-        : exactPages.worktrack;
-  res.type('html').send(renderExactPage(page));
+  res.status(503).type('html').send(`<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WorkTrack Frontend Not Available</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: Inter, "Segoe UI", Arial, sans-serif; background: #eef8ff; color: #14213d; }
+      main { width: min(620px, calc(100vw - 32px)); background: #fff; border: 1px solid #d7e4ef; border-radius: 18px; box-shadow: 0 20px 50px rgba(15, 23, 42, .12); padding: 28px; }
+      h1 { margin: 0 0 12px; font-size: 28px; }
+      p { margin: 0 0 14px; color: #57627d; line-height: 1.6; }
+      code { display: inline-block; padding: 4px 8px; border-radius: 8px; background: #f3f7fd; color: #3f2d95; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>WorkTrack frontend is not built</h1>
+      <p>The production runtime now expects the React app from <code>client/src</code>.</p>
+      <p>Build it with <code>npm run client:build</code> and reopen <code>/login</code>.</p>
+    </main>
+  </body>
+</html>`);
 });
 
 app.use('/api', (_req, res) => {

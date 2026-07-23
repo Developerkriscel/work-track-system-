@@ -1,78 +1,53 @@
 # WorkTrack MERN Migration Notes
 
-This project now serves the original Apps Script UI as the primary MERN UI:
+WorkTrack now runs from the React frontend in `client/src`, the Express APIs in
+`server/`, and MongoDB. The `appscript/` directory remains only as a reference
+for parity review and is not loaded by the production server.
 
-- `/` and `/worktrack` serve the original `appscript/index.html` WorkTrack UI.
-- `/client` serves the original `appscript/client-index.html` UI.
-- `/dashboard` serves the original `appscript/dashboard-index.html` UI.
-- `/exact/worktrack`, `/exact/client`, and `/exact/dashboard` remain aliases.
+## Runtime
 
-Those exact pages keep the same Apps Script HTML, CSS, theme, layout, modals, DataTables, Chart.js usage, and client-side JavaScript. Express injects `public/googleScriptRunShim.js`, which recreates `google.script.run` in the browser and forwards calls to `/api/apps-script/:functionName`. The shim also supports Apps Script-style success/failure handlers, `withUserObject`, and safe `google.script.host` no-ops for browser parity.
+- `/` and `/worktrack` open the employee/admin React workspace.
+- `/client` and `/client/*` open the client React portal.
+- `/dashboard` opens the management dashboard route for authorized employees.
+- `/api/health` reports the active Mongo-backed service.
+- `client/dist` is served by `server.js` after `npm.cmd run build`.
 
-The earlier generated React/Vite UI has been removed from the runnable app path. There is no `/react`, Vite dev server, or `dist` fallback; the Apps Script files are the only UI source of truth.
+Authentication and every protected module API use signed MERN sessions. The
+runtime has no `google.script.run` shim, Apps Script route, Apps Script HTML
+renderer, or seed-data fallback. Login credentials come from MongoDB only.
 
-The WorkTrack and Client Portal pages also validate restored browser session data before auto-login. Incompatible stale `currentUser` / `currentClient` values from earlier local builds are cleared so the original Apps Script UI cannot boot with malformed generated-app state.
+## Data migration
 
-Current seed fallback logins when MongoDB has no imported rows:
+1. Set `MONGO_URI` and `WORKTRACK_AUTH_SECRET` in `.env`.
+2. Export Google Sheet tabs as `.csv` or `.xlsx` files into `imports/`.
+3. Run `npm.cmd run import:sheets`.
 
-- Employee/Admin: `NL106` / `123456`
-- Employee/User used for Apps Script screenshot parity: `VK` / `123456`
-- Client: `CL000` / `123456`
+The importer maps the known WorkTrack modules to Mongo collections while
+preserving legacy field names and identifiers. It supports Users, Clients,
+Tickets, Attendance, Leaves, Intimations, Expenses, FMS, To-Do, Invoices,
+Messages, Social, Forms Portal, Ticket History, and WhatsApp Logs.
 
-Run the server:
+Forms Portal records, external links, and selected-user access assignments are
+stored in MongoDB. Uploaded and camera/base64 files are stored under
+`uploads/`, with their URL paths persisted in MongoDB.
 
-```bash
-npm.cmd start
-```
-
-Check what the expected local ports are actually serving:
-
-```bash
-npm.cmd run status
-```
-
-Verify the exact UI wiring:
-
-```bash
-npm.cmd run build
-```
-
-Run live browser parity checks against the exact Apps Script pages:
+## Verification
 
 ```bash
-npm.cmd run verify:browser
+npm.cmd run verify:all
+npm.cmd run verify:mongo-persistence
+npm.cmd run verify:visual
 ```
 
-This logs into the employee WorkTrack UI, client portal, and master dashboard on `localhost:5173`, rejects the old generated React-style UI, and saves:
+`verify:all` builds the React application, checks import contracts, and smoke
+tests employee and client route families. `verify:mongo-persistence` performs
+temporary authenticated writes through the real API, verifies their Mongo
+readbacks, then removes only its own temporary records.
 
-- `tmp-browser-parity-worktrack.png`
-- `tmp-browser-parity-client.png`
-- `tmp-browser-parity-dashboard.png`
+`verify:visual` renders the dashboard, attendance, tickets, Forms Portal, and
+reports routes in Chrome at a fixed desktop viewport, captures screenshots, and
+fails on protected-route redirects, invalid rendered values, console errors, or
+failed API responses.
 
-The exact Apps Script UI is served on both `5000` and `5173` so old Vite/local browser tabs still show the same UI:
-
-```text
-http://localhost:5000/
-http://localhost:5000/client
-http://localhost:5000/dashboard
-http://localhost:5173/
-http://localhost:5173/client
-http://localhost:5173/dashboard
-```
-
-If either exact port is busy with anything other than the exact Apps Script UI, `npm.cmd start` now fails loudly instead of leaving a stale generated UI visible on `localhost:5173`. Stop the conflicting process, then rerun `npm.cmd start`.
-
-MongoDB migration:
-
-1. Set `MONGO_URI` in `.env`.
-2. Export each Google Sheet tab as `.csv` or `.xlsx`.
-3. Put the files in `imports/`.
-4. Run:
-
-```bash
-npm.cmd run import:sheets
-```
-
-The importer detects common file/sheet names such as Users, Clients, Tickets, Attendance, Leaves, Intimations, Expenses, FMS, To-Do, Invoices, Messages, Social, Forms, Ticket History, and WhatsApp Logs. Rows are stored with original column names so the Apps Script UI receives the same field names it already expects.
-
-Uploaded base64/camera files are saved under `uploads/` and returned as URL paths.
+For local development, run `npm.cmd run dev` and open
+`http://localhost:5000/login` after the production client build is present.

@@ -1,0 +1,1 @@
+export { expensesManifest } from '../manifest';
