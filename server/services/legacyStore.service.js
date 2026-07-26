@@ -375,6 +375,16 @@ export async function deleteOrDeactivate(modelName, key, value) {
   return next;
 }
 
+export async function deleteRow(modelName, key, value) {
+  await assertMongoReady();
+  const rows = await listRows(modelName);
+  const row = rows.find((item) => String(item[key] || '').trim() === String(value || '').trim());
+  if (!row) return null;
+  const legacyId = row._legacyId || getLegacyId(modelName, row);
+  await LegacyModels[modelName].deleteMany({ legacyId });
+  return row;
+}
+
 export async function replaceCollection(modelName, rows) {
   await assertMongoReady();
   const Model = LegacyModels[modelName];

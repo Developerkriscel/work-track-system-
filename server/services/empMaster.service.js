@@ -1,5 +1,5 @@
 import { saveBase64File } from './fileStorage.service.js';
-import { listRows, upsertRow } from './legacyStore.service.js';
+import { deleteRow, listRows, upsertRow } from './legacyStore.service.js';
 import { saveOrUpdateUser } from './admin.service.js';
 
 const safe = (value = '') => String(value ?? '').trim();
@@ -16,6 +16,7 @@ function first(row = {}, keys = [], fallback = '') {
 }
 const ok = (payload = {}) => ({ success: true, ...payload });
 const inactiveStatuses = new Set(['inactive', 'resigned', 'terminated']);
+const elevatedRoles = new Set(['admin', 'super admin']);
 
 export const empCategories = ['Master', 'EMP', 'Freelancer', 'Intern'];
 export const empStatuses = ['Active', 'Pending', 'Inactive', 'Resigned', 'Terminated'];
@@ -43,6 +44,14 @@ function activeRow(row = {}) {
 
 function userStatusForEmp(status) {
   return inactiveStatuses.has(safe(status).toLowerCase()) ? 'Inactive' : 'Active';
+}
+
+function canActorEditRow(actorRole = '', row = {}) {
+  const normalizedActorRole = safe(actorRole).toLowerCase();
+  if (elevatedRoles.has(normalizedActorRole)) return true;
+  const targetRole = safe(first(row, ['Role', 'Designation'])).toLowerCase();
+  if (normalizedActorRole === 'hr' && elevatedRoles.has(targetRole)) return false;
+  return true;
 }
 
 function normalizeEmpMasterRow(input = {}, category = 'Master') {
@@ -144,11 +153,19 @@ export async function getEmpMasterData(category = 'Master') {
   const normalized = records.map((row) => normalizeEmpMasterRow(row, row.Category));
 
   if (targetCategory === 'Inactive') {
+    const inactiveMasterRows = normalized
+      .filter((row) => empCode(row) && inactiveStatuses.has(safe(row.Status).toLowerCase()))
+      .map((row) => ({ ...row, _sourceSheet: row.Category }));
+
+    const inactiveUserRows = users
+      .map(projectUserAsMaster)
+      .filter((row) => empCode(row) && inactiveStatuses.has(safe(row.Status).toLowerCase()))
+      .filter((row) => !inactiveMasterRows.some((existing) => safe(empCode(existing)).toLowerCase() === safe(empCode(row)).toLowerCase()))
+      .map((row) => ({ ...row, _sourceSheet: 'User' }));
+
     return ok({
       category: targetCategory,
-      data: normalized
-        .filter((row) => empCode(row) && inactiveStatuses.has(safe(row.Status).toLowerCase()))
-        .map((row) => ({ ...row, _sourceSheet: row.Category }))
+      data: [...inactiveMasterRows, ...inactiveUserRows]
     });
   }
 
@@ -197,7 +214,7 @@ export async function getNextEmpCode(category = 'EMP') {
   return ok({ code, nextCode: code });
 }
 
-export async function saveEmpMasterData(category, formData = {}, filePayloads = {}, adminId = '') {
+export async function saveEmpMasterData(category, formData = {}, filePayloads = {}, adminId = '', actorRole = '') {
   const targetCategory = normalizeCategory(category || formData.Category);
   const records = await listRows('EmpMaster');
   const users = await listRows('User');
@@ -214,6 +231,12 @@ export async function saveEmpMasterData(category, formData = {}, filePayloads = 
   if (safe(prepared.Email) && !/^\S+@\S+\.\S+$/.test(safe(prepared.Email))) {
     return { success: false, message: 'Please enter a valid employee email address.' };
   }
+  if (existing && !canActorEditRow(actorRole, existing)) {
+    return { success: false, message: 'HR can not edit Admin or Super Admin employee details.' };
+  }
+  if (!existing && !canActorEditRow(actorRole, prepared)) {
+    return { success: false, message: 'HR can not create Admin or Super Admin employee details.' };
+  }
   const duplicateLogin = records.find((row) => safe(first(row, ['User ID', 'Employee ID', 'userId', 'employeeId'])).toLowerCase() === safe(prepared['User ID']).toLowerCase() && safe(empCode(row)).toLowerCase() !== safe(prepared['EMP Code']).toLowerCase());
   if (duplicateLogin) return { success: false, message: `User ID ${prepared['User ID']} is already assigned to another employee.` };
   const linkedUser = users.find((user) => safe(first(user, ['Employee ID', 'User ID', 'employeeId', 'userId'])).toLowerCase() === safe(prepared['User ID']).toLowerCase());
@@ -228,4 +251,33 @@ export async function saveEmpMasterData(category, formData = {}, filePayloads = 
   const userSync = await syncToLoginUser(saved, adminId, portalPassword);
   if (userSync && !userSync.success) return userSync;
   return ok({ message: `Employee ${prepared['EMP Code']} saved successfully.`, item: saved });
+}
+
+export async function deleteEmpMasterData(identifier = '', adminId = '', actorRole = '') {
+  const targetId = safe(identifier);
+  if (!targetId) return { success: false, message: 'Employee ID is required.' };
+
+  const records = await listRows('EmpMaster');
+  const users = await listRows('User');
+  const targetRecord = records.find((row) => safe(empCode(row)).toLowerCase() === targetId.toLowerCase())
+    || users.find((row) => safe(first(row, ['Employee ID', 'User ID', 'empCode', 'employeeId', 'userId'])).toLowerCase() === targetId.toLowerCase());
+
+  if (!targetRecord) {
+    return { success: false, message: 'Employee record not found.' };
+  }
+  if (!canActorEditRow(actorRole, targetRecord)) {
+    return { success: false, message: 'HR can not edit or delete Admin or Super Admin employee details.' };
+  }
+
+  const deletedEmp = await deleteRow('EmpMaster', 'EMP Code', targetId);
+  const deletedUser = await deleteRow('User', 'Employee ID', targetId);
+
+  if (!deletedEmp && !deletedUser) {
+    return { success: false, message: 'Employee record could not be deleted.' };
+  }
+
+  return ok({
+    message: `Employee ${targetId} deleted successfully.`,
+    item: deletedEmp || deletedUser
+  });
 }

@@ -74,6 +74,59 @@ function canReviewEmployee(admin, employee, users) {
   return team.some((user) => eq(userId(user), userId(employee)));
 }
 
+function isPendingTicketStatus(status = '') {
+  return /pending approval|hr approved/i.test(safe(status));
+}
+
+function isPendingLeaveStatus(status = '') {
+  return /^pending$/i.test(safe(status));
+}
+
+function isPendingIntimationStatus(status = '') {
+  return /submitted|pending/i.test(safe(status));
+}
+
+function isPendingAttendanceStatus(status = '') {
+  return /need approval|pending/i.test(safe(status));
+}
+
+function requestApprovalDecision(admin, row, users, type) {
+  const adminId = userId(admin).toUpperCase();
+  const role = userRole(admin);
+  const employeeId = first(row, ['Employee ID', 'employeeId', 'EmpID']);
+  const employee = users.find((user) => eq(userId(user), employeeId));
+  const status = safe(first(row, ['Status', 'status']));
+  const restricted = restrictedApprovalIds.has(adminId);
+  const canSeeEmployee = employee ? canReviewEmployee(admin, employee, users) : role === 'super admin';
+
+  if (!canSeeEmployee && role !== 'super admin') {
+    return { visible: false, actionable: false, canApprove: false };
+  }
+
+  let pending = false;
+  if (/leave/i.test(type)) pending = isPendingLeaveStatus(status);
+  else if (/intimation/i.test(type)) pending = isPendingIntimationStatus(status);
+  else if (/attendance/i.test(type)) pending = isPendingAttendanceStatus(status);
+
+  if (!pending) {
+    return { visible: false, actionable: false, canApprove: false };
+  }
+
+  if (restricted) {
+    return { visible: true, actionable: false, canApprove: false };
+  }
+
+  if (role === 'super admin' || role === 'hr') {
+    return { visible: true, actionable: true, canApprove: true };
+  }
+
+  if (role === 'manager' || role === 'admin') {
+    return { visible: true, actionable: true, canApprove: true };
+  }
+
+  return { visible: false, actionable: false, canApprove: false };
+}
+
 function ticketApprovalDecision(admin, ticket, users) {
   const adminId = userId(admin).toUpperCase();
   const role = userRole(admin);
@@ -233,14 +286,10 @@ export async function getPendingApprovals(adminId) {
   const data = await getRows();
   const admin = data.users.find((user) => eq(userId(user), adminId));
   if (!admin || !elevatedRoles.has(userRole(admin))) return fail('Access Denied');
-  const visibleEmployee = (row) => {
-    const employee = data.users.find((user) => eq(userId(user), first(row, ['Employee ID', 'employeeId', 'EmpID'])));
-    return employee ? canReviewEmployee(admin, employee, data.users) : userRole(admin) === 'super admin';
-  };
 
   const attendanceGroups = new Map();
   data.attendance
-    .filter((row) => /pending|need approval/i.test(first(row, ['Status'], 'Present')) && visibleEmployee(row))
+    .filter((row) => requestApprovalDecision(admin, row, data.users, 'Attendance').visible)
     .forEach((row) => {
       const employee = first(row, ['Employee ID', 'employeeId', 'EmpID']);
       const date = normalizedDate(first(row, ['Date', 'date']));
@@ -252,11 +301,16 @@ export async function getPendingApprovals(adminId) {
         PunchIn: '-',
         PunchOut: '-',
         Duration: '-',
-        Status: first(row, ['Status'], 'Need Approval'),
+        Status: first(row, ['Status', 'status'], 'Need Approval'),
         AttendanceID: key,
-        AttendanceIDs: []
+        AttendanceIDs: [],
+        _canApprove: false,
+        _isActionableByMe: false
       };
+      const decision = requestApprovalDecision(admin, row, data.users, 'Attendance');
       group.AttendanceIDs.push(first(row, ['AttendanceID', 'ID', 'attendanceId']));
+      group._canApprove = group._canApprove || decision.canApprove;
+      group._isActionableByMe = group._isActionableByMe || decision.actionable;
       if (/punch\s*in/i.test(first(row, ['Action', 'action']))) {
         group.PunchIn = formatApprovalTime(first(row, ['Time', 'Punch In', 'InTime']));
       }
@@ -268,12 +322,21 @@ export async function getPendingApprovals(adminId) {
     });
 
   return ok({
-    leaves: data.leaves.filter((row) => /pending/i.test(first(row, ['Status'], 'Pending')) && visibleEmployee(row)),
-    intimations: data.intimations.filter((row) => /pending|submitted/i.test(first(row, ['Status'], 'Submitted')) && visibleEmployee(row)),
+    leaves: data.leaves
+      .map((row) => {
+        const decision = requestApprovalDecision(admin, row, data.users, 'Leave');
+        return decision.visible ? { ...row, _canApprove: decision.canApprove, _isActionableByMe: decision.actionable } : null;
+      })
+      .filter(Boolean),
+    intimations: data.intimations
+      .map((row) => {
+        const decision = requestApprovalDecision(admin, row, data.users, 'Intimation');
+        return decision.visible ? { ...row, _canApprove: decision.canApprove, _isActionableByMe: decision.actionable } : null;
+      })
+      .filter(Boolean),
     attendance: Array.from(attendanceGroups.values()),
     tickets: data.tickets
-      .filter((row) => /pending approval|hr approved/i.test(first(row, ['Status']))
-        && ticketApprovalDecision(admin, row, data.users).visible)
+      .filter((row) => ticketApprovalDecision(admin, row, data.users).visible && isPendingTicketStatus(first(row, ['Status'])))
       .map((row) => {
         const decision = ticketApprovalDecision(admin, row, data.users);
         return { ...asTicketRow(row, data.clients), _canApprove: decision.canApprove, _isActionableByMe: decision.actionable, _canTransferApproval: decision.actionable };
@@ -301,10 +364,39 @@ export async function processApprovalAction(actionData = {}) {
   }
   const remarks = first(actionData, ['remarks', 'Remarks', 'Admin Remarks']);
   const approved = safe(status).toLowerCase() === 'approved';
-  const actualAction = approved && userRole(admin) === 'hr' ? 'HR Approved' : status;
-  const update = { ...actionData, Status: approved ? (userRole(admin) === 'hr' ? 'HR Approved' : 'Present') : status, 'Admin Remarks': remarks, 'Last Update Date': nowIso() };
-  if (/leave/i.test(type)) return ok({ message: `Leave request ${actualAction}.`, item: await upsertRow('Leave', 'LeaveID', id, { ...update, LeaveID: id, 'Leave ID': id, 'Admin Approval': actualAction }) });
-  if (/intimation/i.test(type)) return ok({ message: `Intimation request ${actualAction}.`, item: await upsertRow('Intimation', 'IntimationID', id, { ...update, IntimationID: id, 'Intimation ID': id, 'Admin Approval': actualAction }) });
+  
+  let newStatus = status;
+  if (approved) {
+    if (/attendance/i.test(type)) newStatus = 'Present';
+    else if (userRole(admin) === 'hr') newStatus = 'HR Approved';
+    else newStatus = 'Approved';
+  }
+
+  const actualAction = newStatus;
+  const update = { 
+    ...actionData, 
+    Status: newStatus,
+    status: newStatus,
+    'Admin Remarks': remarks, 
+    'Last Update Date': nowIso() 
+  };
+
+  if (/leave/i.test(type)) {
+    const leaveRows = await listRows('Leave');
+    const row = leaveRows.find((item) => eq(first(item, ['LeaveID', 'Leave ID', 'ID', 'leaveId']), id));
+    if (!row) return fail('Leave request not found.');
+    const decision = requestApprovalDecision(admin, row, users, 'Leave');
+    if (!decision.actionable) return fail('Access Denied: You cannot action this leave request.');
+    return ok({ message: `Leave request ${actualAction}.`, item: await upsertRow('Leave', 'LeaveID', id, { ...update, LeaveID: id, 'Leave ID': id, 'Admin Approval': actualAction }) });
+  }
+  if (/intimation/i.test(type)) {
+    const intimationRows = await listRows('Intimation');
+    const row = intimationRows.find((item) => eq(first(item, ['IntimationID', 'Intimation ID', 'ID', 'intimationId']), id));
+    if (!row) return fail('Intimation request not found.');
+    const decision = requestApprovalDecision(admin, row, users, 'Intimation');
+    if (!decision.actionable) return fail('Access Denied: You cannot action this intimation request.');
+    return ok({ message: `Intimation request ${actualAction}.`, item: await upsertRow('Intimation', 'IntimationID', id, { ...update, IntimationID: id, 'Intimation ID': id, 'Admin Approval': actualAction }) });
+  }
   if (/attendance/i.test(type)) {
     const attendanceRows = await listRows('Attendance');
     const [targetEmployee, targetDate] = safe(id).includes('|') ? safe(id).split('|', 2) : ['', ''];
@@ -315,8 +407,8 @@ export async function processApprovalAction(actionData = {}) {
     });
     if (!targets.length) return fail('Error: Could not match attendance date in database.');
 
-    const targetUser = users.find((user) => eq(userId(user), first(targets[0], ['Employee ID', 'employeeId', 'EmpID'])));
-    if (targetUser && !canReviewEmployee(admin, targetUser, users)) return fail('Unauthorized: You cannot approve this employee attendance.');
+    const attendanceDecision = requestApprovalDecision(admin, targets[0], users, 'Attendance');
+    if (!attendanceDecision.actionable) return fail('Unauthorized: You cannot approve this employee attendance.');
 
     const date = targetDate || normalizedDate(first(targets[0], ['Date', 'date']));
     let punchIn = targets.find((row) => /punch\s*in/i.test(first(row, ['Action', 'action'])));
@@ -418,7 +510,7 @@ export async function adminTicketAction(ticketId, adminId, action, remarks) {
   const data = await getRows();
   const ticket = data.tickets.find((item) => eq(item['Ticket ID'], ticketId));
   if (!ticket) return fail('Ticket not found.');
-  const adminUser = data.users.find((user) => eq(user['Employee ID'], adminId));
+  const adminUser = data.users.find((user) => eq(userId(user), adminId));
   if (!adminUser) return fail('Admin user not found.');
   if (!/pending approval|hr approved/i.test(first(ticket, ['Status']))) return fail('Only pending approval tickets can be actioned.');
   const decision = ticketApprovalDecision(adminUser, ticket, data.users);
@@ -429,13 +521,14 @@ export async function adminTicketAction(ticketId, adminId, action, remarks) {
   const row = await upsertRow('Ticket', 'Ticket ID', ticketId, {
     'Ticket ID': ticketId,
     Status: status,
-    Remarks: `[[${status} by ${adminId} on ${referenceNow().toLocaleString('en-IN')}]] ${remarks || ''}`,
-    'Last Update Date': nowIso()
+    Remarks: `${first(ticket, ['Remarks', 'remarks']) || ''}${first(ticket, ['Remarks', 'remarks']) ? '\n' : ''}[${first(adminUser, ['Role', 'role'], 'Admin')} ${first(adminUser, ['Employee Name', 'Name'], adminId)} - ${referenceNow().toLocaleString('en-IN')}]: ${action} - ${remarks || ''}`,
+    'Last Update Date': nowIso(),
+    'Last Action By': first(adminUser, ['Employee Name', 'Name'], adminId)
   });
   await insertRow('TicketHistory', {
     'History ID': `HIST_${Date.now()}`,
     'Ticket ID': ticketId,
-    ActionBy: adminId,
+    ActionBy: first(adminUser, ['Employee Name', 'Name'], adminId),
     ActionType: status,
     Remarks: remarks,
     Timestamp: nowIso()

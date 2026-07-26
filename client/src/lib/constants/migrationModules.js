@@ -48,6 +48,16 @@ export const migrationModules = {
       'Approval status views'
     ]
   },
+  myApprovalStatus: {
+    status: 'active',
+    priority: 'medium',
+    deliverables: [
+      'Personal approval history',
+      'Ticket, leave, intimation, attendance request status',
+      'Type and search filtering',
+      'Mongo-backed status tracking'
+    ]
+  },
   formsPortal: {
     status: 'active',
     priority: 'medium',

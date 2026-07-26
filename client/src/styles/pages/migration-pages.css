@@ -750,6 +750,99 @@
   font-size: 14px;
 }
 
+.my-approval-status__title {
+  font-size: 46px;
+}
+
+.my-approval-status__title ~ * .page-card__header,
+section.page-card:has(.my-approval-status__title) .page-card__header {
+  padding-bottom: 12px;
+  margin-bottom: 0;
+}
+
+.my-approval-status__filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.my-approval-status__filters-search {
+  min-width: 0;
+}
+
+.my-approval-status__summary-pill {
+  margin-top: 12px;
+}
+
+.my-approval-status__type-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #dbe6f4;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.my-approval-status__type-chip--ticket {
+  background: #edf4ff;
+  color: #2d63c7;
+  border-color: #d7e4fb;
+}
+
+.my-approval-status__type-chip--leave {
+  background: #f4ecff;
+  color: #7a3fe2;
+  border-color: #e3d2ff;
+}
+
+.my-approval-status__type-chip--attendance {
+  background: #eaf9ef;
+  color: #13803c;
+  border-color: #cdeed8;
+}
+
+.my-approval-status__type-chip--intimation {
+  background: #fff3e8;
+  color: #b86a00;
+  border-color: #f4ddb2;
+}
+
+.my-approval-status__subtype {
+  font-weight: 700;
+  color: #1a2744;
+}
+
+.my-approval-status__date {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.my-approval-status__reason {
+  max-width: 340px;
+  color: #51617f;
+}
+
+.my-approval-status__remarks {
+  background: #f8fbff;
+  border: 1px solid rgba(214, 226, 242, 0.95);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: #51617f;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.my-approval-status__empty-remarks {
+  color: #94a3b8;
+  font-style: italic;
+}
+
 .react-data-table {
   display: grid;
   gap: 14px;
@@ -1007,6 +1100,30 @@
   flex-wrap: wrap;
 }
 
+.attendance-cta--busy {
+  position: relative;
+  min-width: 168px;
+}
+
+.attendance-cta--busy::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  margin-left: 10px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #fff;
+  display: inline-block;
+  vertical-align: -2px;
+  animation: wt-spin 0.75s linear infinite;
+}
+
+@keyframes wt-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .attendance-field--hidden {
   display: none;
 }
@@ -1149,6 +1266,76 @@
 .attendance-section-tabs {
   display: flex;
   gap: 16px;
+}
+
+.attendance-team-toolbar {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.25fr) minmax(240px, 0.7fr);
+  gap: 16px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.attendance-team-toolbar__search {
+  margin: 0;
+}
+
+.attendance-team-toolbar__date {
+  margin: 0;
+}
+
+.attendance-team-user {
+  display: grid;
+  gap: 4px;
+}
+
+.attendance-team-user strong {
+  color: var(--wt-text);
+}
+
+.attendance-team-user span {
+  color: var(--wt-text-muted);
+  font-size: 12.5px;
+}
+
+.attendance-team-table__edit {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.attendance-team-modal {
+  max-width: 640px;
+}
+
+.attendance-team-modal__meta {
+  margin: 6px 0 0;
+  color: var(--wt-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.attendance-team-modal__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.attendance-team-modal__hint {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(201, 217, 240, 0.92);
+  background: #f7faff;
+  color: var(--wt-text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.attendance-team-modal__actions {
+  margin-top: 18px;
+  justify-content: flex-end;
 }
 
 .ticket-filter-actions {
@@ -1800,7 +1987,7 @@
 }
 
 .approvals-kpi-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .admin-kpi-grid {
@@ -1854,9 +2041,54 @@
   color: #b42318;
 }
 
+.emp-master-view-tabs {
+  gap: 12px;
+  margin: 0;
+  border-bottom: 0;
+}
+
+.emp-master-panel-tools {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.emp-master-panel-tools--info {
+  margin: 18px 0 16px;
+}
+
+.emp-master-filter {
+  min-width: 220px;
+  margin: 0;
+}
+
+.emp-master-user-filters {
+  margin-top: 18px;
+  margin-bottom: 16px;
+}
+
+.emp-master-loading {
+  margin-top: 10px;
+}
+
 .emp-master-search {
   max-width: 460px;
   margin-bottom: 16px;
+}
+
+.emp-master-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.emp-master-actions .attendance-cta,
+.emp-master-actions .cursor-not-allowed {
+  width: max-content;
+  min-width: 92px;
+  justify-content: center;
 }
 
 .emp-source-badge {
@@ -1884,8 +2116,8 @@
 .emp-editor-modal {
   display: flex;
   flex-direction: column;
-  width: min(1180px, calc(100vw - 32px));
-  max-height: min(94vh, 940px);
+  width: min(1500px, calc(100vw - 16px));
+  max-height: min(96vh, 980px);
 }
 
 .emp-editor {

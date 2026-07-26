@@ -234,9 +234,15 @@ export async function getTicketReportData(employeeId, role, startDate, endDate) 
 
 export async function getFmsReportData(employeeId, role, startDate, endDate) {
   const data = await getRows();
-  const canSeeAll = ['Admin', 'Super Admin', 'HR', 'Manager'].includes(role);
+  const normalizedRole = safe(role).toLowerCase();
+  const canSeeAll = ['super admin', 'hr'].includes(normalizedRole);
+  const teamIds = canSeeAll ? [] : teamMemberIds(data.users, employeeId);
   const items = data.fms
-    .filter((task) => (canSeeAll || eq(task['Employee ID'], employeeId) || eq(task.empId, employeeId)) && dateInRange(first(task, ['Plan Date', 'Date']), startDate, endDate))
+    .filter((task) => {
+      const ownerId = safe(first(task, ['Employee ID', 'EmpID', 'empId'])).toLowerCase();
+      const visible = canSeeAll || ownerId === safe(employeeId).toLowerCase() || (['admin', 'manager'].includes(normalizedRole) && teamIds.includes(ownerId));
+      return visible && dateInRange(first(task, ['Plan Date', 'Date']), startDate, endDate);
+    })
     .map((task) => asFmsRow(task));
   return ok({
     data: items,
@@ -249,12 +255,30 @@ export async function getFmsReportData(employeeId, role, startDate, endDate) {
 
 export async function exportReportForWeb(format = 'csv', sheetName = 'Report', employeeId = '', role = '', startDate = '', endDate = '') {
   const data = await getRows();
-  const canSeeAll = ['Admin', 'Super Admin', 'HR', 'Manager'].some((item) => eq(item, role));
+  const normalizedRole = safe(role).toLowerCase();
+  const ticketTeamIds = teamMemberIds(data.users, employeeId);
+  const fmsTeamIds = teamMemberIds(data.users, employeeId);
+  const canSeeAllTickets = normalizedRole === 'super admin';
+  const canSeeAllFms = ['super admin', 'hr'].includes(normalizedRole);
   const tickets = data.tickets
-    .filter((ticket) => (canSeeAll || eq(ticket['Employee ID'], employeeId) || eq(ticket['Task Approver'], employeeId)) && dateInRange(first(ticket, ['Plan Date', 'Date', 'Timestamp']), startDate, endDate))
+    .filter((ticket) => {
+      const ownerId = safe(first(ticket, ['Employee ID', 'EmpID', 'employeeId'])).toLowerCase();
+      const visible =
+        canSeeAllTickets ||
+        ownerId === safe(employeeId).toLowerCase() ||
+        (['admin', 'manager', 'hr'].includes(normalizedRole) && ticketTeamIds.includes(ownerId));
+      return visible && dateInRange(first(ticket, ['Plan Date', 'Date', 'Timestamp']), startDate, endDate);
+    })
     .map((ticket) => asTicketRow(ticket, data.clients));
   const fms = data.fms
-    .filter((task) => (canSeeAll || eq(task['Employee ID'], employeeId) || eq(task.empId, employeeId)) && dateInRange(first(task, ['Plan Date', 'Date']), startDate, endDate))
+    .filter((task) => {
+      const ownerId = safe(first(task, ['Employee ID', 'EmpID', 'empId'])).toLowerCase();
+      const visible =
+        canSeeAllFms ||
+        ownerId === safe(employeeId).toLowerCase() ||
+        (['admin', 'manager'].includes(normalizedRole) && fmsTeamIds.includes(ownerId));
+      return visible && dateInRange(first(task, ['Plan Date', 'Date']), startDate, endDate);
+    })
     .map((task) => asFmsRow(task));
   const sheetKey = safe(sheetName).toLowerCase();
   const source =

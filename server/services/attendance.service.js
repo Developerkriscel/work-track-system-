@@ -1,11 +1,12 @@
 import { saveBase64File } from './fileStorage.service.js';
-import { insertRow, listRows, sheetAttendance } from './legacyStore.service.js';
+import { getLegacyId, insertRow, listRows, sheetAttendance, upsertRow } from './legacyStore.service.js';
 
 const safe = (value) => String(value ?? '').trim();
 const eq = (left, right) => safe(left).toLowerCase() === safe(right).toLowerCase();
 const first = (row, keys, fallback = '') => keys.map((key) => row?.[key]).find((value) => safe(value)) ?? fallback;
 const num = (value) => Number(String(value ?? 0).replace(/[^0-9.-]/g, '')) || 0;
 const ok = (payload = {}) => ({ success: true, ...payload });
+const fail = (message) => ({ success: false, message });
 
 function parseReferenceNow(value) {
   if (!value) return new Date();
@@ -80,6 +81,212 @@ function timestampFromElapsedMinutes(minutes) {
   const value = num(minutes);
   if (!value) return '';
   return new Date(Date.now() - value * 60000).toISOString();
+}
+
+function localDateLabel(dateValue) {
+  const date = new Date(`${normalizedDate(dateValue)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return normalizedDate(dateValue);
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short'
+  });
+}
+
+function userId(user = {}) {
+  return first(user, ['Employee ID', 'employeeId', 'User ID', 'EmpID']);
+}
+
+function userRole(user = {}) {
+  return safe(first(user, ['Role', 'role'], 'User')).toLowerCase();
+}
+
+function isActiveUser(user = {}) {
+  const status = first(user, ['Status', 'status'], 'Active');
+  return !safe(status) || eq(status, 'Active');
+}
+
+function canManageTeamAttendance(user = {}) {
+  return /^(admin|super admin|hr)$/i.test(first(user, ['Role', 'role'], ''));
+}
+
+function durationLabel(start, end) {
+  if (!start || !end) return '';
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return '';
+  const diff = Math.round((end - start) / 60000);
+  const hours = Math.floor(diff / 60);
+  const minutes = diff % 60;
+  return `${hours}h ${minutes}m`;
+}
+
+function computeAttendanceStatus(dateValue, punchInRow) {
+  if (!punchInRow) {
+    const day = new Date(`${normalizedDate(dateValue)}T00:00:00`).getDay();
+    return day === 0 ? 'Weekly Off' : 'Absent';
+  }
+
+  const punchTime = new Date(timestampForAttendance(dateValue, first(punchInRow, ['Punch In', 'Time']), 'Punch In'));
+  if (Number.isNaN(punchTime.getTime())) return 'Present';
+  const shiftStart = new Date(`${normalizedDate(dateValue)}T10:00:00+05:30`);
+  const difference = (punchTime.getTime() - shiftStart.getTime()) / 60000;
+  if (difference < 0) return 'Early';
+  if (difference <= 15) return 'On Time';
+  if (difference <= 60) return 'Late';
+  return 'Very Late';
+}
+
+function teamAttendanceAccessSet(reviewer = {}, users = []) {
+  if (!canManageTeamAttendance(reviewer)) return new Set();
+  return new Set(
+    users
+      .filter((user) => isActiveUser(user))
+      .map((user) => safe(userId(user)).toUpperCase())
+      .filter(Boolean)
+  );
+}
+
+function dateWithinRange(dateValue, startDate, endDate) {
+  const date = normalizedDate(dateValue);
+  const start = normalizedDate(startDate || date);
+  const end = normalizedDate(endDate || start);
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{4}-\d{2}-\d{2}$/.test(start) && /^\d{4}-\d{2}-\d{2}$/.test(end) && start <= date && date <= end;
+}
+
+function buildTeamAttendanceGroups(attendanceRows, users, allowedIds, startDate, endDate) {
+  const userMap = new Map(users.map((user) => [safe(userId(user)).toUpperCase(), user]));
+  const groups = new Map();
+
+  attendanceRows
+    .filter((row) => {
+      const employeeId = safe(first(row, ['Employee ID', 'employeeId', 'EmpID'])).toUpperCase();
+      const date = normalizedDate(first(row, ['Date', 'date']));
+      return allowedIds.has(employeeId) && dateInRange(date, startDate, endDate);
+    })
+    .forEach((rawRow) => {
+      const employeeId = safe(first(rawRow, ['Employee ID', 'employeeId', 'EmpID'])).toUpperCase();
+      const employee = userMap.get(employeeId) || {};
+      const expanded = attendanceRowsForApp(rawRow).map((event) => ({
+        ...event,
+        _sourceLegacyId: getLegacyId('Attendance', rawRow),
+        _sourceRow: rawRow
+      }));
+
+      expanded.forEach((event) => {
+        const date = normalizedDate(first(event, ['Date', 'date']));
+        const key = `${employeeId}__${date}`;
+        if (!groups.has(key)) {
+          groups.set(key, {
+            id: key,
+            date,
+            dateLabel: localDateLabel(date),
+            employeeId,
+            employeeName: first(employee, ['Employee Name', 'Name'], first(event, ['Employee Name', 'Name'], employeeId)),
+            role: first(employee, ['Role', 'role'], ''),
+            department: first(employee, ['Department', 'department'], ''),
+            punchesIn: [],
+            punchesOut: []
+          });
+        }
+        const group = groups.get(key);
+        if (/punch\s*in/i.test(safe(event.Action))) group.punchesIn.push(event);
+        if (/punch\s*out/i.test(safe(event.Action))) group.punchesOut.push(event);
+      });
+    });
+
+  if (dateWithinRange(today(), startDate, endDate)) {
+    users
+      .filter((user) => {
+        const employeeId = safe(userId(user)).toUpperCase();
+        return employeeId && allowedIds.has(employeeId) && isActiveUser(user);
+      })
+      .forEach((user) => {
+        const employeeId = safe(userId(user)).toUpperCase();
+        const key = `${employeeId}__${today()}`;
+        if (!groups.has(key)) {
+          groups.set(key, {
+            id: key,
+            date: today(),
+            dateLabel: localDateLabel(today()),
+            employeeId,
+            employeeName: first(user, ['Employee Name', 'Name'], employeeId),
+            role: first(user, ['Role', 'role'], ''),
+            department: first(user, ['Department', 'department'], ''),
+            punchesIn: [],
+            punchesOut: []
+          });
+        }
+      });
+  }
+
+  return Array.from(groups.values())
+    .map((group) => {
+      const punchIn = group.punchesIn.sort((left, right) => attendanceEventTime(left) - attendanceEventTime(right))[0] || null;
+      const punchOut = group.punchesOut.sort((left, right) => attendanceEventTime(right) - attendanceEventTime(left))[0] || null;
+      const inDate = punchIn ? new Date(timestampForAttendance(group.date, first(punchIn, ['Punch In', 'Time']), 'Punch In')) : null;
+      const outDate = punchOut ? new Date(timestampForAttendance(group.date, first(punchOut, ['Punch Out', 'Time']), 'Punch Out')) : null;
+
+      return {
+        id: group.id,
+        date: group.date,
+        dateLabel: group.dateLabel,
+        employeeId: group.employeeId,
+        employeeName: group.employeeName,
+        role: group.role,
+        department: group.department,
+        punchIn,
+        punchOut,
+        punchInTime: first(punchIn, ['Punch In']),
+        punchOutTime: first(punchOut, ['Punch Out']),
+        punchInSourceId: punchIn?._sourceLegacyId || '',
+        punchOutSourceId: punchOut?._sourceLegacyId || '',
+        status: computeAttendanceStatus(group.date, punchIn),
+        duration: durationLabel(inDate, outDate) || first(punchOut, ['Duration', 'Total Duration']) || '-'
+      };
+    })
+    .sort((left, right) => {
+      if (left.date === right.date) return left.employeeName.localeCompare(right.employeeName);
+      return right.date.localeCompare(left.date);
+    });
+}
+
+function currentEditorRemark(editor = {}) {
+  const name = first(editor, ['Employee Name', 'Name'], userId(editor) || 'Admin');
+  return `Attendance edited by ${name} on ${referenceNow().toLocaleString('en-IN', { timeZone: WORKTRACK_TIME_ZONE })}`;
+}
+
+function mergeAttendanceRow(baseRow = {}, updates = {}) {
+  return {
+    ...baseRow,
+    ...updates,
+    Latitude: updates.Latitude ?? baseRow.Latitude ?? baseRow.Lattitude ?? '',
+    Lattitude: updates.Lattitude ?? updates.Latitude ?? baseRow.Lattitude ?? baseRow.Latitude ?? '',
+    Longitude: updates.Longitude ?? baseRow.Longitude ?? '',
+    Photo: updates.Photo ?? baseRow.Photo ?? baseRow['Photo Url'] ?? baseRow['Photo URL'] ?? '',
+    'Photo Url': updates['Photo Url'] ?? updates.Photo ?? baseRow['Photo Url'] ?? baseRow.Photo ?? '',
+    'Photo URL': updates['Photo URL'] ?? updates.Photo ?? baseRow['Photo URL'] ?? baseRow.Photo ?? ''
+  };
+}
+
+function buildAttendanceEditTarget(existingRow, defaults) {
+  return existingRow ? { ...existingRow } : sheetAttendance(defaults);
+}
+
+function normalizeTimeValue(value) {
+  return safe(value).toLowerCase();
+}
+
+function timesEqual(left, right) {
+  return normalizeTimeValue(left) === normalizeTimeValue(right);
+}
+
+function editKey(employeeId, date, action) {
+  return `ATT_EDIT_${safe(employeeId).toUpperCase()}_${normalizedDate(date)}_${safe(action).replace(/\s+/g, '_').toUpperCase()}`;
+}
+
+function requireTeamAttendanceReviewer(reviewerId, users) {
+  const reviewer = users.find((user) => eq(userId(user), reviewerId));
+  if (!reviewer || !canManageTeamAttendance(reviewer)) return null;
+  return reviewer;
 }
 
 function attendanceRowsForApp(row = {}) {
@@ -242,12 +449,173 @@ export async function recordAttendance(attendanceData = {}) {
 }
 
 export async function getAttendanceForUser(employeeId, startDate, endDate) {
-  const attendance = await listRows('Attendance');
+  const [attendance, leaves, intimations] = await Promise.all([
+    listRows('Attendance'),
+    listRows('Leave'),
+    listRows('Intimation')
+  ]);
+  
   return ok({
     data: attendance
       .filter((row) => eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), employeeId) && dateInRange(first(row, ['Date', 'date']), startDate, endDate))
       .map((row) => attendanceRowsForApp(row))
-      .flat()
+      .flat(),
+    leaves: leaves.filter((row) => eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), employeeId) && dateInRange(first(row, ['Start Date', 'Start Date']), startDate, endDate)),
+    intimations: intimations.filter((row) => eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), employeeId) && dateInRange(first(row, ['Intimation Date', 'Intimation Date']), startDate, endDate))
+  });
+}
+
+export async function getTeamAttendanceForReviewer(reviewerId, startDate, endDate) {
+  const [users, attendance] = await Promise.all([
+    listRows('User'),
+    listRows('Attendance')
+  ]);
+  const reviewer = requireTeamAttendanceReviewer(reviewerId, users);
+  if (!reviewer) return fail('Only Admin, Super Admin, or HR can view team attendance.');
+
+  const visibleIds = teamAttendanceAccessSet(reviewer, users);
+  const rows = buildTeamAttendanceGroups(attendance, users, visibleIds, startDate, endDate);
+  return ok({
+    data: rows,
+    users: users
+      .filter((user) => visibleIds.has(safe(userId(user)).toUpperCase()))
+      .map((user) => ({
+        id: userId(user),
+        name: first(user, ['Employee Name', 'Name'], userId(user)),
+        role: first(user, ['Role', 'role'], ''),
+        department: first(user, ['Department', 'department'], '')
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name))
+  });
+}
+
+export async function updateTeamAttendanceEntry(reviewerId, payload = {}) {
+  const employeeId = safe(payload.employeeId);
+  const date = normalizedDate(payload.date);
+  const nextPunchIn = safe(payload.punchInTime);
+  const nextPunchOut = safe(payload.punchOutTime);
+  if (!employeeId || !date) return fail('Employee and attendance date are required.');
+  if (!nextPunchIn && !nextPunchOut) return fail('Provide punch in or punch out time to update.');
+
+  const [users, attendance] = await Promise.all([
+    listRows('User'),
+    listRows('Attendance')
+  ]);
+
+  const reviewer = requireTeamAttendanceReviewer(reviewerId, users);
+  if (!reviewer) return fail('Only Admin, Super Admin, or HR can edit team attendance.');
+
+  const visibleIds = teamAttendanceAccessSet(reviewer, users);
+  if (!visibleIds.has(employeeId.toUpperCase())) return fail('You cannot edit this employee attendance.');
+
+  const targetUser = users.find((user) => eq(userId(user), employeeId));
+  if (!targetUser) return fail('Target employee not found.');
+
+  const sameDayRows = attendance.filter((row) => (
+    eq(first(row, ['Employee ID', 'employeeId', 'EmpID']), employeeId) &&
+    normalizedDate(first(row, ['Date', 'date'])) === date
+  ));
+
+  const expanded = sameDayRows.flatMap((row) => attendanceRowsForApp(row).map((event) => ({ ...event, _sourceRow: row })));
+  const punchInEvent = expanded
+    .filter((event) => /punch\s*in/i.test(safe(event.Action)))
+    .sort((left, right) => attendanceEventTime(left) - attendanceEventTime(right))[0] || null;
+  const punchOutEvent = expanded
+    .filter((event) => /punch\s*out/i.test(safe(event.Action)))
+    .sort((left, right) => attendanceEventTime(right) - attendanceEventTime(left))[0] || null;
+
+  const updates = new Map();
+  const employeeName = first(targetUser, ['Employee Name', 'Name'], employeeId);
+  const remark = currentEditorRemark(reviewer);
+
+  function workingRow(sourceRow, action) {
+    const key = sourceRow ? getLegacyId('Attendance', sourceRow) : editKey(employeeId, date, action);
+    if (!updates.has(key)) {
+      updates.set(
+        key,
+        buildAttendanceEditTarget(sourceRow ? { ...sourceRow } : null, {
+          AttendanceID: key,
+          employeeId,
+          employeeName,
+          date,
+          action
+        })
+      );
+    }
+    return updates.get(key);
+  }
+
+  if (nextPunchIn && !timesEqual(nextPunchIn, first(punchInEvent, ['Punch In']))) {
+    const sourceRow = punchInEvent?._sourceRow;
+    const key = sourceRow ? getLegacyId('Attendance', sourceRow) : editKey(employeeId, date, 'Punch In');
+    updates.set(key, mergeAttendanceRow(workingRow(sourceRow, 'Punch In'), {
+      AttendanceID: first(sourceRow, ['AttendanceID', 'ID', 'attendanceId'], key),
+      'Employee ID': employeeId,
+      EmpID: employeeId,
+      'Employee Name': employeeName,
+      Name: employeeName,
+      Date: date,
+      Action: 'Punch In',
+      'Punch In': nextPunchIn,
+      Time: timestampForAttendance(date, nextPunchIn, 'Punch In'),
+      Status: 'Present',
+      'Admin Approval': 'Approved',
+      'Admin Remarks': remark
+    }));
+  }
+
+  if (nextPunchOut && !timesEqual(nextPunchOut, first(punchOutEvent, ['Punch Out']))) {
+    const sourceRow = punchOutEvent?._sourceRow;
+    const key = sourceRow ? getLegacyId('Attendance', sourceRow) : editKey(employeeId, date, 'Punch Out');
+    updates.set(key, mergeAttendanceRow(workingRow(sourceRow, 'Punch Out'), {
+      AttendanceID: first(sourceRow, ['AttendanceID', 'ID', 'attendanceId'], key),
+      'Employee ID': employeeId,
+      EmpID: employeeId,
+      'Employee Name': employeeName,
+      Name: employeeName,
+      Date: date,
+      Action: 'Punch Out',
+      'Punch Out': nextPunchOut,
+      Time: timestampForAttendance(date, nextPunchOut, 'Punch Out'),
+      Status: 'Present',
+      'Admin Approval': 'Approved',
+      'Admin Remarks': remark
+    }));
+  }
+
+  if (!updates.size) {
+    return ok({ message: 'No attendance changes were needed.' });
+  }
+
+  const effectivePunchIn = nextPunchIn || first(punchInEvent, ['Punch In']);
+  const effectivePunchOut = nextPunchOut || first(punchOutEvent, ['Punch Out']);
+  if (effectivePunchIn && effectivePunchOut) {
+    const start = new Date(timestampForAttendance(date, effectivePunchIn, 'Punch In'));
+    const end = new Date(timestampForAttendance(date, effectivePunchOut, 'Punch Out'));
+    const duration = durationLabel(start, end);
+    if (duration) {
+      const sourceRow = punchOutEvent?._sourceRow;
+      const key = sourceRow ? getLegacyId('Attendance', sourceRow) : editKey(employeeId, date, 'Punch Out');
+      updates.set(key, mergeAttendanceRow(workingRow(sourceRow, 'Punch Out'), {
+        Duration: duration,
+        'Total Working Hours': duration,
+        Status: 'Present',
+        'Admin Approval': 'Approved',
+        'Admin Remarks': remark
+      }));
+    }
+  }
+
+  const saved = [];
+  for (const row of updates.values()) {
+    const id = first(row, ['AttendanceID', 'ID', 'attendanceId'], getLegacyId('Attendance', row));
+    saved.push(await upsertRow('Attendance', 'AttendanceID', id, row));
+  }
+
+  return ok({
+    message: `Attendance updated for ${employeeName}.`,
+    item: saved[0],
+    data: saved
   });
 }
 

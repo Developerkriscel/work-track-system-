@@ -4,8 +4,11 @@ import { AttendanceActionRow } from '@/features/attendance/components/Attendance
 import { AttendanceEntryPanel } from '@/features/attendance/components/AttendanceEntryPanel';
 import { AttendanceHeader } from '@/features/attendance/components/AttendanceHeader';
 import { AttendanceRangeToolbar } from '@/features/attendance/components/AttendanceRangeToolbar';
-import { AttendanceSummaryStats } from '@/features/attendance/components/AttendanceSummaryStats';
-import { AttendanceHistoryTable } from '@/features/attendance/components/AttendanceTables';
+import {
+  AttendanceHistoryTable,
+  TeamAttendanceEditDialog,
+  TeamAttendanceTable
+} from '@/features/attendance/components/AttendanceTables';
 import { formatElapsed, todayYmd } from '@/features/attendance/services/attendancePresentation';
 import { useAttendanceData } from '@/features/attendance/useAttendanceData';
 
@@ -14,6 +17,7 @@ export function AttendancePage() {
   const {
     employeeId,
     currentUser,
+    canManageTeamAttendance,
     range,
     setRange,
     customStart,
@@ -23,20 +27,32 @@ export function AttendancePage() {
     attendanceLoading,
     attendanceError,
     attendanceRows,
+    leaves,
+    intimations,
+    teamAttendanceLoading,
+    teamAttendanceError,
+    teamAttendanceRows,
     submitting,
     session,
     recordPunch,
     createLeave,
-    createIntimation
+    createIntimation,
+    saveTeamAttendance
   } = useAttendanceData();
 
   const [activeTab, setActiveTab] = useState('punch');
+  const [activeView, setActiveView] = useState('self');
   const [showForm, setShowForm] = useState(false);
   const [timer, setTimer] = useState('00:00:00');
   const [message, setMessage] = useState(null);
+  const [punchAction, setPunchAction] = useState(null);
   const [photoBase64, setPhotoBase64] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraCycle, setCameraCycle] = useState(0);
+  const [teamSearch, setTeamSearch] = useState('');
+  const [teamDateFilter, setTeamDateFilter] = useState('');
+  const [teamEditor, setTeamEditor] = useState(null);
+  const [teamEditorForm, setTeamEditorForm] = useState({ punchInTime: '', punchOutTime: '' });
   const [leaveForm, setLeaveForm] = useState({
     leaveType: 'Sick Leave',
     dayType: 'Full Day',
@@ -103,11 +119,29 @@ export function AttendancePage() {
     };
   }, [showForm, activeTab, cameraCycle]);
 
-  const todayRowsCount = attendanceRows.length;
+  const teamDates = Array.from(new Set((teamAttendanceRows || []).map((row) => row.date).filter(Boolean)))
+    .sort((left, right) => right.localeCompare(left));
+
+  const visibleTeamRows = (teamAttendanceRows || []).filter((row) => {
+    const query = teamSearch.trim().toLowerCase();
+    const matchesDate = !teamDateFilter || row.date === teamDateFilter;
+    if (!query) return matchesDate;
+    const searchable = [
+      row.employeeName,
+      row.employeeId,
+      row.role,
+      row.department,
+      row.date,
+      row.status
+    ].join(' ').toLowerCase();
+    return matchesDate && searchable.includes(query);
+  });
+
   const openForm = (tab) => {
     setActiveTab(tab);
     setShowForm(true);
     setMessage(null);
+    setPunchAction(null);
     setPhotoBase64('');
   };
 
@@ -131,6 +165,7 @@ export function AttendancePage() {
   const retakePhoto = () => {
     setPhotoBase64('');
     setMessage(null);
+    setPunchAction(null);
     setCameraCycle((current) => current + 1);
   };
 
@@ -159,8 +194,10 @@ export function AttendancePage() {
       return;
     }
     setMessage(null);
+    setPunchAction({ action, stage: 'location' });
     try {
       const location = await getLocation();
+      setPunchAction({ action, stage: 'submitting' });
       const result = await recordPunch(action, {
         employeeName: currentUser?.['Employee Name'] || currentUser?.Name || employeeId,
         photoBase64,
@@ -175,6 +212,8 @@ export function AttendancePage() {
       }
     } catch (error) {
       setMessage({ tone: 'danger', text: error.message || 'Unable to capture live location.' });
+    } finally {
+      setPunchAction(null);
     }
   };
 
@@ -199,6 +238,32 @@ export function AttendancePage() {
     });
     if (result.success) {
       setIntimationForm((current) => ({ ...current, reason: '' }));
+    }
+  };
+
+  const openTeamEditor = (row) => {
+    setTeamEditor(row);
+    setTeamEditorForm({
+      punchInTime: row?.punchInTime || '',
+      punchOutTime: row?.punchOutTime || ''
+    });
+    setMessage(null);
+  };
+
+  const handleTeamAttendanceSave = async () => {
+    if (!teamEditor) return;
+    const result = await saveTeamAttendance({
+      employeeId: teamEditor.employeeId,
+      date: teamEditor.date,
+      punchInTime: teamEditorForm.punchInTime,
+      punchOutTime: teamEditorForm.punchOutTime
+    });
+    setMessage({
+      tone: result.success ? 'success' : 'danger',
+      text: result.success ? (result.message || 'Attendance updated.') : result.message
+    });
+    if (result.success) {
+      setTeamEditor(null);
     }
   };
 
@@ -230,6 +295,7 @@ export function AttendancePage() {
         leaveForm={leaveForm}
         intimationForm={intimationForm}
         submitting={submitting}
+        punchAction={punchAction}
         onClose={() => setShowForm(false)}
         onTabChange={setActiveTab}
         onCapturePhoto={capturePhoto}
@@ -246,27 +312,74 @@ export function AttendancePage() {
       />
 
       <AttendanceRangeToolbar
+        activeView={activeView}
+        canManageTeamAttendance={canManageTeamAttendance}
         range={range}
         customStart={customStart}
         customEnd={customEnd}
+        onViewChange={setActiveView}
         onRangeChange={setRange}
         onCustomStartChange={setCustomStart}
         onCustomEndChange={setCustomEnd}
       />
 
+      {activeView === 'self' ? (
+        <>
+          {attendanceError ? <div className="dashboard-banner dashboard-banner--error">{attendanceError}</div> : null}
+          <article className="migration-panel migration-panel--full">
+            <div className="migration-panel__row">
+              <h2>Attendance Log</h2>
+              <StatusPill tone={attendanceLoading ? 'neutral' : 'info'}>
+                {attendanceLoading ? 'Refreshing' : `${attendanceRows?.length || 0} rows`}
+              </StatusPill>
+            </div>
+            <AttendanceHistoryTable rows={attendanceRows || []} />
+          </article>
+        </>
+      ) : (
+        <>
+          {teamAttendanceError ? <div className="dashboard-banner dashboard-banner--error">{teamAttendanceError}</div> : null}
+          <article className="migration-panel migration-panel--full">
+            <div className="migration-panel__row">
+              <h2>My Team Attendance</h2>
+              <StatusPill tone={teamAttendanceLoading ? 'neutral' : 'info'}>
+                {teamAttendanceLoading ? 'Refreshing' : `${visibleTeamRows.length} rows`}
+              </StatusPill>
+            </div>
+            <div className="attendance-team-toolbar">
+              <label className="dashboard-control attendance-team-toolbar__search">
+                <span>Search Employee</span>
+                <input
+                  value={teamSearch}
+                  onChange={(event) => setTeamSearch(event.target.value)}
+                  placeholder="Search by employee, ID, role, department..."
+                />
+              </label>
+              <label className="dashboard-control attendance-team-toolbar__date">
+                <span>Attendance Date</span>
+                <select value={teamDateFilter} onChange={(event) => setTeamDateFilter(event.target.value)}>
+                  <option value="">All Dates In Range</option>
+                  {teamDates.map((date) => (
+                    <option key={date} value={date}>
+                      {date}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <TeamAttendanceTable rows={visibleTeamRows} onEdit={openTeamEditor} />
+          </article>
+        </>
+      )}
 
-
-      {attendanceError ? <div className="dashboard-banner dashboard-banner--error">{attendanceError}</div> : null}
-      <article className="migration-panel migration-panel--full">
-        <div className="migration-panel__row">
-          <h2>Attendance Log</h2>
-          <StatusPill tone={attendanceLoading ? 'neutral' : 'info'}>
-            {attendanceLoading ? 'Refreshing' : `${attendanceRows.length} rows`}
-          </StatusPill>
-        </div>
-        <AttendanceHistoryTable rows={attendanceRows} />
-      </article>
-
+      <TeamAttendanceEditDialog
+        row={teamEditor}
+        form={teamEditorForm}
+        saving={submitting}
+        onChange={(field, value) => setTeamEditorForm((current) => ({ ...current, [field]: value }))}
+        onClose={() => setTeamEditor(null)}
+        onSubmit={handleTeamAttendanceSave}
+      />
     </section>
   );
 }

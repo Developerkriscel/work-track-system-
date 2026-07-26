@@ -1,5 +1,5 @@
 import express from 'express';
-import { getEmpMasterData, getNextEmpCode, saveEmpMasterData } from '../services/empMaster.service.js';
+import { deleteEmpMasterData, getEmpMasterData, getNextEmpCode, saveEmpMasterData } from '../services/empMaster.service.js';
 
 const router = express.Router();
 
@@ -23,7 +23,23 @@ router.post('/next-code', async (req, res) => {
 
 router.post('/save', async (req, res) => {
   try {
-    const result = await saveEmpMasterData(req.body.category, req.body.formData || {}, req.body.filePayloads || {}, req.auth.sub);
+    const result = await saveEmpMasterData(
+      req.body.category,
+      req.body.formData || {},
+      req.body.filePayloads || {},
+      req.auth.sub,
+      req.auth.role
+    );
+    if (!result.success) return res.status(400).json(result);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/delete', async (req, res) => {
+  try {
+    const result = await deleteEmpMasterData(req.body.employeeId || req.body.empCode || req.body.identifier, req.auth.sub, req.auth.role);
     if (!result.success) return res.status(400).json(result);
     res.json(result);
   } catch (error) {

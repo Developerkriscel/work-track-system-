@@ -9,6 +9,7 @@ export function AttendanceEntryPanel({
   leaveForm,
   intimationForm,
   submitting,
+  punchAction,
   onClose,
   onTabChange,
   onCapturePhoto,
@@ -20,6 +21,10 @@ export function AttendanceEntryPanel({
   onIntimationSubmit
 }) {
   if (!showForm) return null;
+
+  const punchInBusy = punchAction?.action === 'Punch In';
+  const punchOutBusy = punchAction?.action === 'Punch Out';
+  const punchBusyText = punchAction?.stage === 'location' ? 'Getting location...' : 'Submitting...';
 
   return (
     <article className="migration-panel migration-panel--full">
@@ -59,31 +64,31 @@ export function AttendanceEntryPanel({
             <button
               type="button"
               className={`attendance-cta attendance-cta--purple${photoBase64 ? ' attendance-cta--hidden' : ''}`}
-              disabled={!cameraReady || submitting || Boolean(photoBase64)}
+              disabled={!cameraReady || submitting || Boolean(photoBase64) || Boolean(punchAction)}
               onClick={onCapturePhoto}
             >
               Capture
             </button>
             {photoBase64 ? (
-              <button type="button" className="attendance-cta attendance-cta--gray" disabled={submitting} onClick={onRetakePhoto}>
+              <button type="button" className="attendance-cta attendance-cta--gray" disabled={submitting || Boolean(punchAction)} onClick={onRetakePhoto}>
                 Retake
               </button>
             ) : null}
             <button
               type="button"
-              className="attendance-cta attendance-cta--green"
-              disabled={submitting || !photoBase64 || isPunchedIn}
+              className={`attendance-cta attendance-cta--green${punchInBusy ? ' attendance-cta--busy' : ''}`}
+              disabled={submitting || !photoBase64 || isPunchedIn || Boolean(punchAction)}
               onClick={() => onPunch('Punch In')}
             >
-              Punch In
+              {punchInBusy ? punchBusyText : 'Punch In'}
             </button>
             <button
               type="button"
-              className="attendance-cta attendance-cta--red"
-              disabled={submitting || !photoBase64 || !isPunchedIn}
+              className={`attendance-cta attendance-cta--red${punchOutBusy ? ' attendance-cta--busy' : ''}`}
+              disabled={submitting || !photoBase64 || !isPunchedIn || Boolean(punchAction)}
               onClick={() => onPunch('Punch Out')}
             >
-              Punch Out
+              {punchOutBusy ? punchBusyText : 'Punch Out'}
             </button>
           </div>
         </div>

@@ -3,24 +3,23 @@ import {
   Clock3,
   Tickets,
   ListChecks,
-  BadgeCheck,
   FileText,
   Users,
   Receipt,
   BarChart3,
-  ShieldUser,
+  BadgeCheck,
   Settings as SettingsIcon
 } from '@/components/common/icons';
 import { AttendancePage } from '@/features/attendance/AttendancePage';
 import { AdminPage } from '@/features/admin/AdminPage';
-import { ApprovalsPage } from '@/features/approvals/ApprovalsPage';
 import { ClientsPortalPage } from '@/features/clients-portal/ClientsPortalPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { ExpensesPage } from '@/features/expenses/ExpensesPage';
 import { EmpMasterPage } from '@/features/emp-master/EmpMasterPage';
 import { FmsPage } from '@/features/fms/FmsPage';
 import { FormsPortalPage } from '@/features/forms-portal/FormsPortalPage';
-import { ManagementDashboardPage } from '@/features/management-dashboard/ManagementDashboardPage';
+import { ApprovalsPage } from '@/features/approvals/ApprovalsPage';
+import { MyApprovalStatusPage } from '@/features/my-approval-status/MyApprovalStatusPage';
 import { ReportsPage } from '@/features/reports/ReportsPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { TicketSystemPage } from '@/features/tickets/TicketSystemPage';
@@ -84,9 +83,19 @@ export const appRoutes = [
     key: 'approvals',
     title: 'Approvals',
     icon: BadgeCheck,
-    iconColor: '#facc15',
-    page: { ...placeholder('Review tickets, attendance, leave, and other approval requests from your queue.'), ...migrationModules.approvals },
+    iconColor: '#818cf8',
+    accessCheck: (user) => /manager|admin|hr|super admin/i.test(String(user?.Role || user?.role || '')),
+    page: { ...placeholder('Review and action pending ticket, leave, intimation, and attendance approvals.'), ...migrationModules.approvals },
     element: <ApprovalsPage />
+  },
+  {
+    path: '/my-approval-status',
+    key: 'myApprovalStatus',
+    title: 'My Approval Status',
+    icon: Receipt,
+    iconColor: '#fb923c',
+    page: { ...placeholder('Track the status of your tickets, leave requests, intimations, and approval-linked attendance records.'), ...migrationModules.myApprovalStatus },
+    element: <MyApprovalStatusPage />
   },
   {
     path: '/forms-portal',
@@ -126,15 +135,6 @@ export const appRoutes = [
     element: <ExpensesPage />
   },
   {
-    path: '/settings',
-    key: 'settings',
-    title: 'Settings',
-    icon: SettingsIcon,
-    iconColor: '#94a3b8',
-    page: { ...placeholder('Manage your profile picture, personal details, and change your password.'), ...migrationModules.admin },
-    element: <SettingsPage />
-  },
-  {
     path: '/reports',
     key: 'reports',
     title: 'Reports',
@@ -145,44 +145,43 @@ export const appRoutes = [
     element: <ReportsPage />
   },
   {
-    path: '/management-dashboard',
-    key: 'managementDashboard',
-    title: 'Management Dashboard',
-    icon: BarChart3,
-    iconColor: '#818cf8',
-    accessCheck: (user) => /manager|admin|hr|super admin/i.test(String(user?.Role || '')),
-    page: { ...placeholder('Monitor company-wide execution, user activity, and client workload from a management workspace.'), ...migrationModules.managementDashboard },
-    element: <ManagementDashboardPage />
-  },
-  {
-    path: '/dashboard',
-    key: 'managementDashboardAlias',
-    title: 'Management Dashboard',
-    icon: BarChart3,
-    iconColor: '#818cf8',
-    hiddenInNav: true,
-    accessCheck: (user) => /manager|admin|hr|super admin/i.test(String(user?.Role || '')),
-    page: { ...placeholder('Monitor company-wide execution, user activity, and client workload from a management workspace.'), ...migrationModules.managementDashboard },
-    element: <ManagementDashboardPage />
-  },
-  {
     path: '/emp-master',
     key: 'empMaster',
     title: 'EMP Master',
     icon: FileText,
     iconColor: '#e879f9',
-    accessCheck: (user) => /^(hr|super admin)$/i.test(String(user?.Role || user?.role || '')),
+    accessCheck: (user) => /^(hr|admin|super admin)$/i.test(String(user?.Role || user?.role || '')),
     page: { ...placeholder('Manage employee, intern, freelancer, inactive-user, and employee document records.'), ...migrationModules.admin },
     element: <EmpMasterPage />
   },
   {
-    path: '/admin',
-    key: 'admin',
-    title: 'Admin',
-    icon: ShieldUser,
-    iconColor: '#fb7185',
+    path: '/users',
+    key: 'usersAdmin',
+    title: 'Users',
+    icon: Users,
+    iconColor: '#facc15',
     accessCheck: (user) => Boolean(user?.access?.canManageUsers),
-    page: { ...placeholder('Manage employee records, user access, and administrative workspace data.'), ...migrationModules.admin },
+    page: { ...placeholder('Manage user accounts, roles, reporting lines, approvers, and user access settings.'), ...migrationModules.admin },
     element: <AdminPage />
+  },
+  {
+    path: '/admin',
+    key: 'adminAlias',
+    title: 'Users',
+    icon: Users,
+    iconColor: '#facc15',
+    hiddenInNav: true,
+    accessCheck: (user) => Boolean(user?.access?.canManageUsers),
+    page: { ...placeholder('Manage user accounts, roles, reporting lines, approvers, and user access settings.'), ...migrationModules.admin },
+    element: <AdminPage />
+  },
+  {
+    path: '/settings',
+    key: 'settings',
+    title: 'Settings',
+    icon: SettingsIcon,
+    iconColor: '#94a3b8',
+    page: { ...placeholder('Manage your profile picture, personal details, and change your password.'), ...migrationModules.admin },
+    element: <SettingsPage />
   }
 ];

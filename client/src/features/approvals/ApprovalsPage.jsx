@@ -43,8 +43,8 @@ export function ApprovalsPage() {
     if (actionDialog.kind === 'ticket-approve') result = await approveTicket(actionDialog.ticketId, values.remarks);
     if (actionDialog.kind === 'ticket-rework') result = await reworkTicket(actionDialog.ticketId, values.remarks);
     if (actionDialog.kind === 'ticket-transfer') result = await moveTicketApproval(actionDialog.ticketId, values.target, values.remarks);
-    if (actionDialog.kind === 'approve') result = await approveItem(actionDialog.type, actionDialog.id, values.remarks);
-    if (actionDialog.kind === 'reject') result = await rejectItem(actionDialog.type, actionDialog.id, values.remarks);
+    if (actionDialog.kind === 'approve') result = await approveItem(actionDialog.type, actionDialog.id, values);
+    if (actionDialog.kind === 'reject') result = await rejectItem(actionDialog.type, actionDialog.id, values);
     if (result?.success !== false) setActionDialog(null);
   }
 

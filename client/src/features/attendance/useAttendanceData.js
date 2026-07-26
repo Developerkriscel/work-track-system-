@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  fetchTeamAttendance,
   fetchAttendanceForUser,
   submitAttendanceRecord,
   submitIntimation,
-  submitLeaveRequest
+  submitLeaveRequest,
+  updateTeamAttendance
 } from '@/features/attendance/api';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { todayYmd } from '@/features/attendance/services/attendancePresentation';
@@ -97,9 +99,8 @@ function normalizeDateKey(value) {
 
 function attendanceStatus(group, punchIn) {
   if (!punchIn) {
-    if (group.date === todayYmd()) return 'Pending Punch In';
     const day = new Date(`${group.date}T00:00:00`).getDay();
-    return day === 0 ? 'Weekend' : 'Absent';
+    return day === 0 ? 'Weekly Off' : 'Absent';
   }
 
   const punchTime = parseTimeToDate(group.date, punchIn.Time || punchIn['Punch In']);
@@ -120,7 +121,14 @@ function durationLabel(start, end) {
   return `${hours}h ${minutes}m`;
 }
 
-function groupAttendanceRows(rows, range) {
+function rangeIncludesDate(startDate, endDate, dateValue) {
+  const start = normalizeDateKey(startDate);
+  const end = normalizeDateKey(endDate);
+  const current = normalizeDateKey(dateValue);
+  return Boolean(start && end && current && start <= current && current <= end);
+}
+
+function groupAttendanceRows(rows, bounds) {
   const groups = new Map();
 
   rows.forEach((row) => {
@@ -160,19 +168,26 @@ function groupAttendanceRows(rows, range) {
     };
   });
 
-  if (!grouped.length && range === 'today') {
-    const today = todayYmd();
-    grouped = [{
+  const today = todayYmd();
+  const hasTodayRow = grouped.some((row) => row.date === today);
+  if (!hasTodayRow && rangeIncludesDate(bounds?.startDate, bounds?.endDate, today)) {
+    grouped.push({
       date: today,
       dateLabel: formatDateLabel(today),
       punchesIn: [],
       punchesOut: [],
       punchIn: null,
       punchOut: null,
-      status: 'Pending Punch In',
+      status: new Date(`${today}T00:00:00`).getDay() === 0 ? 'Weekly Off' : 'Absent',
       duration: '-',
-      isPendingToday: true
-    }];
+      isPendingToday: false
+    });
+  } else {
+    grouped = grouped.map((row) => (
+      row.date === today && !row.punchIn && !row.punchOut
+        ? { ...row, isPendingToday: false, status: new Date(`${row.date}T00:00:00`).getDay() === 0 ? 'Weekly Off' : 'Absent' }
+        : row
+    ));
   }
 
   return grouped.sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -196,10 +211,13 @@ export function useAttendanceData() {
   const { user } = useAuth();
   const employeeId = user?.['Employee ID'] || '';
   const employeeName = user?.['Employee Name'] || user?.Name || employeeId;
+  const role = String(user?.Role || user?.role || '');
+  const canManageTeamAttendance = /^(admin|super admin|hr)$/i.test(role.trim());
   const [range, setRange] = useState('today');
   const [customStart, setCustomStart] = useState(toYmd(new Date()));
   const [customEnd, setCustomEnd] = useState(toYmd(new Date()));
-  const [attendanceState, setAttendanceState] = useState({ loading: true, error: null, rows: [] });
+  const [attendanceState, setAttendanceState] = useState({ loading: true, error: null, rows: [], leaves: [], intimations: [] });
+  const [teamAttendanceState, setTeamAttendanceState] = useState({ loading: false, error: null, rows: [], users: [] });
   const [todayRows, setTodayRows] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const refreshTick = useRef(0);
@@ -216,7 +234,7 @@ export function useAttendanceData() {
 
   useEffect(() => {
     if (!employeeId) {
-      setAttendanceState({ loading: false, error: null, rows: [] });
+      setAttendanceState({ loading: false, error: null, rows: [], leaves: [], intimations: [] });
       setTodayRows([]);
       return undefined;
     }
@@ -225,25 +243,54 @@ export function useAttendanceData() {
 
     async function loadAttendance() {
       setAttendanceState((current) => ({ ...current, loading: true, error: null }));
+      if (canManageTeamAttendance) {
+        setTeamAttendanceState((current) => ({ ...current, loading: true, error: null }));
+      }
       try {
-        const [payload, todayPayload] = await Promise.all([
+        const requests = [
           fetchAttendanceForUser(employeeId, bounds.startDate, bounds.endDate),
           fetchAttendanceForUser(employeeId, todayYmd(), todayYmd())
-        ]);
+        ];
+        if (canManageTeamAttendance) {
+          requests.push(fetchTeamAttendance(bounds.startDate, bounds.endDate));
+        }
+        const [payload, todayPayload, teamPayload] = await Promise.all(requests);
         if (!alive) return;
         setAttendanceState({
           loading: false,
           error: null,
-          rows: payload.data || []
+          rows: payload.data || [],
+          leaves: payload.leaves || [],
+          intimations: payload.intimations || []
         });
         setTodayRows(todayPayload.data || []);
+        if (canManageTeamAttendance) {
+          setTeamAttendanceState({
+            loading: false,
+            error: null,
+            rows: teamPayload?.data || [],
+            users: teamPayload?.users || []
+          });
+        } else {
+          setTeamAttendanceState({ loading: false, error: null, rows: [], users: [] });
+        }
       } catch (error) {
         if (!alive) return;
         setAttendanceState({
           loading: false,
           error: error.message || 'Failed to load attendance.',
-          rows: []
+          rows: [],
+          leaves: [],
+          intimations: []
         });
+        if (canManageTeamAttendance) {
+          setTeamAttendanceState({
+            loading: false,
+            error: error.message || 'Failed to load team attendance.',
+            rows: [],
+            users: []
+          });
+        }
       }
     }
 
@@ -251,11 +298,11 @@ export function useAttendanceData() {
     return () => {
       alive = false;
     };
-  }, [employeeId, bounds.startDate, bounds.endDate, refreshTick.current]);
+  }, [employeeId, bounds.startDate, bounds.endDate, canManageTeamAttendance, refreshTick.current]);
 
   const groupedRows = useMemo(
-    () => groupAttendanceRows(attendanceState.rows, range),
-    [attendanceState.rows, range]
+    () => groupAttendanceRows(attendanceState.rows, bounds),
+    [attendanceState.rows, bounds]
   );
 
   const session = useMemo(
@@ -334,9 +381,28 @@ export function useAttendanceData() {
     }
   }
 
+  async function saveTeamAttendance(payload) {
+    if (!canManageTeamAttendance) {
+      return { success: false, message: 'Only Admin or HR can edit team attendance.' };
+    }
+    setSubmitting(true);
+    try {
+      const response = await updateTeamAttendance(payload);
+      if (!response?.success) return { success: false, message: response?.message || 'Attendance update failed.' };
+      reload();
+      return { success: true, message: response.message, item: response.item };
+    } catch (error) {
+      return { success: false, message: error.message || 'Attendance update failed.' };
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return {
     employeeId,
     currentUser: user || null,
+    role,
+    canManageTeamAttendance,
     range,
     setRange,
     customStart,
@@ -347,10 +413,17 @@ export function useAttendanceData() {
     attendanceLoading: attendanceState.loading,
     attendanceError: attendanceState.error,
     attendanceRows: groupedRows,
+    leaves: attendanceState.leaves,
+    intimations: attendanceState.intimations,
+    teamAttendanceLoading: teamAttendanceState.loading,
+    teamAttendanceError: teamAttendanceState.error,
+    teamAttendanceRows: teamAttendanceState.rows,
+    teamAttendanceUsers: teamAttendanceState.users,
     submitting,
     session,
     recordPunch,
     createLeave,
-    createIntimation
+    createIntimation,
+    saveTeamAttendance
   };
 }

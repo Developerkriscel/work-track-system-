@@ -12,30 +12,65 @@ function withoutPassword(row = {}) {
 }
 
 function normalizeAdminUser(userData = {}) {
-  const employeeId = first(userData, ['Employee ID', 'User ID', 'employeeId', 'userId', 'id'], '');
+  const employeeId = first(userData, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'userId', 'id'], '');
+  const employeeName = first(userData, ['Employee Name', 'Name', 'employeeName', 'name'], '');
+  const managerId = first(userData, ['Manager ID', 'Manager', 'managerId'], '');
+  const taskApprover = first(userData, ['Task Approver', 'Approver', 'taskApprover'], '');
+  const mobile = first(userData, ['Mobile Number', 'Mobile', 'mobile', 'Phone No', 'phone'], '');
+  const email = first(userData, ['Email', 'email', 'Official mail id if any', 'Personal Email ID'], '');
+  const role = first(userData, ['Role', 'role', 'Designation'], 'User');
   return {
     ...userData,
     'Employee ID': employeeId,
     'User ID': employeeId,
-    'Employee Name': first(userData, ['Employee Name', 'employeeName', 'name'], ''),
-    'Manager ID': first(userData, ['Manager ID', 'Manager', 'managerId'], ''),
-    'Task Approver': first(userData, ['Task Approver', 'Approver', 'taskApprover'], ''),
+    'Employee Name': employeeName,
+    Name: first(userData, ['Name', 'Employee Name', 'employeeName', 'name'], employeeName),
+    'Manager ID': managerId,
+    Manager: first(userData, ['Manager', 'Manager ID', 'managerId'], managerId),
+    'Task Approver': taskApprover,
     Department: first(userData, ['Department', 'department'], ''),
-    Role: first(userData, ['Role', 'role'], 'User'),
+    Role: role,
     Password: first(userData, ['Password', 'password'], ''),
     Status: first(userData, ['Status', 'status'], 'Active'),
-    'Mobile Number': first(userData, ['Mobile Number', 'Mobile', 'mobile'], ''),
-    Email: first(userData, ['Email', 'email'], '')
+    'Mobile Number': mobile,
+    Mobile: mobile,
+    Email: email
   };
 }
 
-export async function getAllUsersForAdmin(_adminId = '') {
+function isRealUserRow(userData = {}) {
+  const normalized = normalizeAdminUser(userData);
+  const employeeId = safe(normalized['Employee ID']);
+  const employeeName = safe(normalized['Employee Name']);
+  if (!employeeId || !employeeName) return false;
+  if (/^(tmp_|test_|verify_|debug_)/i.test(employeeId)) return false;
+  if (/^tmp\b/i.test(employeeName)) return false;
+  if (/verification|debug admin emp/i.test(employeeName)) return false;
+  return true;
+}
+
+function normalizeVisibleUser(userData = {}) {
+  return withoutPassword(normalizeAdminUser(userData));
+}
+
+async function listAdminUsers() {
   const users = await listRows('User');
-  return ok({ data: users.map(withoutPassword) });
+  return users
+    .map(normalizeVisibleUser)
+    .filter(isRealUserRow)
+    .sort((left, right) => {
+      const leftName = safe(left['Employee Name'] || left['Employee ID']);
+      const rightName = safe(right['Employee Name'] || right['Employee ID']);
+      return leftName.localeCompare(rightName);
+    });
+}
+
+export async function getAllUsersForAdmin(_adminId = '') {
+  return ok({ data: await listAdminUsers() });
 }
 
 export async function getAllManagersList() {
-  const users = await listRows('User');
+  const users = await listAdminUsers();
   return users
     .filter((user) => /manager|admin|super admin|hr/i.test(safe(user.Role)))
     .map((user) => ({
@@ -46,12 +81,11 @@ export async function getAllManagersList() {
 }
 
 export async function getEmpMasterData(_category = 'Master') {
-  const users = await listRows('User');
-  return ok({ data: users.map(withoutPassword) });
+  return ok({ data: await listAdminUsers() });
 }
 
 export async function getNextEmpCode(category = 'EMP') {
-  const users = await listRows('User');
+  const users = await listAdminUsers();
   const prefixMap = {
     Master: 'MS',
     EMP: 'EMP',
@@ -75,7 +109,9 @@ export async function getNextEmpCode(category = 'EMP') {
 export async function saveOrUpdateUser(userData = {}, _adminId = '') {
   const normalized = normalizeAdminUser(userData);
   const employeeId = normalized['Employee ID'] || `EMP_${Date.now()}`;
-  const existing = (await listRows('User')).find((user) => safe(first(user, ['Employee ID', 'User ID', 'employeeId', 'userId'])).toLowerCase() === safe(employeeId).toLowerCase());
+  const existing = (await listRows('User')).find((user) => safe(first(user, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'userId'])).toLowerCase() === safe(employeeId).toLowerCase());
+  if (!safe(normalized['Employee Name'])) return { success: false, message: 'Employee Name is required.' };
+  if (!safe(normalized.Department)) return { success: false, message: 'Department is required.' };
   if (safe(normalized.Password)) {
     if (!isHashed(normalized.Password)) normalized.Password = await bcrypt.hash(normalized.Password, 10);
   } else if (existing?.Password || existing?.password) {

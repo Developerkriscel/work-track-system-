@@ -43,6 +43,16 @@ function FilterBar({ tab, filters, userOptions, ticketCategories = [], onChange,
         ) : null}
 
         <label className="dashboard-control">
+          <span>Status</span>
+          <select value={filters.status} onChange={(event) => onChange({ status: event.target.value })}>
+            <option value="">All Statuses</option>
+            <option value="pending">Pending Action</option>
+            <option value="approved">Approved / Closed</option>
+            <option value="rejected">Rejected / Rework</option>
+          </select>
+        </label>
+
+        <label className="dashboard-control">
           <span>Start Date</span>
           <input type="date" value={filters.startDate} onChange={(event) => onChange({ startDate: event.target.value })} />
         </label>

@@ -41,10 +41,10 @@ export function useApprovalsData() {
   const employeeId = user?.['Employee ID'] || '';
   const [activeTab, setActiveTab] = useState('tickets');
   const [filters, setFilters] = useState({
-    tickets: { employee: '', category: '', startDate: '', endDate: '', search: '' },
-    leaves: { employee: '', startDate: '', endDate: '', search: '' },
-    intimations: { employee: '', startDate: '', endDate: '', search: '' },
-    attendance: { employee: '', startDate: '', endDate: '', search: '' }
+    tickets: { employee: '', category: '', startDate: '', endDate: '', search: '', status: '' },
+    leaves: { employee: '', startDate: '', endDate: '', search: '', status: '' },
+    intimations: { employee: '', startDate: '', endDate: '', search: '', status: '' },
+    attendance: { employee: '', startDate: '', endDate: '', search: '', status: '' }
   });
   const [state, setState] = useState({
     loading: true,
@@ -146,7 +146,14 @@ export function useApprovalsData() {
         ticket['Client Name'],
         ticket['Client ID']
       ].join(' ');
+      const isPending = /pending approval|hr approved/i.test(ticket.Status);
+      const isStatusMatch = !filter.status || 
+        (filter.status === 'pending' && isPending) || 
+        (filter.status === 'approved' && /approved/i.test(ticket.Status) && !isPending) ||
+        (filter.status === 'rejected' && /reject|rework|closed/i.test(ticket.Status));
+
       return (
+        isStatusMatch &&
         includesFilter(employeeText, filter.employee) &&
         (!filter.category || (ticket['Task Category'] || ticket.Category) === filter.category) &&
         inDateRange(ticket['Plan Date'], filter.startDate, filter.endDate) &&
@@ -158,12 +165,19 @@ export function useApprovalsData() {
   const filteredLeaves = useMemo(() => {
     const filter = filters.leaves;
     return state.data.leaves.filter((item) => {
-      const employeeText = `${item['Employee Name'] || ''} ${item['Employee ID'] || ''}`;
-      const searchable = [item['Leave Type'], item.Reason, item['Day Type']].join(' ');
+      const employeeText = `${item['Employee Name'] || item.employeeName || ''} ${item['Employee ID'] || item.employeeId || ''}`;
+      const searchable = [item['Leave Type'] || item.leaveType || item.type, item.Reason || item.reason, item['Day Type'] || item.dayType].join(' ');
+      const isPending = /pending/i.test(item.Status);
+      const isStatusMatch = !filter.status || 
+        (filter.status === 'pending' && isPending) || 
+        (filter.status === 'approved' && /approved/i.test(item.Status)) ||
+        (filter.status === 'rejected' && /reject/i.test(item.Status));
+
       return (
+        isStatusMatch &&
         includesFilter(employeeText, filter.employee) &&
-        inDateRange(item['Start Date'], filter.startDate, filter.endDate) &&
-        inDateRange(item['End Date'], filter.startDate, filter.endDate) &&
+        inDateRange(item['Start Date'] || item.startDate, filter.startDate, filter.endDate) &&
+        inDateRange(item['End Date'] || item.endDate, filter.startDate, filter.endDate) &&
         includesFilter(searchable, filter.search)
       );
     });
@@ -172,11 +186,18 @@ export function useApprovalsData() {
   const filteredIntimations = useMemo(() => {
     const filter = filters.intimations;
     return state.data.intimations.filter((item) => {
-      const employeeText = `${item['Employee Name'] || ''} ${item['Employee ID'] || ''}`;
-      const searchable = [item['Intimation Type'], item.Reason].join(' ');
+      const employeeText = `${item['Employee Name'] || item.employeeName || ''} ${item['Employee ID'] || item.employeeId || ''}`;
+      const searchable = [item['Intimation Type'] || item.type, item.Reason || item.reason].join(' ');
+      const isPending = /pending|submitted/i.test(item.Status);
+      const isStatusMatch = !filter.status || 
+        (filter.status === 'pending' && isPending) || 
+        (filter.status === 'approved' && /approved/i.test(item.Status)) ||
+        (filter.status === 'rejected' && /reject/i.test(item.Status));
+
       return (
+        isStatusMatch &&
         includesFilter(employeeText, filter.employee) &&
-        inDateRange(item['Intimation Date'] || item.Date, filter.startDate, filter.endDate) &&
+        inDateRange(item['Intimation Date'] || item.Date || item.date, filter.startDate, filter.endDate) &&
         includesFilter(searchable, filter.search)
       );
     });
@@ -187,7 +208,14 @@ export function useApprovalsData() {
     return state.data.attendance.filter((item) => {
       const employeeText = `${item['Employee Name'] || ''} ${item['Employee ID'] || ''}`;
       const searchable = [item.Status, item.Remarks, item['Admin Remarks']].join(' ');
+      const isPending = /pending|need approval/i.test(item.Status);
+      const isStatusMatch = !filter.status || 
+        (filter.status === 'pending' && isPending) || 
+        (filter.status === 'approved' && /present|approved/i.test(item.Status) && !isPending) ||
+        (filter.status === 'rejected' && /reject|absent/i.test(item.Status));
+
       return (
+        isStatusMatch &&
         includesFilter(employeeText, filter.employee) &&
         inDateRange(item.Date || item.DateStr, filter.startDate, filter.endDate) &&
         includesFilter(searchable, filter.search)
@@ -197,10 +225,10 @@ export function useApprovalsData() {
 
   const counts = useMemo(
     () => ({
-      tickets: state.data.tickets.length,
-      leaves: state.data.leaves.length,
-      intimations: state.data.intimations.length,
-      attendance: state.data.attendance.length
+      tickets: state.data.tickets.filter((t) => t._isActionableByMe === true).length,
+      leaves: state.data.leaves.filter((l) => l._isActionableByMe === true).length,
+      intimations: state.data.intimations.filter((i) => i._isActionableByMe === true).length,
+      attendance: state.data.attendance.filter((a) => a._isActionableByMe === true).length
     }),
     [state.data]
   );
@@ -223,7 +251,8 @@ export function useApprovalsData() {
         category: '',
         startDate: '',
         endDate: '',
-        search: ''
+        search: '',
+        status: ''
       }
     }));
   }
@@ -253,16 +282,32 @@ export function useApprovalsData() {
     }
   }
 
-  function approveItem(type, id, remarks = '') {
+  function approveItem(type, id, values = {}) {
+    const payload = typeof values === 'string' ? { remarks: values } : values;
     return runAction(
-      () => submitApprovalAction({ adminId: employeeId, type, id, action: 'Approved', remarks }),
+      () => submitApprovalAction({
+        adminId: employeeId,
+        type,
+        id,
+        action: 'Approved',
+        remarks: payload.remarks || '',
+        ...(payload.newPunchIn ? { newPunchIn: payload.newPunchIn } : {}),
+        ...(payload.newPunchOut ? { newPunchOut: payload.newPunchOut } : {})
+      }),
       `${type} approved successfully.`
     );
   }
 
-  function rejectItem(type, id, remarks = '') {
+  function rejectItem(type, id, values = {}) {
+    const payload = typeof values === 'string' ? { remarks: values } : values;
     return runAction(
-      () => submitApprovalAction({ adminId: employeeId, type, id, action: 'Rejected', remarks }),
+      () => submitApprovalAction({
+        adminId: employeeId,
+        type,
+        id,
+        action: 'Rejected',
+        remarks: payload.remarks || ''
+      }),
       `${type} rejected successfully.`
     );
   }

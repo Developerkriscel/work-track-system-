@@ -20,3 +20,10 @@ export function saveEmpMasterRecord(category, formData, filePayloads) {
     body: JSON.stringify({ category, formData, filePayloads })
   });
 }
+
+export function deleteEmpMasterRecord(employeeId) {
+  return httpClient('/api/emp-master/delete', {
+    method: 'POST',
+    body: JSON.stringify({ employeeId })
+  });
+}

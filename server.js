@@ -21,6 +21,7 @@ import expensesRoutes from './server/routes/expenses.routes.js';
 import fmsRoutes from './server/routes/fms.routes.js';
 import formsPortalRoutes from './server/routes/formsPortal.routes.js';
 import managementDashboardRoutes from './server/routes/managementDashboard.routes.js';
+import myApprovalStatusRoutes from './server/routes/myApprovalStatus.routes.js';
 import notificationsRoutes from './server/routes/notifications.routes.js';
 import reportsRoutes from './server/routes/reports.routes.js';
 import ticketRoutes from './server/routes/ticket.routes.js';
@@ -188,7 +189,7 @@ app.use('/api', (req, res, next) => {
   return requireAuth()(req, res, next);
 });
 app.use('/api/admin', requireAuth({ kind: 'employee', roles: ['Admin', 'HR', 'Super Admin'] }), adminRoutes);
-app.use('/api/emp-master', requireAuth({ kind: 'employee', roles: ['HR', 'Super Admin'] }), empMasterRoutes);
+app.use('/api/emp-master', requireAuth({ kind: 'employee', roles: ['Admin', 'HR', 'Super Admin'] }), empMasterRoutes);
 app.use('/api/worktrack', requireAuth({ kind: 'employee' }), worktrackRoutes);
 app.use('/api/client', requireAuth({ kind: 'client' }), clientRoutes);
 app.use('/api/client-portal', requireAuth({ kind: 'client' }), clientPortalRoutes);
@@ -204,6 +205,7 @@ app.use('/api/fms', requireAuth({ kind: 'employee' }), fmsRoutes);
 // create, edit, delete, and access-management actions Super Admin-only.
 app.use('/api/forms-portal', requireAuth({ kind: 'employee' }), formsPortalRoutes);
 app.use('/api/management-dashboard', requireAuth({ kind: 'employee', roles: ['Manager', 'Admin', 'HR', 'Super Admin'] }), managementDashboardRoutes);
+app.use('/api/my-approval-status', requireAuth({ kind: 'employee' }), myApprovalStatusRoutes);
 app.use('/api/notifications', requireAuth(), notificationsRoutes);
 app.use(
   '/api/reports',

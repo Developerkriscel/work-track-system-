@@ -1,5 +1,6 @@
 import { saveBase64File } from './fileStorage.service.js';
-import { insertRow, listRows } from './legacyStore.service.js';
+import { insertRow, listRows, upsertRow } from './legacyStore.service.js';
+import { checkUserAttendanceActive } from './attendance.service.js';
 
 const safe = (value = '') => String(value ?? '').trim();
 const eq = (left, right) => safe(left).toLowerCase() === safe(right).toLowerCase();
@@ -66,6 +67,21 @@ async function requireAttendanceActive(employeeId) {
   return fail('Attendance Required: Aapne aaj ki Attendance (Punch In) mark nahi ki hai ya aap already Punch Out kar chuke hain. Kripya pehle Punch In karein!');
 }
 
+async function requireManagerApprovalRole(adminId) {
+  const users = await listRows('User');
+  const admin = users.find((item) => eq(first(item, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'EmpID']), adminId));
+  if (!admin) return { ok: false, message: 'Unauthorized access.' };
+  const role = safe(first(admin, ['Role', 'role'], 'User')).toLowerCase();
+  if (!['admin', 'super admin', 'hr'].includes(role)) {
+    return { ok: false, message: 'Unauthorized access.' };
+  }
+  const gate = await checkUserAttendanceActive(adminId);
+  if (!gate?.active) {
+    return { ok: false, message: 'Attendance Required: Aapne aaj ki Attendance (Punch In) mark nahi ki hai ya aap already Punch Out kar chuke hain. Kripya pehle Punch In karein!' };
+  }
+  return { ok: true, admin };
+}
+
 function normalizeAttachmentField(value, folderName = 'expenses') {
   if (!value) return '';
   if (typeof value === 'string') return value;
@@ -97,4 +113,29 @@ export async function recordExpense(expenseData = {}) {
 export async function getExpensesForUser(employeeId) {
   const expenses = await listRows('Expense');
   return ok({ data: expenses.filter((row) => eq(row['Employee ID'], employeeId)) });
+}
+
+export async function processExpenseApprovalFromMongo(expenseId, status, remarks, adminId) {
+  const access = await requireManagerApprovalRole(adminId);
+  if (!access.ok) return fail(access.message);
+
+  const expenses = await listRows('Expense');
+  const expense = expenses.find((row) => eq(first(row, ['ExpenseID', 'Expense ID', 'ID', 'expenseId']), expenseId));
+  if (!expense) return fail('Expense record not found.');
+
+  const approvalStatus = safe(status) || 'Pending';
+  const updated = await upsertRow('Expense', 'ExpenseID', expenseId, {
+    ...expense,
+    ExpenseID: expenseId,
+    'Expense ID': expenseId,
+    Status: approvalStatus,
+    Approver: access.admin['Employee Name'] || access.admin['Employee ID'] || adminId,
+    'Admin Remarks': remarks || expense['Admin Remarks'] || '',
+    'Last Update Date': new Date().toISOString()
+  });
+
+  return ok({
+    message: `Expense claim ${approvalStatus} successfully.`,
+    item: updated
+  });
 }

@@ -2,11 +2,13 @@ import express from 'express';
 import {
   getAllManagersList,
   getAllUsersForAdmin,
-  getEmpMasterData,
-  getNextEmpCode,
-  saveEmpMasterData,
   saveOrUpdateUser
 } from '../services/admin.service.js';
+import {
+  getEmpMasterData as getAdminEmpMasterData,
+  getNextEmpCode as getAdminNextEmpCode,
+  saveEmpMasterData as saveAdminEmpMasterData
+} from '../services/empMaster.service.js';
 
 const router = express.Router();
 
@@ -28,7 +30,7 @@ router.post('/managers', async (_req, res) => {
 
 router.post('/emp-master', async (req, res) => {
   try {
-    res.json(await getEmpMasterData(req.body.category || 'Master'));
+    res.json(await getAdminEmpMasterData(req.body.category || 'Master'));
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -36,7 +38,9 @@ router.post('/emp-master', async (req, res) => {
 
 router.post('/next-code', async (req, res) => {
   try {
-    res.json(await getNextEmpCode(req.body.category || 'Master'));
+    const result = await getAdminNextEmpCode(req.body.category || 'Master');
+    if (!result.success) return res.status(400).json(result);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -54,7 +58,13 @@ router.post('/save-user', async (req, res) => {
 
 router.post('/save-emp-master', async (req, res) => {
   try {
-    const result = await saveEmpMasterData(req.body.category, req.body.formData || {}, req.auth.sub);
+    const result = await saveAdminEmpMasterData(
+      req.body.category,
+      req.body.formData || {},
+      req.body.filePayloads || {},
+      req.auth.sub,
+      req.auth.role
+    );
     if (!result.success) return res.status(400).json(result);
     res.json(result);
   } catch (error) {

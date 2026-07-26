@@ -3,10 +3,11 @@ export const shellNavigationOrder = [
   'attendance',
   'tickets',
   'fms',
-  'approvals',
+  'myApprovalStatus',
   'formsPortal',
   'clientsPortal',
   'expenses',
   'reports',
-  'admin'
+  'admin',
+  'settings'
 ];

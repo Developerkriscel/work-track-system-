@@ -1,12 +1,15 @@
 # WorkTrack MERN Frontend
 
-This folder is the new production-oriented frontend workspace for the WorkTrack migration.
+This folder is the production frontend workspace for the WorkTrack MERN runtime.
 
 ## Why it exists
 
-The current live app still renders exact Apps Script HTML through `server.js`. That keeps parity stable, but it also means the frontend is still tied to `appscript/*.html`.
+The live WorkTrack runtime is served from the React build generated from `client/src`.
+The old `appscript/` folder now acts as a parity reference only, not as a runtime
+frontend dependency.
 
-This `client/` workspace is the clean React/Vite frontend where each module will be migrated one by one:
+This `client/` workspace is the React/Vite frontend where modules are owned and
+completed one by one:
 
 - shared theme tokens
 - shared shell layout
@@ -30,6 +33,7 @@ npm run client:build
 
 ## Current status
 
-- The live app is still served from `appscript` through the Express exact-parity server.
-- The new React shell is ready under `client/src`.
-- No production routes have been flipped yet, so current working behavior stays intact.
+- The live app is served from the built React client through `server.js`.
+- The React shell and route families live under `client/src`.
+- The remaining migration work is module parity, data-contract cleanup, and final
+  removal of any lingering Apps Script-era assumptions from runtime behavior.

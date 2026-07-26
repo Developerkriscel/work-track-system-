@@ -31,7 +31,7 @@ export function toneForAttendanceStatus(status) {
   if (/present/i.test(status)) return 'success';
   if (/on time|early/i.test(status)) return 'success';
   if (/late/i.test(status)) return 'warning';
-  if (/weekend/i.test(status)) return 'neutral';
+  if (/weekend|weekly off/i.test(status)) return 'danger';
   if (/pending/i.test(status)) return 'info';
   if (/approved/i.test(status)) return 'success';
   if (/rejected|absent/i.test(status)) return 'danger';

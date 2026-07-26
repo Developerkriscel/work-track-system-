@@ -37,3 +37,22 @@ export async function submitIntimation(payload) {
     })
   });
 }
+
+export async function fetchTeamAttendance(startDate, endDate) {
+  return httpClient('/api/attendance/team/list', {
+    method: 'POST',
+    body: JSON.stringify({
+      startDate,
+      endDate
+    })
+  });
+}
+
+export async function updateTeamAttendance(payload) {
+  return httpClient('/api/attendance/team/update', {
+    method: 'POST',
+    body: JSON.stringify({
+      payload
+    })
+  });
+}

@@ -4,13 +4,13 @@ export function AdminHeader({ employeeId, onEmployeeIdChange, activeTab, onRefre
   return (
     <div className="page-card__header">
       <div>
-        <p className="page-card__eyebrow">Administration</p>
-        <h1 className="page-card__title">Admin Workspace</h1>
+        <p className="page-card__eyebrow">Users Workspace</p>
+        <h1 className="page-card__title">User Management</h1>
       </div>
 
       <div className="dashboard-controls">
         <label className="dashboard-control">
-          <span>Admin ID</span>
+          <span>User Admin ID</span>
           <input value={employeeId} onChange={(event) => onEmployeeIdChange(event.target.value)} placeholder="e.g. MS101" />
         </label>
         <button type="button" className="attendance-cta attendance-cta--blue approvals-refresh-btn" onClick={onRefresh}>
