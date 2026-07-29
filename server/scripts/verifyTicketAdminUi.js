@@ -23,7 +23,7 @@ try {
   const teamTab = page.getByRole('button', { name: 'Team Tickets', exact: true });
   if (!(await teamTab.count())) throw new Error(`Team Tickets is missing for ${user.Role}.`);
   await teamTab.click();
-  if (!(await teamTab.evaluate((node) => node.className.includes('ticket-tab--active')))) throw new Error('Team Tickets did not activate.');
+  if (!(await teamTab.evaluate((node) => node.className.includes('view-mode-tab--active')))) throw new Error('Team Tickets did not activate.');
   await page.goto('http://localhost:5000/approvals', { waitUntil: 'domcontentloaded', timeout: 15000 });
   await page.getByRole('heading', { name: 'Pending Approvals', exact: true }).waitFor({ state: 'visible', timeout: 10000 });
   const ticketTable = page.locator('.approval-table').first();

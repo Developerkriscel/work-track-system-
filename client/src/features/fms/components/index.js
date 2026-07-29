@@ -4,6 +4,7 @@ export const fmsComponentPlan = [
   'FmsFilterPanel',
   'FmsTaskTable',
   'FmsCompletionDialog',
+  'FmsCreateDialog',
   'FmsExternalFormDialog'
 ];
 
@@ -12,3 +13,4 @@ export { FmsTabsPanel } from './FmsTabsPanel';
 export { FmsFilterPanel } from './FmsFilterPanel';
 export { FmsTaskTable } from './FmsTaskTable';
 export { FmsCompletionDialog } from './FmsCompletionDialog';
+export { FmsCreateDialog } from './FmsCreateDialog';

@@ -16,6 +16,9 @@ const rangeOptions = [
   { value: 'custom', label: 'Custom' }
 ];
 
+const initialTicketFilters = { priority: '', category: '', status: '', search: '' };
+const initialFmsFilters = { status: '', search: '' };
+
 function toYmd(date) {
   const year = date.getFullYear();
   const month = `${date.getMonth() + 1}`.padStart(2, '0');
@@ -81,8 +84,13 @@ function safeArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
-function safeSummary(value) {
-  return value && typeof value === 'object' ? value : {};
+function includesText(parts, query) {
+  if (!query) return true;
+  const haystack = parts
+    .map((part) => String(part ?? '').trim().toLowerCase())
+    .filter(Boolean)
+    .join(' ');
+  return haystack.includes(query);
 }
 
 function mimeTypeForFormat(format) {
@@ -105,17 +113,17 @@ export function useReportsData() {
   const [range, setRange] = useState('month');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
-  const [ticketFilters, setTicketFilters] = useState({ priority: '', category: '' });
-  const [fmsFilters, setFmsFilters] = useState({ status: '' });
+  const [ticketFilters, setTicketFilters] = useState(initialTicketFilters);
+  const [fmsFilters, setFmsFilters] = useState(initialFmsFilters);
   const [state, setState] = useState({
     loading: true,
     error: null,
-    tickets: { data: [], summary: {} },
-    fms: { data: [], summary: {} }
+    tickets: [],
+    fms: []
   });
   const [message, setMessage] = useState(null);
   const [downloading, setDownloading] = useState(false);
-  const refreshRef = useRef(0);
+  const refreshIndex = useRef(0);
 
   const bounds = useMemo(
     () => rangeBounds(range, customStart, customEnd),
@@ -127,8 +135,8 @@ export function useReportsData() {
       setState({
         loading: false,
         error: null,
-        tickets: { data: [], summary: {} },
-        fms: { data: [], summary: {} }
+        tickets: [],
+        fms: []
       });
       return undefined;
     }
@@ -152,22 +160,16 @@ export function useReportsData() {
         setState({
           loading: false,
           error: null,
-          tickets: {
-            data: safeArray(ticketPayload?.data),
-            summary: safeSummary(ticketPayload?.summary)
-          },
-          fms: {
-            data: safeArray(fmsPayload?.data),
-            summary: safeSummary(fmsPayload?.summary)
-          }
+          tickets: safeArray(ticketPayload?.data),
+          fms: safeArray(fmsPayload?.data)
         });
       } catch (error) {
         if (!alive) return;
         setState({
           loading: false,
           error: error.message || 'Failed to load reports.',
-          tickets: { data: [], summary: {} },
-          fms: { data: [], summary: {} }
+          tickets: [],
+          fms: []
         });
       }
     }
@@ -176,48 +178,96 @@ export function useReportsData() {
     return () => {
       alive = false;
     };
-  }, [employeeId, role, bounds.startDate, bounds.endDate, refreshRef.current]);
+  }, [employeeId, role, bounds.startDate, bounds.endDate, refreshIndex.current]);
 
-  const ticketPriorities = useMemo(() => {
-    return Array.from(
-      new Set(state.tickets.data.map((item) => item.Priority).filter(Boolean))
-    ).sort((left, right) => left.localeCompare(right));
-  }, [state.tickets.data]);
+  const ticketPriorities = useMemo(
+    () =>
+      Array.from(new Set(state.tickets.map((item) => item.Priority).filter(Boolean))).sort((left, right) =>
+        left.localeCompare(right)
+      ),
+    [state.tickets]
+  );
 
-  const ticketCategories = useMemo(() => {
-    return Array.from(
-      new Set(
-        state.tickets.data
-          .map((item) => item['Task Category'] || item.Category)
-          .filter(Boolean)
-      )
-    ).sort((left, right) => left.localeCompare(right));
-  }, [state.tickets.data]);
+  const ticketCategories = useMemo(
+    () =>
+      Array.from(
+        new Set(state.tickets.map((item) => item['Task Category'] || item.Category).filter(Boolean))
+      ).sort((left, right) => left.localeCompare(right)),
+    [state.tickets]
+  );
 
-  const fmsStatuses = useMemo(() => {
-    return Array.from(
-      new Set(state.fms.data.map((item) => item.Status).filter(Boolean))
-    ).sort((left, right) => left.localeCompare(right));
-  }, [state.fms.data]);
+  const ticketStatuses = useMemo(
+    () =>
+      Array.from(new Set(state.tickets.map((item) => item.Status).filter(Boolean))).sort((left, right) =>
+        left.localeCompare(right)
+      ),
+    [state.tickets]
+  );
+
+  const fmsStatuses = useMemo(
+    () =>
+      Array.from(new Set(state.fms.map((item) => item.Status).filter(Boolean))).sort((left, right) =>
+        left.localeCompare(right)
+      ),
+    [state.fms]
+  );
 
   const filteredTickets = useMemo(() => {
-    return state.tickets.data.filter((item) => {
+    const search = String(ticketFilters.search || '').trim().toLowerCase();
+    return state.tickets.filter((item) => {
       const matchesPriority = !ticketFilters.priority || item.Priority === ticketFilters.priority;
       const category = item['Task Category'] || item.Category || '';
       const matchesCategory = !ticketFilters.category || category === ticketFilters.category;
-      return matchesPriority && matchesCategory;
+      const matchesStatus = !ticketFilters.status || item.Status === ticketFilters.status;
+      const matchesSearch = includesText(
+        [
+          item['Ticket ID'],
+          item.Name,
+          item['Employee Name'],
+          item['Task Description'],
+          item.Description,
+          item.Priority,
+          item.Status,
+          category
+        ],
+        search
+      );
+      return matchesPriority && matchesCategory && matchesStatus && matchesSearch;
     });
-  }, [state.tickets.data, ticketFilters]);
+  }, [state.tickets, ticketFilters]);
 
   const filteredFms = useMemo(() => {
-    return state.fms.data.filter((item) => {
-      return !fmsFilters.status || item.Status === fmsFilters.status;
+    const search = String(fmsFilters.search || '').trim().toLowerCase();
+    return state.fms.filter((item) => {
+      const matchesStatus = !fmsFilters.status || item.Status === fmsFilters.status;
+      const matchesSearch = includesText(
+        [
+          item['FMS Name'],
+          item.Name,
+          item['Task Name'],
+          item['Task Description'],
+          item.Description,
+          item.Who,
+          item['Assigned To'],
+          item.Status
+        ],
+        search
+      );
+      return matchesStatus && matchesSearch;
     });
-  }, [state.fms.data, fmsFilters]);
+  }, [state.fms, fmsFilters]);
 
   function refresh() {
-    refreshRef.current += 1;
+    refreshIndex.current += 1;
     setState((current) => ({ ...current }));
+  }
+
+  function resetTicketFilters() {
+    setTicketFilters(initialTicketFilters);
+  }
+
+  function resetFmsFilters() {
+    setFmsFilters(initialFmsFilters);
   }
 
   async function download(format) {
@@ -225,7 +275,19 @@ export function useReportsData() {
     setMessage(null);
     try {
       const sheetName = activeTab === 'tickets' ? 'Tickets_Report' : 'FMS_Report';
-      const payload = await exportReportForWeb(format, sheetName, employeeId, role, bounds.startDate, bounds.endDate);
+      const filters = activeTab === 'tickets'
+        ? { ...ticketFilters }
+        : { ...fmsFilters };
+      const payload = await exportReportForWeb(
+        format,
+        sheetName,
+        employeeId,
+        role,
+        bounds.startDate,
+        bounds.endDate,
+        filters
+      );
+
       if (!payload?.success || !payload?.base64Data) {
         throw new Error(payload?.message || 'Report export failed.');
       }
@@ -237,7 +299,10 @@ export function useReportsData() {
         link.click();
       }
 
-      setMessage({ tone: 'success', text: `${activeTab === 'tickets' ? 'Ticket' : 'FMS'} report exported successfully.` });
+      setMessage({
+        tone: 'success',
+        text: `${activeTab === 'tickets' ? 'Ticket' : 'FMS'} report exported successfully.`
+      });
       return payload;
     } catch (error) {
       const text = error.message || 'Report export failed.';
@@ -267,16 +332,17 @@ export function useReportsData() {
     message,
     downloading,
     tickets: filteredTickets,
-    ticketsSummary: state.tickets.summary,
+    ticketStatuses,
     ticketPriorities,
     ticketCategories,
     ticketFilters,
     setTicketFilters,
+    resetTicketFilters,
     fms: filteredFms,
-    fmsSummary: state.fms.summary,
     fmsStatuses,
     fmsFilters,
     setFmsFilters,
+    resetFmsFilters,
     refresh,
     download
   };

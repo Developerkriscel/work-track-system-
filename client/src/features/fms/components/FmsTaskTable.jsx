@@ -12,9 +12,13 @@ export function FmsTaskTable({ tasks, submitting, onComplete }) {
         <thead>
           <tr>
             <th>Emp ID</th>
+            <th>What</th>
+            <th>When</th>
+            <th>How</th>
             <th>Who</th>
             <th>FMS Name</th>
             <th>Task Name</th>
+            <th>Step</th>
             <th>Plan Date</th>
             <th>Status</th>
             <th>Action</th>
@@ -25,9 +29,13 @@ export function FmsTaskTable({ tasks, submitting, onComplete }) {
             tasks.map((task) => (
               <tr key={task.rowId || task.ID || task['Task ID']}>
                 <td>{task.empId || task['Employee ID'] || '-'}</td>
+                <td>{task.what || '-'}</td>
+                <td>{task.when || task.TAT || '-'}</td>
+                <td>{task.how || '-'}</td>
                 <td>{task.who || task['Employee Name'] || '-'}</td>
                 <td>{task.fmsName || task['Client Name'] || task.Client || '-'}</td>
                 <td>{task.taskName || task['Task Description'] || task.Description || '-'}</td>
+                <td>{task.stepNo || '-'}</td>
                 <td>{formatFmsPlanDate(task.planDate || task['Plan Date'] || task.Date)}</td>
                 <td>
                   <StatusPill tone={fmsStatusTone(task)}>
@@ -58,7 +66,7 @@ export function FmsTaskTable({ tasks, submitting, onComplete }) {
             ))
           ) : (
             <tr>
-              <td colSpan="7" className="dashboard-table__empty">No FMS tasks found for this view.</td>
+              <td colSpan="11" className="dashboard-table__empty">No FMS tasks found for this view.</td>
             </tr>
           )}
         </tbody>

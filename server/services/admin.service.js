@@ -1,10 +1,18 @@
 import bcrypt from 'bcryptjs';
-import { listRows, upsertRow } from './legacyStore.service.js';
+import { deleteRow, listRows, upsertRow } from './legacyStore.service.js';
 
 const safe = (value) => String(value ?? '').trim();
 const first = (row, keys, fallback = '') => keys.map((key) => row?.[key]).find((value) => safe(value)) ?? fallback;
 const ok = (payload = {}) => ({ success: true, ...payload });
 const isHashed = (value) => /^\$2[aby]\$\d{2}\$/.test(safe(value));
+
+function canActorManageUser(actorRole = '', targetUser = {}) {
+  const actor = safe(actorRole).toLowerCase();
+  if (actor === 'admin' || actor === 'super admin') return true;
+  const targetRole = safe(first(targetUser, ['Role', 'role', 'Designation'])).toLowerCase();
+  if (actor === 'hr' && (targetRole === 'admin' || targetRole === 'super admin')) return false;
+  return actor === 'hr';
+}
 
 function withoutPassword(row = {}) {
   const { Password, password, ...safeRow } = row;
@@ -131,4 +139,24 @@ export async function saveEmpMasterData(category, formData = {}, adminId = '') {
     Category: category || formData.Category || 'Master'
   };
   return saveOrUpdateUser(merged, adminId);
+}
+
+export async function deleteUserByEmployeeId(identifier = '', actorRole = '') {
+  const employeeId = safe(identifier);
+  if (!employeeId) return { success: false, message: 'Employee ID is required.' };
+
+  const users = await listRows('User');
+  const target = users.find((user) => safe(first(user, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'userId'])).toLowerCase() === employeeId.toLowerCase());
+  if (!target) return { success: false, message: 'User record not found.' };
+  if (!canActorManageUser(actorRole, target)) {
+    return { success: false, message: 'HR can not edit or delete Admin or Super Admin user details.' };
+  }
+
+  const deleted = await deleteRow('User', 'Employee ID', employeeId);
+  if (!deleted) return { success: false, message: 'User record could not be deleted.' };
+
+  return ok({
+    message: `User ${employeeId} deleted successfully.`,
+    item: deleted
+  });
 }

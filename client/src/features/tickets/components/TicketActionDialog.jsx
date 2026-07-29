@@ -19,14 +19,19 @@ export function TicketActionDialog({ ticket, action, saving, onClose, onSubmit }
   }
 
   return (
-    <AppModal title={`${title} ${ticket?.['Ticket ID'] || ''}`} onClose={onClose} width="560px">
-      <form className="ticket-form-grid" onSubmit={submit}>
+    <AppModal title={`${title} ${ticket?.['Ticket ID'] || ''}`} onClose={onClose} width="460px">
+      <form className="ticket-form-grid ticket-action-dialog" onSubmit={submit}>
         <label className="dashboard-control ticket-form-grid__full">
           <span>Remarks *</span>
-          <textarea rows="5" value={remarks} onChange={(event) => setRemarks(event.target.value)} required placeholder="Enter remarks or instructions" />
+          <textarea rows="3" value={remarks} onChange={(event) => setRemarks(event.target.value)} required placeholder="Enter remarks or instructions" />
         </label>
-        {action === 'Completed' || action === 'Paused' ? <label className="dashboard-control ticket-form-grid__full"><span>Attachments (optional)</span><input type="file" multiple onChange={(event) => setFiles(Array.from(event.target.files || []))} /></label> : null}
-        <div className="ticket-form-actions ticket-form-grid__full" style={{ justifyContent: 'flex-end', marginTop: '12px' }}>
+        {action === 'Completed' || action === 'Paused' ? (
+          <label className="dashboard-control ticket-form-grid__full ticket-action-dialog__upload">
+            <span>Attachments (optional)</span>
+            <input type="file" multiple onChange={(event) => setFiles(Array.from(event.target.files || []))} />
+          </label>
+        ) : null}
+        <div className="ticket-form-actions ticket-form-grid__full ticket-action-dialog__actions">
           <button type="button" className="attendance-cta attendance-cta--gray" onClick={onClose}>Cancel</button>
           <button type="submit" className="attendance-cta attendance-cta--blue" disabled={saving}>{saving ? 'Saving...' : title}</button>
         </div>

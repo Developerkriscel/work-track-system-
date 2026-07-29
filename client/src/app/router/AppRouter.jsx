@@ -32,6 +32,7 @@ export function AppRouter() {
       </Route>
       <Route element={<RequireClientAuth />}>
         <Route element={<ClientShell />}>
+          <Route path="/client/social" element={<Navigate to="/client" replace />} />
           {clientRoutes.map((route) => (
             <Route key={route.key} path={route.path} element={route.element || <AppShellPage title={route.title} />} />
           ))}

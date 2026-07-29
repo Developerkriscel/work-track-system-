@@ -2,10 +2,36 @@ import { useEffect, useMemo, useState } from 'react';
 import { StatusPill } from '@/components/common/StatusPill';
 import { formatPlanDate, toneForTicketPriority, toneForTicketStatus } from '@/features/tickets/services/ticketPresentation';
 
-export function TicketTable({ tickets, role, submitting, onStatusAction, onScheduleAction, onReassign, onChat, onApprovalAction, onApprovalTransfer, onClientResponse, onDetails }) {
+export function TicketTable({
+  tickets,
+  role,
+  submitting,
+  onStatusAction,
+  onScheduleAction,
+  onReassign,
+  onApprovalAction,
+  onApprovalTransfer,
+  onClientResponse,
+  onChat,
+  onDetails
+}) {
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
   const pageCount = Math.max(1, Math.ceil(tickets.length / pageSize));
+
+  function ticketStatus(value) {
+    return String(value || '').trim();
+  }
+
+  function isTerminalTicket(value) {
+    const status = ticketStatus(value).toLowerCase();
+    return ['completed', 'closed', 'approved by client', 'cancelled'].includes(status);
+  }
+
+  function isWaitingTicket(value) {
+    const status = ticketStatus(value).toLowerCase();
+    return ['pending approval', 'pending client response'].includes(status);
+  }
 
   useEffect(() => {
     setPage(1);
@@ -73,18 +99,19 @@ export function TicketTable({ tickets, role, submitting, onStatusAction, onSched
                 <td>{formatPlanDate(ticket['Plan Date'])}</td>
                 <td>
                   <div className="ticket-actions">
-                    {!['Closed', 'Approved by Client', 'Pending Approval'].includes(String(ticket.Status || '').trim()) &&
-                    ticket.Status !== 'In Progress' ? (
+                    {!isTerminalTicket(ticket.Status) &&
+                    !isWaitingTicket(ticket.Status) &&
+                    ticketStatus(ticket.Status) !== 'In Progress' ? (
                       <button
                         type="button"
                         className="ticket-action-btn ticket-action-btn--start"
                         disabled={submitting}
                         onClick={() => onStatusAction(ticket, 'In Progress')}
                       >
-                        {['Paused', 'Rework', 'Reassigned'].includes(String(ticket.Status || '').trim()) ? 'Restart' : 'Start'}
+                        {['Paused', 'Rework', 'Reassigned'].includes(ticketStatus(ticket.Status)) ? 'Restart' : 'Start'}
                       </button>
                     ) : null}
-                    {ticket.Status === 'In Progress' ? (
+                    {ticketStatus(ticket.Status) === 'In Progress' ? (
                       <>
                         <button
                           type="button"
@@ -104,7 +131,7 @@ export function TicketTable({ tickets, role, submitting, onStatusAction, onSched
                         </button>
                       </>
                     ) : null}
-                    {!['Closed', 'Pending Approval', 'Approved by Client', 'Pending Client Response'].includes(String(ticket.Status || '').trim()) ? (
+                    {!isTerminalTicket(ticket.Status) && !isWaitingTicket(ticket.Status) && ticketStatus(ticket.Status) !== 'Completed' ? (
                       <>
                         <button
                           type="button"
@@ -118,7 +145,15 @@ export function TicketTable({ tickets, role, submitting, onStatusAction, onSched
                         <button type="button" className="ticket-action-btn ticket-action-btn--chat" disabled={submitting} onClick={() => onChat(ticket)}>Chat</button>
                         <button type="button" className="ticket-action-btn ticket-action-btn--client" disabled={submitting} onClick={() => onClientResponse(ticket, 'client-send')}>Client</button>
                       </>
-                    ) : <span className={`ticket-action-state ticket-action-state--${['Closed', 'Approved by Client'].includes(String(ticket.Status || '').trim()) ? 'closed' : 'pending'}`}>{['Closed', 'Approved by Client'].includes(String(ticket.Status || '').trim()) ? 'Approved' : 'Waiting'}</span>}
+                    ) : (
+                      <span
+                        className={`ticket-action-state ticket-action-state--${
+                          isTerminalTicket(ticket.Status) ? 'closed' : 'pending'
+                        }`}
+                      >
+                        {isTerminalTicket(ticket.Status) ? 'Approved' : 'Waiting'}
+                      </span>
+                    )}
                   </div>
                 </td>
               </tr>

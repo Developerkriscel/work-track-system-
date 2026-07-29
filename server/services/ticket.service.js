@@ -44,6 +44,12 @@ function canSeeTicket(ticket, employeeId, role, users = []) {
   return false;
 }
 
+function isClientOriginTicket(ticket = {}) {
+  const remarks = safe(first(ticket, ['Remarks', 'remarks']));
+  return remarks.toLowerCase().includes('created from client portal')
+    || remarks.toLowerCase().includes('created from mern client portal');
+}
+
 function assignableIdsFor(employeeId, role, users = []) {
   const normalizedRole = safe(role).toLowerCase();
   const activeUsers = users.filter((user) => eq(first(user, ['Status', 'status'], 'Active'), 'Active'));
@@ -236,7 +242,8 @@ function asTicketRow(row = {}, clients = []) {
     TAT: first(row, ['TAT', 'When', 'tatMinutes']),
     When: first(row, ['When', 'TAT', 'tatMinutes']),
     'Task Approver': first(row, ['Task Approver', 'taskApprover', 'Approver ID']),
-    'Reassigned By': first(row, ['Reassigned By', 'reassignedBy'])
+    'Reassigned By': first(row, ['Reassigned By', 'reassignedBy']),
+    _isClientOrigin: isClientOriginTicket(row)
   };
 }
 
@@ -314,6 +321,9 @@ export async function getTicketSystemData(employeeId, role) {
   };
   const normalizedRole = safe(role).toLowerCase();
   const elevated = ['super admin', 'admin', 'manager', 'hr'].includes(normalizedRole);
+  const clientOriginScope = elevated
+    ? data.tickets.filter((ticket) => isClientOriginTicket(ticket))
+    : tickets.filter((ticket) => isClientOriginTicket(ticket));
   const ownerFor = (ticket) => data.users.find((user) => eq(userId(user), first(ticket, ['Employee ID', 'EmpID', 'employeeId'])));
   const approvalFor = (ticket) => {
     const owner = ownerFor(ticket);
@@ -339,6 +349,24 @@ export async function getTicketSystemData(employeeId, role) {
       _canSeeTeam: elevated
     };
   });
+  const clientOriginTickets = clientOriginScope.map((ticket) => {
+    const row = asTicketRow(ticket, data.clients);
+    const isPending = eq(row.Status, 'Pending Approval');
+    const isOwner = eq(row['Employee ID'], employeeId);
+    const designated = eq(approvalFor(ticket), employeeId);
+    const owner = ownerFor(ticket);
+    const ownerDepartment = safe(first(owner, ['Department', 'department'])).toLowerCase();
+    const superAdminAction = normalizedRole === 'super admin' && !isOwner;
+    const hrAction = normalizedRole === 'hr' && (ownerDepartment === 'hr' || ownerDepartment.includes('human resource'));
+    const actionable = isPending && !isOwner && (superAdminAction || designated || hrAction);
+    return {
+      ...row,
+      _canApprove: actionable,
+      _isActionableByMe: actionable,
+      _canTransferApproval: actionable,
+      _canSeeTeam: elevated
+    };
+  });
   return ok({
     clients,
     users: assignableUsers,
@@ -346,7 +374,9 @@ export async function getTicketSystemData(employeeId, role) {
     employees: assignableUsers,
     tickets: visibleTickets,
     teamTickets: elevated ? visibleTickets : [],
+    clientOriginTickets,
     canViewTeamTickets: elevated,
+    canViewClientTickets: elevated || clientOriginTickets.length > 0,
     categories,
     dropdowns
   });

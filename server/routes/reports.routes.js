@@ -27,7 +27,8 @@ router.post('/export', async (req, res) => {
       req.auth.sub,
       req.auth.role,
       req.body.startDate,
-      req.body.endDate
+      req.body.endDate,
+      req.body.filters || {}
     ));
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

@@ -2,14 +2,7 @@ export function ClientEditor({ editor, submitting, onUpdate, onClose, onSubmit }
   if (!editor.open) return null;
 
   return (
-    <article className="migration-panel migration-panel--full">
-      <div className="migration-panel__row">
-        <h2>{editor.client.Client_Id ? `Edit Client: ${editor.client.Client_Id}` : 'Add Client'}</h2>
-        <button type="button" className="attendance-cta attendance-cta--red" onClick={onClose}>
-          Close
-        </button>
-      </div>
-
+    <article className="forms-editor">
       <div className="forms-editor__grid">
         <label className="dashboard-control forms-editor__full">
           <span>Client Name</span>

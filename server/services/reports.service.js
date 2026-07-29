@@ -11,6 +11,7 @@ const isClosedStatus = (status = '') => closedTerms.some((term) => safe(status).
 const csvEscape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
 const cleanFileName = (value, fallback = 'report') =>
   String(value || fallback).replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_');
+const normalizedContains = (value, query) => safe(value).toLowerCase().includes(safe(query).toLowerCase());
 
 function parseReferenceNow(value) {
   if (!value) return new Date();
@@ -57,6 +58,48 @@ function teamMemberIds(users, managerId) {
 
 function pdfEscape(value) {
   return String(value ?? '').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+}
+
+function matchesTicketFilters(ticket = {}, filters = {}) {
+  const priority = safe(filters.priority);
+  const category = safe(filters.category);
+  const status = safe(filters.status);
+  const search = safe(filters.search).toLowerCase();
+  if (priority && !eq(ticket.Priority, priority)) return false;
+  if (category && !eq(ticket['Task Category'] || ticket.Category, category)) return false;
+  if (status && !eq(ticket.Status, status)) return false;
+  if (!search) return true;
+  return [
+    ticket['Ticket ID'],
+    ticket.Name,
+    ticket['Client Name'],
+    ticket.Client,
+    ticket['Employee Name'],
+    ticket.User,
+    ticket['Task Description'],
+    ticket.Description,
+    ticket.Priority,
+    ticket.Status,
+    ticket['Task Category'],
+    ticket.Category
+  ].some((value) => normalizedContains(value, search));
+}
+
+function matchesFmsFilters(task = {}, filters = {}) {
+  const status = safe(filters.status);
+  const search = safe(filters.search).toLowerCase();
+  if (status && !eq(task.Status, status)) return false;
+  if (!search) return true;
+  return [
+    task['FMS Name'],
+    task.Name,
+    task['Task Name'],
+    task['Task Description'],
+    task.Description,
+    task.Who,
+    task['Assigned To'],
+    task.Status
+  ].some((value) => normalizedContains(value, search));
 }
 
 function buildSimplePdf(title, headers, sourceRows) {
@@ -253,7 +296,7 @@ export async function getFmsReportData(employeeId, role, startDate, endDate) {
   });
 }
 
-export async function exportReportForWeb(format = 'csv', sheetName = 'Report', employeeId = '', role = '', startDate = '', endDate = '') {
+export async function exportReportForWeb(format = 'csv', sheetName = 'Report', employeeId = '', role = '', startDate = '', endDate = '', filters = {}) {
   const data = await getRows();
   const normalizedRole = safe(role).toLowerCase();
   const ticketTeamIds = teamMemberIds(data.users, employeeId);
@@ -269,7 +312,8 @@ export async function exportReportForWeb(format = 'csv', sheetName = 'Report', e
         (['admin', 'manager', 'hr'].includes(normalizedRole) && ticketTeamIds.includes(ownerId));
       return visible && dateInRange(first(ticket, ['Plan Date', 'Date', 'Timestamp']), startDate, endDate);
     })
-    .map((ticket) => asTicketRow(ticket, data.clients));
+    .map((ticket) => asTicketRow(ticket, data.clients))
+    .filter((ticket) => matchesTicketFilters(ticket, filters));
   const fms = data.fms
     .filter((task) => {
       const ownerId = safe(first(task, ['Employee ID', 'EmpID', 'empId'])).toLowerCase();
@@ -279,7 +323,8 @@ export async function exportReportForWeb(format = 'csv', sheetName = 'Report', e
         (['admin', 'manager'].includes(normalizedRole) && fmsTeamIds.includes(ownerId));
       return visible && dateInRange(first(task, ['Plan Date', 'Date']), startDate, endDate);
     })
-    .map((task) => asFmsRow(task));
+    .map((task) => asFmsRow(task))
+    .filter((task) => matchesFmsFilters(task, filters));
   const sheetKey = safe(sheetName).toLowerCase();
   const source =
     /ticket/.test(sheetKey) ? tickets :

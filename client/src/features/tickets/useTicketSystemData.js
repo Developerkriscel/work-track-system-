@@ -22,8 +22,10 @@ function sortStatusWeight(status) {
   if (value === 'paused') return 3;
   if (value === 'rework' || value === 'reassigned' || value.includes('rework')) return 4;
   if (value === 'pending approval' || value.includes('pending')) return 5;
-  if (value === 'closed' || value.includes('approved') || value === 'cancelled') return 6;
-  return 7;
+  if (value === 'completed') return 6;
+  if (value === 'closed' || value.includes('approved by client') || value === 'cancelled') return 7;
+  if (value.includes('approved')) return 8;
+  return 9;
 }
 
 export const ticketStatusOptions = [
@@ -40,6 +42,8 @@ function normalizeDate(value) {
   const raw = String(value).trim();
   const ymd = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (ymd) return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+  const dmy = raw.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (dmy) return new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 }
@@ -111,7 +115,10 @@ function sortTickets(tickets) {
     if (statusDiff !== 0) return statusDiff;
     const dateA = normalizeDate(a['Plan Date'])?.getTime() || 0;
     const dateB = normalizeDate(b['Plan Date'])?.getTime() || 0;
-    return dateB - dateA;
+    if (dateB !== dateA) return dateB - dateA;
+    const startA = String(a['Start Time'] || '');
+    const startB = String(b['Start Time'] || '');
+    return startB.localeCompare(startA);
   });
 }
 
@@ -181,10 +188,15 @@ export function useTicketSystemData() {
     : state.payload?.dropdowns?.clients || [];
   const users = state.payload?.users || [];
   const categories = state.payload?.categories || [];
+  const clientOriginRawTickets = state.payload?.clientOriginTickets || [];
 
   const filteredTickets = useMemo(
     () => sortTickets(filterTickets(rawTickets, appliedFilters)),
     [rawTickets, appliedFilters]
+  );
+  const filteredClientOriginTickets = useMemo(
+    () => sortTickets(filterTickets(clientOriginRawTickets, appliedFilters)),
+    [clientOriginRawTickets, appliedFilters]
   );
 
   function applyFilters() {
@@ -325,6 +337,8 @@ export function useTicketSystemData() {
     users,
     categories,
     tickets: filteredTickets,
+    clientOriginTickets: filteredClientOriginTickets,
+    canViewClientTickets: Boolean(state.payload?.canViewClientTickets),
     filters,
     setFilters,
     applyFilters,

@@ -1,4 +1,4 @@
-export function AttendanceActionRow({ onOpenForm }) {
+export function AttendanceActionRow({ onOpenForm, canManageTeamAttendance, onOpenLocationPolicy }) {
   return (
     <div className="attendance-action-row">
       <button type="button" className="attendance-cta attendance-cta--green" onClick={() => onOpenForm('punch')}>
@@ -10,6 +10,11 @@ export function AttendanceActionRow({ onOpenForm }) {
       <button type="button" className="attendance-cta attendance-cta--purple" onClick={() => onOpenForm('intimation')}>
         Intimation
       </button>
+      {canManageTeamAttendance ? (
+        <button type="button" className="attendance-cta attendance-cta--gray" onClick={onOpenLocationPolicy}>
+          Location Policy
+        </button>
+      ) : null}
     </div>
   );
 }

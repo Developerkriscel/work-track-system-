@@ -50,7 +50,7 @@ if (rawUser) {
     const teamTab = page.getByRole('button', { name: 'Team Tickets', exact: true });
     if (await teamTab.count()) {
       await teamTab.click();
-      assert(await teamTab.evaluate((node) => node.className.includes('ticket-tab--active')), 'Team Tickets tab did not become active.');
+      assert(await teamTab.evaluate((node) => node.className.includes('view-mode-tab--active')), 'Team Tickets tab did not become active.');
     }
     await statusSelect.click();
     await statusSelect.locator('..').locator('input').nth(5).check();

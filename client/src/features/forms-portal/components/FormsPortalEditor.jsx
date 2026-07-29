@@ -25,14 +25,7 @@ export function FormsPortalEditor({
   };
 
   return (
-    <article className="migration-panel migration-panel--full forms-editor">
-      <div className="migration-panel__row">
-        <h2>{editor.mode === 'edit' ? `Edit Form: ${editor.form['Sheet name'] || ''}` : 'Add New Form'}</h2>
-        <button type="button" className="attendance-cta attendance-cta--red" onClick={onClose}>
-          Close
-        </button>
-      </div>
-
+    <article className="forms-editor">
       <div className="forms-editor__grid">
         <label className="dashboard-control">
           <span>Department</span>

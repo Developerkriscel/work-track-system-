@@ -1,6 +1,6 @@
 import { useState } from 'react';
+import { AppModal, ConfirmDialog } from '@/components/modals';
 import { StatusPill } from '@/components/common/StatusPill';
-import { ConfirmDialog } from '@/components/modals';
 import { ClientDetailsCard } from '@/features/clients-portal/components/ClientDetailsCard';
 import { ClientEditor } from '@/features/clients-portal/components/ClientEditor';
 import { ClientsPortalFilterPanel } from '@/features/clients-portal/components/ClientsPortalFilterPanel';
@@ -17,7 +17,7 @@ export function ClientsPortalPage() {
     error,
     clients,
     allClientsCount,
-    isAdmin,
+    canManageClients,
     isSuperAdmin,
     submitting,
     message,
@@ -60,7 +60,7 @@ export function ClientsPortalPage() {
         </div>
       ) : null}
 
-      <ClientsPortalSummaryCards visibleCount={clients.length} totalCount={allClientsCount} isAdmin={isAdmin} />
+      <ClientsPortalSummaryCards visibleCount={clients.length} totalCount={allClientsCount} isAdmin={canManageClients} />
 
       <ClientsPortalFilterPanel
         filters={filters}
@@ -71,12 +71,20 @@ export function ClientsPortalPage() {
       />
 
       <ClientDetailsCard client={detailsClient} onClose={() => setDetailsClient(null)} />
-      <ClientEditor editor={editor} submitting={submitting} onUpdate={updateEditor} onClose={closeEditor} onSubmit={submitEditor} />
+      {editor.open ? (
+        <AppModal
+          title={editor.client.Client_Id ? `Edit Client: ${editor.client.Client_Id}` : 'Add Client'}
+          onClose={closeEditor}
+          width="980px"
+        >
+          <ClientEditor editor={editor} submitting={submitting} onUpdate={updateEditor} onClose={closeEditor} onSubmit={submitEditor} />
+        </AppModal>
+      ) : null}
 
       <ClientsPortalTable
         clients={clients}
         allClientsCount={allClientsCount}
-        isAdmin={isAdmin}
+        isAdmin={canManageClients}
         submitting={submitting}
         onOpenDetails={setDetailsClient}
         onOpenEditor={openEditor}

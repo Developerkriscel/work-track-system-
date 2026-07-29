@@ -1,3 +1,4 @@
+import { StatusPill } from '@/components/common/StatusPill';
 import { FmsReportSection } from '@/features/reports/components/FmsReportSection';
 import { ReportsHeader } from '@/features/reports/components/ReportsHeader';
 import { ReportsSummaryCards } from '@/features/reports/components/ReportsSummaryCards';
@@ -23,16 +24,17 @@ export function ReportsPage() {
     message,
     downloading,
     tickets,
-    ticketsSummary,
+    ticketStatuses,
     ticketPriorities,
     ticketCategories,
     ticketFilters,
     setTicketFilters,
+    resetTicketFilters,
     fms,
-    fmsSummary,
     fmsStatuses,
     fmsFilters,
     setFmsFilters,
+    resetFmsFilters,
     refresh,
     download
   } = useReportsData();
@@ -40,17 +42,17 @@ export function ReportsPage() {
   const ticketSummaryItems = [
     {
       label: 'Total Tickets',
-      value: ticketsSummary.total ?? tickets.length,
+      value: tickets.length,
       iconClass: 'dashboard-kpi-card__icon--purple'
     },
     {
       label: 'Open',
-      value: ticketsSummary.open ?? tickets.filter((item) => !String(item.Status || '').toLowerCase().includes('closed')).length,
+      value: tickets.filter((item) => !String(item.Status || '').toLowerCase().includes('closed')).length,
       iconClass: 'dashboard-kpi-card__icon--blue'
     },
     {
       label: 'Closed',
-      value: ticketsSummary.closed ?? tickets.filter((item) => String(item.Status || '').toLowerCase().includes('closed')).length,
+      value: tickets.filter((item) => String(item.Status || '').toLowerCase().includes('closed')).length,
       iconClass: 'dashboard-kpi-card__icon--green'
     }
   ];
@@ -58,17 +60,17 @@ export function ReportsPage() {
   const fmsSummaryItems = [
     {
       label: 'Total FMS',
-      value: fmsSummary.total ?? fms.length,
+      value: fms.length,
       iconClass: 'dashboard-kpi-card__icon--purple'
     },
     {
       label: 'Completed',
-      value: fmsSummary.completed ?? fms.filter((item) => String(item.Status || '').toLowerCase().includes('complete')).length,
+      value: fms.filter((item) => String(item.Status || '').toLowerCase().includes('complete')).length,
       iconClass: 'dashboard-kpi-card__icon--green'
     },
     {
       label: 'Pending',
-      value: (fmsSummary.total ?? fms.length) - (fmsSummary.completed ?? fms.filter((item) => String(item.Status || '').toLowerCase().includes('complete')).length),
+      value: fms.filter((item) => !String(item.Status || '').toLowerCase().includes('complete')).length,
       iconClass: 'dashboard-kpi-card__icon--blue'
     }
   ];
@@ -111,24 +113,25 @@ export function ReportsPage() {
       {activeTab === 'tickets' ? (
         <>
           <ReportsSummaryCards items={ticketSummaryItems} />
-
           <TicketReportSection
             tickets={tickets}
+            ticketStatuses={ticketStatuses}
             ticketPriorities={ticketPriorities}
             ticketCategories={ticketCategories}
             ticketFilters={ticketFilters}
             onTicketFiltersChange={setTicketFilters}
+            onResetFilters={resetTicketFilters}
           />
         </>
       ) : (
         <>
           <ReportsSummaryCards items={fmsSummaryItems} />
-
           <FmsReportSection
             fms={fms}
             fmsStatuses={fmsStatuses}
             fmsFilters={fmsFilters}
             onFmsFiltersChange={setFmsFilters}
+            onResetFilters={resetFmsFilters}
           />
         </>
       )}

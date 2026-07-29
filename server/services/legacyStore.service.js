@@ -260,6 +260,7 @@ const legacyIdKeyMap = {
     Client: ['Client_Id', 'Client ID', 'CustomerID', 'clientId', 'customerId'],
     Ticket: ['Ticket ID', 'Task ID', 'ID', 'ticketId', 'taskId'],
     Attendance: ['AttendanceID', 'ID', 'attendanceId'],
+    AttendancePolicy: ['PolicyID', 'ID', 'policyId', 'AttendancePolicyID'],
     Leave: ['LeaveID', 'Leave ID', 'ID', 'leaveId'],
     Intimation: ['IntimationID', 'Intimation ID', 'ID', 'intimationId'],
     Expense: ['ExpenseID', 'Expense ID', 'ID', 'expenseId'],

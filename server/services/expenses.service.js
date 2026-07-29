@@ -7,6 +7,7 @@ const eq = (left, right) => safe(left).toLowerCase() === safe(right).toLowerCase
 const first = (row, keys, fallback = '') => keys.map((key) => row?.[key]).find((value) => safe(value)) ?? fallback;
 const ok = (payload = {}) => ({ success: true, ...payload });
 const fail = (message) => ({ success: false, message });
+const elevatedExpenseRoles = new Set(['admin', 'super admin', 'hr']);
 
 function parseReferenceNow(value) {
   if (!value) return new Date();
@@ -47,6 +48,26 @@ function attendanceEventTime(row) {
   return new Date(`${date}T00:00:00+05:30`).getTime();
 }
 
+function userRole(user = {}) {
+  return safe(first(user, ['Role', 'role'], 'User')).toLowerCase();
+}
+
+function userId(user = {}) {
+  return first(user, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'EmpID']);
+}
+
+function compareUpdateTime(right, left) {
+  const rightTime = new Date(first(right, ['Last Update Date', 'Date', 'Timestamp'], today())).getTime() || 0;
+  const leftTime = new Date(first(left, ['Last Update Date', 'Date', 'Timestamp'], today())).getTime() || 0;
+  return rightTime - leftTime;
+}
+
+function isHigherRoleProtected(admin, employee) {
+  const adminRole = userRole(admin);
+  const employeeRole = userRole(employee);
+  return employeeRole === 'super admin' && adminRole !== 'super admin';
+}
+
 function isAttendanceActive(rowsList, employeeId) {
   if (!safe(employeeId) || eq(employeeId, 'client')) return true;
   const todayRows = rowsList
@@ -71,15 +92,15 @@ async function requireManagerApprovalRole(adminId) {
   const users = await listRows('User');
   const admin = users.find((item) => eq(first(item, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'EmpID']), adminId));
   if (!admin) return { ok: false, message: 'Unauthorized access.' };
-  const role = safe(first(admin, ['Role', 'role'], 'User')).toLowerCase();
-  if (!['admin', 'super admin', 'hr'].includes(role)) {
+  const role = userRole(admin);
+  if (!elevatedExpenseRoles.has(role)) {
     return { ok: false, message: 'Unauthorized access.' };
   }
   const gate = await checkUserAttendanceActive(adminId);
   if (!gate?.active) {
     return { ok: false, message: 'Attendance Required: Aapne aaj ki Attendance (Punch In) mark nahi ki hai ya aap already Punch Out kar chuke hain. Kripya pehle Punch In karein!' };
   }
-  return { ok: true, admin };
+  return { ok: true, admin, users };
 }
 
 function normalizeAttachmentField(value, folderName = 'expenses') {
@@ -112,7 +133,41 @@ export async function recordExpense(expenseData = {}) {
 
 export async function getExpensesForUser(employeeId) {
   const expenses = await listRows('Expense');
-  return ok({ data: expenses.filter((row) => eq(row['Employee ID'], employeeId)) });
+  return ok({
+    data: expenses
+      .filter((row) => eq(row['Employee ID'], employeeId))
+      .sort(compareUpdateTime)
+  });
+}
+
+export async function getExpenseApprovalQueue(adminId) {
+  const access = await requireManagerApprovalRole(adminId);
+  if (!access.ok) return fail(access.message);
+
+  const expenses = await listRows('Expense');
+  const visibleRows = expenses
+    .filter((row) => {
+      const ownerId = first(row, ['Employee ID', 'EmpID', 'employeeId']);
+      const owner = access.users.find((user) => eq(userId(user), ownerId));
+      if (owner && isHigherRoleProtected(access.admin, owner)) return false;
+      return true;
+    })
+    .map((row) => {
+      const status = safe(first(row, ['Status', 'status'], 'Pending'));
+      const canApprove = /pending/i.test(status);
+      return {
+        ...row,
+        ExpenseID: first(row, ['ExpenseID', 'Expense ID', 'ID', 'expenseId']),
+        _canApprove: canApprove
+      };
+    })
+    .sort((left, right) => {
+      const pendingDiff = Number(/pending/i.test(safe(right.Status))) - Number(/pending/i.test(safe(left.Status)));
+      if (pendingDiff) return pendingDiff;
+      return compareUpdateTime(right, left);
+    });
+
+  return ok({ data: visibleRows });
 }
 
 export async function processExpenseApprovalFromMongo(expenseId, status, remarks, adminId) {
@@ -122,6 +177,11 @@ export async function processExpenseApprovalFromMongo(expenseId, status, remarks
   const expenses = await listRows('Expense');
   const expense = expenses.find((row) => eq(first(row, ['ExpenseID', 'Expense ID', 'ID', 'expenseId']), expenseId));
   if (!expense) return fail('Expense record not found.');
+  const ownerId = first(expense, ['Employee ID', 'EmpID', 'employeeId']);
+  const owner = access.users.find((user) => eq(userId(user), ownerId));
+  if (owner && isHigherRoleProtected(access.admin, owner)) {
+    return fail('Unauthorized access.');
+  }
 
   const approvalStatus = safe(status) || 'Pending';
   const updated = await upsertRow('Expense', 'ExpenseID', expenseId, {

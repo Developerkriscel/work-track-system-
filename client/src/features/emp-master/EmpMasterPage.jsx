@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from '@/components/common/icons';
 import { StatusPill } from '@/components/common/StatusPill';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { fetchAllManagersList, fetchAllUsersForAdmin } from '@/features/admin/api';
+import { AdminSummaryCards } from '@/features/admin/components/AdminSummaryCards';
 import { ConfirmDialog } from '@/features/tickets/components/ConfirmDialog';
 import { deleteEmpMasterRecord, fetchEmpMasterData, fetchNextEmpCode, saveEmpMasterRecord } from '@/features/emp-master/api';
 
@@ -14,14 +16,19 @@ const categories = [
 ];
 
 const statuses = ['Active', 'Pending', 'Inactive', 'Resigned', 'Terminated'];
+const roleOptions = ['User', 'Manager', 'Admin', 'HR', 'Super Admin'];
 
 const emptyForm = () => ({
   Category: 'EMP',
   'EMP Code': '',
   'User ID': '',
+  Role: 'User',
+  'Manager ID': '',
+  'Task Approver': '',
+  Status: 'Active',
+  Password: '',
   'Company Code': 'KRIS',
   'Company Name': 'Kriscel Tech Pvt. Ltd.',
-  Status: 'Active',
   'Date of Joining': '',
   Department: '',
   Designation: '',
@@ -32,10 +39,9 @@ const emptyForm = () => ({
   'Week Off': '',
   'PROBATION PERIOD': '',
   DOE: '',
-  'Official mail id if any': '',
-  Password: '',
   Name: '',
   'Phone No': '',
+  'Official mail id if any': '',
   'Personal Email ID': '',
   Gender: 'Male',
   'Marital Status': 'Single',
@@ -64,26 +70,36 @@ const emptyForm = () => ({
   'Documents of Employee': ''
 });
 
-const first = (row, keys, fallback = '') => keys.map((key) => row?.[key]).find((value) => String(value ?? '').trim()) ?? fallback;
+const safe = (value = '') => String(value ?? '').trim();
+
+function first(row = {}, keys = [], fallback = '') {
+  for (const key of keys) {
+    const value = row?.[key];
+    if (safe(value)) return value;
+  }
+  return fallback;
+}
+
+function normalizeRole(value) {
+  return safe(value).toLowerCase();
+}
 
 function asYmd(value) {
-  const raw = String(value || '').trim();
+  const raw = safe(value);
   if (!raw) return '';
   if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
-  const dmy = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  const dmy = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (dmy) return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
   const parsed = new Date(raw);
   return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10);
 }
 
-const statusTone = (status) => {
-  const value = String(status || '').toLowerCase();
+function statusTone(status) {
+  const value = normalizeRole(status);
   if (value === 'active') return 'success';
   if (value === 'pending') return 'warning';
   return 'danger';
-};
-
-const normalizeRole = (value) => String(value || '').trim().toLowerCase();
+}
 
 function canEditEmpMasterRow(actorRole, row) {
   const role = normalizeRole(actorRole);
@@ -93,18 +109,31 @@ function canEditEmpMasterRow(actorRole, row) {
   return true;
 }
 
-function toForm(row, category) {
+function toManagerValue(value = '', options = []) {
+  const raw = safe(value);
+  if (!raw) return '';
+  const exact = options.find((option) => option.id === raw);
+  if (exact) return exact.id;
+  const matched = options.find((option) => `${option.name} (${option.id})` === raw);
+  return matched?.id || raw;
+}
+
+function toForm(row, category, managerOptions = []) {
   const next = { ...emptyForm(), ...row, Category: row?.Category || category };
   next['EMP Code'] = first(row, ['EMP Code', 'Employee ID', 'User ID']);
   next['User ID'] = first(row, ['User ID', 'Employee ID'], next['EMP Code']);
   next.Name = first(row, ['Name', 'Employee Name']);
-  next.Designation = first(row, ['Designation', 'Role']);
+  next.Designation = first(row, ['Designation'], first(row, ['Role']));
+  next.Role = first(row, ['Role', 'Designation'], 'User');
+  next['Manager ID'] = toManagerValue(first(row, ['Manager ID', 'Manager', 'Reporting to']), managerOptions);
+  next['Task Approver'] = toManagerValue(first(row, ['Task Approver', 'Approver']), managerOptions);
   next['Date of Joining'] = asYmd(first(row, ['Date of Joining', 'Joining Date']));
   next.DOE = asYmd(row?.DOE);
   next['Date of Birth'] = asYmd(row?.['Date of Birth']);
   next['Anniversary Date'] = asYmd(row?.['Anniversary Date']);
   next['Phone No'] = first(row, ['Phone No', 'Mobile Number', 'Mobile']);
   next['Official mail id if any'] = first(row, ['Official mail id if any', 'Email']);
+  next['Personal Email ID'] = first(row, ['Personal Email ID'], row?.['Personal Email ID'] || '');
   return next;
 }
 
@@ -121,7 +150,18 @@ function fileToPayload(file, code) {
   });
 }
 
-function Field({ label, name, form, onChange, type = 'text', options, full = false, required = false, disabled = false }) {
+function Field({
+  label,
+  name,
+  form,
+  onChange,
+  type = 'text',
+  options,
+  full = false,
+  required = false,
+  disabled = false,
+  placeholder = ''
+}) {
   const common = {
     value: form[name] || '',
     onChange: (event) => onChange({ [name]: event.target.value }),
@@ -134,12 +174,20 @@ function Field({ label, name, form, onChange, type = 'text', options, full = fal
       <span>{label}{required ? ' *' : ''}</span>
       {options ? (
         <select {...common}>
-          {options.map((option) => <option key={option} value={option}>{option}</option>)}
+          {options.map((option) => {
+            const value = typeof option === 'string' ? option : option.value;
+            const optionLabel = typeof option === 'string' ? option : option.label;
+            return (
+              <option key={value} value={value}>
+                {optionLabel}
+              </option>
+            );
+          })}
         </select>
       ) : type === 'textarea' ? (
-        <textarea rows="3" {...common} />
+        <textarea rows="3" placeholder={placeholder} {...common} />
       ) : (
-        <input type={type} {...common} />
+        <input type={type} placeholder={placeholder} {...common} />
       )}
     </label>
   );
@@ -147,34 +195,66 @@ function Field({ label, name, form, onChange, type = 'text', options, full = fal
 
 function DocumentLinks({ form }) {
   const links = [
-    ['Offer letter', form['OFFER LETTER LINK']],
+    ['Offer Letter', form['OFFER LETTER LINK']],
     ['Appointment Letter', form['APPOINTMENT LETTER LINK']],
-    ...String(form['Documents of Employee'] || '')
+    ...safe(form['Documents of Employee'])
       .split(',')
       .map((url) => url.trim())
       .filter(Boolean)
-      .map((url) => {
-        const parts = url.split('/');
-        const fileName = parts[parts.length - 1];
-        return [`Document (${fileName})`, url];
-      })
+      .map((url) => [`Document`, url])
   ];
 
   if (!links.length) return null;
 
   return (
     <div className="emp-document-links">
-      {links.map(([label, url]) => (
-        <a key={`${label}-${url}`} href={url} target="_blank" rel="noreferrer">
-          {label}
+      {links.map(([label, url], index) => (
+        <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer">
+          {label} {links.length > 2 ? index + 1 : ''}
         </a>
       ))}
     </div>
   );
 }
 
-function EmpEditor({ mode, category, initialRow, onClose, onSaved }) {
-  const [form, setForm] = useState(() => (initialRow ? toForm(initialRow, category) : { ...emptyForm(), Category: category }));
+function mergeRowsWithUsers(rows = [], users = []) {
+  const userMap = new Map();
+  users.forEach((user) => {
+    const keys = [first(user, ['Employee ID']), first(user, ['User ID'])].filter(Boolean);
+    keys.forEach((key) => userMap.set(safe(key).toLowerCase(), user));
+  });
+
+  return rows.map((row) => {
+    const lookupKey = safe(first(row, ['User ID', 'EMP Code', 'Employee ID'])).toLowerCase();
+    const linkedUser = userMap.get(lookupKey) || userMap.get(safe(first(row, ['Employee ID'])).toLowerCase());
+    return {
+      ...linkedUser,
+      ...row,
+      Role: first(row, ['Role', 'Designation'], first(linkedUser, ['Role'], '-')),
+      Department: row.Department || first(linkedUser, ['Department'], '-'),
+      Status: row.Status || first(linkedUser, ['Status'], 'Active'),
+      'Manager ID': first(row, ['Manager ID', 'Manager'], first(linkedUser, ['Manager ID', 'Manager'], '')),
+      'Task Approver': first(row, ['Task Approver', 'Approver'], first(linkedUser, ['Task Approver'], '')),
+      'Phone No': first(row, ['Phone No', 'Mobile Number'], first(linkedUser, ['Mobile Number'], '')),
+      Email: first(row, ['Official mail id if any', 'Email'], first(linkedUser, ['Email'], ''))
+    };
+  });
+}
+
+function buildSummary(users = []) {
+  const active = users.filter((entry) => normalizeRole(entry.Status) === 'active').length;
+  const managers = users.filter((entry) => /manager|admin|hr|super admin/i.test(safe(entry.Role))).length;
+  const departments = new Set(users.map((entry) => safe(entry.Department)).filter(Boolean)).size;
+  return {
+    totalUsers: users.length,
+    activeUsers: active,
+    managers,
+    departments
+  };
+}
+
+function EmpEditor({ mode, category, initialRow, managerOptions, onClose, onSaved }) {
+  const [form, setForm] = useState(() => (initialRow ? toForm(initialRow, category, managerOptions) : { ...emptyForm(), Category: category }));
   const [files, setFiles] = useState({ offer: null, appointment: null, bunch: [] });
   const [loadingCode, setLoadingCode] = useState(!initialRow);
   const [saving, setSaving] = useState(false);
@@ -182,8 +262,15 @@ function EmpEditor({ mode, category, initialRow, onClose, onSaved }) {
   const readOnly = mode === 'view';
 
   useEffect(() => {
+    setForm(initialRow ? toForm(initialRow, category, managerOptions) : { ...emptyForm(), Category: category });
+  }, [initialRow, category, managerOptions]);
+
+  useEffect(() => {
     let alive = true;
-    if (initialRow) return undefined;
+    if (initialRow) {
+      setLoadingCode(false);
+      return undefined;
+    }
 
     fetchNextEmpCode(category)
       .then((payload) => {
@@ -214,8 +301,7 @@ function EmpEditor({ mode, category, initialRow, onClose, onSaved }) {
         appointment: files.appointment ? await fileToPayload(files.appointment, form['EMP Code']) : null,
         bunch: await Promise.all(files.bunch.map((file) => fileToPayload(file, form['EMP Code'])))
       };
-      const { ...cleanForm } = form;
-      const result = await saveEmpMasterRecord(category, cleanForm, filePayloads);
+      const result = await saveEmpMasterRecord(category, form, filePayloads);
       if (!result.success) {
         throw new Error(result.message || 'Employee record could not be saved.');
       }
@@ -227,6 +313,22 @@ function EmpEditor({ mode, category, initialRow, onClose, onSaved }) {
     }
   }
 
+  const managerSelectOptions = [
+    { value: '', label: 'None' },
+    ...managerOptions.map((manager) => ({
+      value: manager.id,
+      label: `${manager.name} (${manager.id})`
+    }))
+  ];
+
+  const approverSelectOptions = [
+    { value: '', label: 'Same as Manager' },
+    ...managerOptions.map((manager) => ({
+      value: manager.id,
+      label: `${manager.name} (${manager.id})`
+    }))
+  ];
+
   return (
     <div className="app-modal-backdrop" role="presentation">
       <section className="app-modal emp-editor-modal" role="dialog" aria-modal="true" aria-label="Employee master editor">
@@ -235,7 +337,7 @@ function EmpEditor({ mode, category, initialRow, onClose, onSaved }) {
             <p className="page-card__eyebrow">EMP Master</p>
             <h2>
               {readOnly
-                ? 'Employee Details'
+                ? 'People Details'
                 : mode === 'edit'
                   ? `Edit ${category === 'EMP' ? 'Employee' : category}`
                   : `Add ${category === 'EMP' ? 'Employee' : category}`}
@@ -246,25 +348,34 @@ function EmpEditor({ mode, category, initialRow, onClose, onSaved }) {
 
         <form className="emp-editor" onSubmit={submit}>
           <section className="emp-editor__section emp-editor__section--official">
-            <h3>Official Details</h3>
+            <h3>Access & Workflow</h3>
             <div className="emp-editor__grid">
+              <Field label="Category" name="Category" form={form} onChange={update} options={categories.map(([value, label]) => ({ value, label }))} disabled={readOnly || Boolean(initialRow)} />
               <Field label="EMP Code" name="EMP Code" form={form} onChange={update} required disabled={readOnly || !initialRow} />
               <Field label="User ID" name="User ID" form={form} onChange={update} required disabled={readOnly || !initialRow} />
+              <Field label="Role" name="Role" form={form} onChange={update} options={roleOptions} disabled={readOnly} />
+              <Field label="Reporting Manager" name="Manager ID" form={form} onChange={update} options={managerSelectOptions} disabled={readOnly} />
+              <Field label="Task Approver" name="Task Approver" form={form} onChange={update} options={approverSelectOptions} disabled={readOnly} />
+              <Field label="Status" name="Status" form={form} onChange={update} options={statuses} disabled={readOnly} />
+              <Field label="Portal Password" name="Password" form={form} onChange={update} type="password" required={!initialRow} disabled={readOnly} />
+            </div>
+          </section>
+
+          <section className="emp-editor__section emp-editor__section--official">
+            <h3>Official Details</h3>
+            <div className="emp-editor__grid">
               <Field label="Company Code" name="Company Code" form={form} onChange={update} disabled={readOnly} />
               <Field label="Company Name" name="Company Name" form={form} onChange={update} disabled={readOnly} />
-              <Field label="Status" name="Status" form={form} onChange={update} options={statuses} disabled={readOnly} />
               <Field label="Date of Joining" name="Date of Joining" form={form} onChange={update} type="date" disabled={readOnly} />
               <Field label="Department" name="Department" form={form} onChange={update} disabled={readOnly} />
               <Field label="Designation" name="Designation" form={form} onChange={update} disabled={readOnly} />
               <Field label="Job Type" name="Job Type" form={form} onChange={update} disabled={readOnly} />
-              <Field label="Reporting To" name="Reporting to" form={form} onChange={update} disabled={readOnly} />
               <Field label="Working Hours" name="Working Hours" form={form} onChange={update} disabled={readOnly} />
               <Field label="In Timing" name="In Timing" form={form} onChange={update} type="time" disabled={readOnly} />
               <Field label="Week Off" name="Week Off" form={form} onChange={update} disabled={readOnly} />
               <Field label="Probation Period" name="PROBATION PERIOD" form={form} onChange={update} disabled={readOnly} />
               <Field label="DOE (Exit Date)" name="DOE" form={form} onChange={update} type="date" disabled={readOnly} />
               <Field label="Official Email" name="Official mail id if any" form={form} onChange={update} type="email" disabled={readOnly} />
-              <Field label="Portal Password" name="Password" form={form} onChange={update} type="password" required={!initialRow} disabled={readOnly} />
             </div>
           </section>
 
@@ -272,7 +383,7 @@ function EmpEditor({ mode, category, initialRow, onClose, onSaved }) {
             <h3>Personal & Family</h3>
             <div className="emp-editor__grid">
               <Field label="Full Name" name="Name" form={form} onChange={update} required full disabled={readOnly} />
-              <Field label="Phone No" name="Phone No" form={form} onChange={update} disabled={readOnly} />
+              <Field label="Mobile Number" name="Phone No" form={form} onChange={update} disabled={readOnly} />
               <Field label="Personal Email" name="Personal Email ID" form={form} onChange={update} type="email" disabled={readOnly} />
               <Field label="Gender" name="Gender" form={form} onChange={update} options={['Male', 'Female', 'Other']} disabled={readOnly} />
               <Field label="Marital Status" name="Marital Status" form={form} onChange={update} options={['Single', 'Married']} disabled={readOnly} />
@@ -352,6 +463,8 @@ export function EmpMasterPage() {
   const { user } = useAuth();
   const [category, setCategory] = useState('Master');
   const [rows, setRows] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+  const [managerOptions, setManagerOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -365,11 +478,19 @@ export function EmpMasterPage() {
     setLoading(true);
     setError('');
     try {
-      const payload = await fetchEmpMasterData(nextCategory);
-      setRows(Array.isArray(payload.data) ? payload.data : []);
+      const [empPayload, usersPayload, managersPayload] = await Promise.all([
+        fetchEmpMasterData(nextCategory),
+        fetchAllUsersForAdmin(user?.['Employee ID'] || user?.employeeId || ''),
+        fetchAllManagersList()
+      ]);
+      setRows(Array.isArray(empPayload.data) ? empPayload.data : []);
+      setAllUsers(Array.isArray(usersPayload?.data) ? usersPayload.data : []);
+      setManagerOptions(Array.isArray(managersPayload) ? managersPayload : []);
     } catch (reason) {
       setRows([]);
-      setError(reason.message || 'EMP Master data could not be loaded.');
+      setAllUsers([]);
+      setManagerOptions([]);
+      setError(reason.message || 'People master data could not be loaded.');
     } finally {
       setLoading(false);
     }
@@ -379,11 +500,13 @@ export function EmpMasterPage() {
     load(category);
   }, [category]);
 
+  const mergedRows = useMemo(() => mergeRowsWithUsers(rows, allUsers), [rows, allUsers]);
   const visibleRows = useMemo(
-    () => rows.filter((row) => JSON.stringify(row).toLowerCase().includes(search.trim().toLowerCase())),
-    [rows, search]
+    () => mergedRows.filter((row) => JSON.stringify(row).toLowerCase().includes(search.trim().toLowerCase())),
+    [mergedRows, search]
   );
   const activeCategoryLabel = categories.find(([value]) => value === category)?.[1] || 'Master Data';
+  const summary = useMemo(() => buildSummary(allUsers), [allUsers]);
 
   function changeCategory(nextCategory) {
     setCategory(nextCategory);
@@ -476,6 +599,8 @@ export function EmpMasterPage() {
       ) : null}
       {error ? <div className="dashboard-banner dashboard-banner--error">{error}</div> : null}
 
+      <AdminSummaryCards summary={summary} />
+
       <article className="migration-panel migration-panel--full">
         <div className="migration-panel__row">
           <h2>{activeCategoryLabel}</h2>
@@ -492,8 +617,8 @@ export function EmpMasterPage() {
                 onClick={() => changeCategory(value)}
               >
                 {label}
-                </button>
-              ))}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -502,7 +627,7 @@ export function EmpMasterPage() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search employee, ID, department, status..."
+            placeholder="Search employee, ID, role, department, manager, status..."
           />
         </label>
 
@@ -513,6 +638,8 @@ export function EmpMasterPage() {
                 <th>Employee ID</th>
                 <th>Employee Name</th>
                 <th>Role</th>
+                <th>Manager ID</th>
+                <th>Task Approver</th>
                 <th>Department</th>
                 <th>Status</th>
                 <th>Mobile Number</th>
@@ -523,7 +650,7 @@ export function EmpMasterPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="8" className="dashboard-table__empty">Loading employee records...</td>
+                  <td colSpan="10" className="dashboard-table__empty">Loading people records...</td>
                 </tr>
               ) : visibleRows.length ? (
                 visibleRows.map((row) => {
@@ -539,27 +666,21 @@ export function EmpMasterPage() {
                           <small className="emp-source-badge">{row._sourceSheet === 'EMP' ? 'Employee' : row._sourceSheet}</small>
                         ) : null}
                       </td>
-                      <td>{first(row, ['Designation', 'Role'], '-')}</td>
+                      <td>{first(row, ['Role', 'Designation'], '-')}</td>
+                      <td>{first(row, ['Manager ID', 'Manager'], '-')}</td>
+                      <td>{first(row, ['Task Approver', 'Approver'], '-')}</td>
                       <td>{row.Department || '-'}</td>
                       <td><StatusPill tone={statusTone(row.Status)}>{row.Status || 'Active'}</StatusPill></td>
                       <td>{first(row, ['Phone No', 'Mobile Number'], '-')}</td>
                       <td>{first(row, ['Date of Joining', 'Joining Date'], '-')}</td>
                       <td>
                         <div className="emp-master-actions">
-                          <button
-                            type="button"
-                            className="attendance-cta attendance-cta--gray"
-                            onClick={() => openView(row)}
-                          >
+                          <button type="button" className="attendance-cta attendance-cta--gray" onClick={() => openView(row)}>
                             View
                           </button>
                           {editable ? (
                             <>
-                              <button
-                                type="button"
-                                className="attendance-cta attendance-cta--blue"
-                                onClick={() => openEdit(row)}
-                              >
+                              <button type="button" className="attendance-cta attendance-cta--blue" onClick={() => openEdit(row)}>
                                 Edit
                               </button>
                               <button
@@ -581,7 +702,7 @@ export function EmpMasterPage() {
                 })
               ) : (
                 <tr>
-                  <td colSpan="8" className="dashboard-table__empty">No employee records found.</td>
+                  <td colSpan="10" className="dashboard-table__empty">No people records found.</td>
                 </tr>
               )}
             </tbody>
@@ -594,6 +715,7 @@ export function EmpMasterPage() {
           mode={editor.mode}
           category={editor.category}
           initialRow={editor.row}
+          managerOptions={managerOptions}
           onClose={() => setEditor(null)}
           onSaved={saved}
         />

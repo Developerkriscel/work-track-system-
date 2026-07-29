@@ -1211,6 +1211,73 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
   padding: 8px 0 4px;
 }
 
+.attendance-policy-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.attendance-policy-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.attendance-policy-card__header h3 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.2;
+  color: var(--wt-heading);
+}
+
+.attendance-policy-card__subtitle {
+  margin-top: 6px;
+  font-size: 13px;
+  color: #6b7a95;
+}
+
+.attendance-policy-card__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 14px;
+}
+
+.attendance-policy-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
+.attendance-policy-card__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  color: #30415f;
+}
+
+.attendance-policy-card__toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--wt-primary);
+}
+
+.attendance-policy-card__action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.attendance-policy-card__action-buttons .attendance-cta {
+  min-width: 180px;
+}
+
 .attendance-form-grid__full {
   grid-column: 1 / -1;
 }
@@ -1306,7 +1373,12 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
 }
 
 .attendance-team-modal {
-  max-width: 640px;
+  width: min(860px, calc(100vw - 24px));
+  max-width: 860px;
+}
+
+.attendance-team-modal .app-modal__body {
+  overflow-x: hidden;
 }
 
 .attendance-team-modal__meta {
@@ -1319,7 +1391,146 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
 .attendance-team-modal__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
+}
+
+.attendance-time-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 110px;
+  gap: 10px;
+  align-items: center;
+}
+
+.attendance-time-picker > * {
+  width: 100%;
+  min-width: 0;
+}
+
+.attendance-time-picker select {
+  min-width: 0;
+}
+
+.attendance-choice {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+}
+
+.attendance-choice__trigger {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--wt-border);
+  background: #fff;
+  color: var(--wt-text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.attendance-choice__trigger:focus-visible {
+  outline: 2px solid var(--wt-primary);
+  outline-offset: 2px;
+}
+
+.attendance-choice__caret {
+  color: var(--wt-text-muted);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.attendance-choice__menu {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  top: calc(100% + 8px);
+  width: 100%;
+  min-width: 100%;
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 14px;
+  border: 1px solid rgba(201, 217, 240, 0.92);
+  background: #fff;
+  box-shadow: 0 16px 38px rgba(18, 39, 80, 0.16);
+}
+
+.attendance-choice__option {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--wt-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.attendance-choice__option:hover,
+.attendance-choice__option--selected {
+  background: rgba(69, 104, 220, 0.1);
+  color: var(--wt-primary);
+}
+
+.attendance-time-picker__value {
+  margin-top: 6px;
+  min-height: 18px;
+  color: var(--wt-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.attendance-time-split-row {
+  display: grid;
+  grid-template-columns: 68px 8px 68px 84px 76px;
+  gap: 6px;
+  align-items: center;
+}
+
+.attendance-time-split-row__part,
+.attendance-time-split-row__period {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--wt-border);
+  background: #fff;
+  color: var(--wt-text);
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+}
+
+.attendance-time-split-row__part:focus,
+.attendance-time-split-row__period:focus {
+  border-color: var(--wt-primary);
+  box-shadow: 0 0 0 3px rgba(52, 99, 235, 0.12);
+}
+
+.attendance-time-split-row__part {
+  text-align: center;
+}
+
+.attendance-time-split-row__colon {
+  color: var(--wt-text-muted);
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.attendance-time-split-row__clear {
+  white-space: nowrap;
+  min-height: 40px;
+  padding-inline: 12px;
+  font-size: 13px;
 }
 
 .attendance-team-modal__hint {
@@ -1362,6 +1573,14 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
   gap: 16px;
 }
 
+.ticket-action-dialog {
+  gap: 12px;
+}
+
+.ticket-action-dialog .dashboard-control > span {
+  margin-bottom: 6px;
+}
+
 .ticket-form-grid textarea {
   min-height: 120px;
   border-radius: 12px;
@@ -1371,6 +1590,31 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
   color: var(--wt-text);
   outline: none;
   resize: vertical;
+}
+
+.ticket-action-dialog textarea {
+  min-height: 92px;
+  resize: none;
+}
+
+.ticket-action-dialog__upload {
+  gap: 8px;
+}
+
+.ticket-action-dialog__upload input[type="file"] {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--wt-border);
+  background: #f8fbff;
+  color: var(--wt-text);
+  font-size: 13px;
+}
+
+.ticket-action-dialog__actions {
+  margin-top: 6px;
+  justify-content: flex-end;
 }
 
 .ticket-form-grid__full {
@@ -1971,6 +2215,67 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
   font-size: 12px;
 }
 
+.expenses-view-switcher {
+  padding-top: 14px;
+  padding-bottom: 14px;
+  margin-bottom: 20px;
+}
+
+.expenses-view-switcher .approval-tabs {
+  margin-bottom: 0;
+}
+
+.expenses-approval-filter-card {
+  margin-bottom: 16px;
+}
+
+.expenses-approval-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.expenses-approval-filter-actions {
+  margin-top: 16px;
+  justify-content: flex-start;
+}
+
+.approval-table__identity {
+  display: grid;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.approval-table__identity strong {
+  color: var(--wt-text);
+  line-height: 1.35;
+}
+
+.approval-table__identity span {
+  color: #71829f;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.approval-table__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 128px;
+}
+
+.expense-approval-action {
+  width: 100%;
+  justify-content: center;
+}
+
+.approval-table td:last-child,
+.approval-table th:last-child {
+  min-width: 150px;
+  vertical-align: top;
+}
+
 .approval-action-stack {
   display: flex;
   flex-wrap: wrap;
@@ -2006,7 +2311,7 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
 .forms-editor__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .forms-editor__full {
@@ -2070,6 +2375,38 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
 
 .emp-master-loading {
   margin-top: 10px;
+}
+
+.people-master-page {
+  display: grid;
+  gap: 6px;
+}
+
+.people-master-page__switcher-panel {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 4px 12px;
+  min-height: 0;
+}
+
+.people-master-switcher {
+  margin: 0;
+  border-bottom: 0;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.people-master-switcher .approval-tab-btn {
+  min-height: 38px;
+  padding: 8px 14px;
+  font-size: 14px;
+}
+
+.people-master-page__viewport {
+  display: grid;
+  gap: 8px;
+  margin-top: 0;
 }
 
 .emp-master-search {
@@ -2239,29 +2576,29 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
 }
 
 .forms-user-picker {
-  margin-top: 20px;
-  padding-top: 18px;
+  margin-top: 16px;
+  padding-top: 14px;
   border-top: 1px solid rgba(214, 226, 242, 0.95);
 }
 
 .forms-user-picker h3 {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
 }
 
 .forms-user-picker__grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .forms-user-card {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 10px;
   border: 1px solid rgba(214, 226, 242, 0.95);
   border-radius: 14px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   background: #fff;
 }
 
@@ -2277,14 +2614,14 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
 .forms-user-card strong {
   display: block;
   color: var(--wt-text);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .forms-user-card span {
   display: block;
-  margin-top: 4px;
+  margin-top: 3px;
   color: #8b97ad;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .forms-action-stack {
@@ -2602,6 +2939,30 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
   padding: 24px;
 }
 
+.attendance-submit-notice {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  text-align: center;
+  padding: 6px 4px 4px;
+}
+
+.attendance-submit-notice p {
+  margin: 0;
+  color: var(--wt-text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.55;
+}
+
+.attendance-submit-notice--success p {
+  color: #166534;
+}
+
+.attendance-submit-notice--danger p {
+  color: #b91c1c;
+}
+
 .client-ticket-details {
   display: grid;
   gap: 20px;
@@ -2718,11 +3079,22 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
 .client-ticket-chat__bubble p {
   color: var(--wt-text);
   line-height: 1.6;
+  margin: 0;
 }
 
 .client-ticket-chat__bubble span {
   color: #8b97ad;
   font-size: 12px;
+}
+
+.client-ticket-chat__bubble--client strong,
+.client-ticket-chat__bubble--client p,
+.client-ticket-chat__bubble--client span {
+  color: rgba(255, 255, 255, 0.98);
+}
+
+.client-ticket-chat__bubble--client span {
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .client-ticket-chat__composer {
@@ -3051,6 +3423,10 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
   .migration-panel__row {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .expenses-approval-grid {
+    grid-template-columns: 1fr;
   }
 
   .kv-grid {

@@ -11,11 +11,13 @@ export function MyApprovalStatusPage() {
     currentUser,
     loading,
     error,
+    activeTab,
     rows,
+    counts,
     summary,
     filters,
-    typeOptions,
     updateFilters,
+    setActiveTab,
     resetFilters,
     refresh
   } = useMyApprovalStatusData();
@@ -38,10 +40,12 @@ export function MyApprovalStatusPage() {
 
       <MyApprovalStatusSummary summary={summary} />
       <MyApprovalStatusFilters
-        filters={filters}
-        typeOptions={typeOptions}
-        onChange={updateFilters}
-        onReset={resetFilters}
+        activeTab={activeTab}
+        counts={counts}
+        filters={filters[activeTab]}
+        onTabChange={setActiveTab}
+        onChange={(patch) => updateFilters(activeTab, patch)}
+        onReset={() => resetFilters(activeTab)}
       />
       <MyApprovalStatusTable rows={rows} loading={loading} />
     </section>

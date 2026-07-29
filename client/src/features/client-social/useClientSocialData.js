@@ -9,16 +9,22 @@ import {
 } from '@/features/client-social/api';
 import {
   persistClientSocialId,
+  resolveClientSocialRange,
   readStoredClientSocialId
 } from '@/features/client-social/services/clientSocialPresentation';
 
 export function useClientSocialData() {
   const { client } = useClientAuth();
   const authenticatedClientId = String(client?.Client_Id || client?.['Client ID'] || '').trim().toUpperCase();
+  const authenticatedClientName = String(client?.['Client Name'] || client?.clientName || '').trim();
   const [clientId, setClientIdState] = useState(() => readStoredClientSocialId() || authenticatedClientId);
   const [filters, setFilters] = useState({
     platform: '',
-    status: ''
+    status: '',
+    search: '',
+    range: 'all',
+    customStart: '',
+    customEnd: ''
   });
   const [state, setState] = useState({
     loading: true,
@@ -55,7 +61,8 @@ export function useClientSocialData() {
 
       setState((current) => ({ ...current, loading: true, error: null }));
       try {
-        const payload = await fetchClientSocialTasks(clientId, null, null);
+        const resolved = resolveClientSocialRange(filters.range, filters.customStart, filters.customEnd);
+        const payload = await fetchClientSocialTasks(clientId, resolved.startDate, resolved.endDate);
         if (!alive) return;
         setState({
           loading: false,
@@ -76,13 +83,26 @@ export function useClientSocialData() {
     return () => {
       alive = false;
     };
-  }, [clientId, refreshVersion]);
+  }, [clientId, filters.range, filters.customStart, filters.customEnd, refreshVersion]);
 
   const visibleRows = useMemo(() => {
     return state.rows.filter((row) => {
       const matchesPlatform = !filters.platform || String(row.Platform || '').toLowerCase() === filters.platform.toLowerCase();
       const matchesStatus = !filters.status || String(row.Status || '').toLowerCase() === filters.status.toLowerCase();
-      return matchesPlatform && matchesStatus;
+      const haystack = [
+        row['Post ID'],
+        row.ID,
+        row.Platform,
+        row['Content Type'],
+        row.Description,
+        row.Caption,
+        row.Status
+      ]
+        .map((value) => String(value || '').toLowerCase())
+        .join(' ');
+      const search = String(filters.search || '').trim().toLowerCase();
+      const matchesSearch = !search || haystack.includes(search);
+      return matchesPlatform && matchesStatus && matchesSearch;
     });
   }, [state.rows, filters]);
 
@@ -103,7 +123,14 @@ export function useClientSocialData() {
   }
 
   function resetFilters() {
-    setFilters({ platform: '', status: '' });
+    setFilters({
+      platform: '',
+      status: '',
+      search: '',
+      range: 'all',
+      customStart: '',
+      customEnd: ''
+    });
   }
 
   function refresh() {
@@ -157,7 +184,7 @@ export function useClientSocialData() {
       () => updateClientSocialStatus(row['Post ID'] || row.ID, newStatus, remarks, {
         Client_Id: authenticatedClientId,
         'Client ID': authenticatedClientId,
-        'Client Name': client?.['Client Name'] || clientId
+        'Client Name': authenticatedClientName || clientId
       }),
       `Social task ${row['Post ID'] || row.ID} updated successfully.`
     );
@@ -172,6 +199,7 @@ export function useClientSocialData() {
 
   return {
     clientId,
+    clientName: authenticatedClientName,
     setClientId,
     loading: state.loading,
     error: state.error,

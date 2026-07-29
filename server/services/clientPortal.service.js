@@ -43,6 +43,13 @@ function isClosedStatus(status = '') {
     .some((term) => safe(status).toLowerCase().includes(term));
 }
 
+function isClientOriginTicket(row = {}) {
+  const remarks = first(row, ['Remarks', 'remarks'], '');
+  const normalized = safe(remarks).toLowerCase();
+  return normalized.includes('created from client portal')
+    || normalized.includes('created from mern client portal');
+}
+
 function asTicketRow(row = {}, clients = []) {
   const ticketId = first(row, ['Ticket ID', 'Task ID', 'ID', 'ticketId', 'taskId']);
   const clientId = first(row, ['Client_Id', 'Client ID', 'CustomerID', 'clientId']);
@@ -221,7 +228,9 @@ export async function createBulkTicketsWithDetails(ticketList = [], clientInfo =
 
 export async function getClientTickets(clientId, startDate, endDate, statusFilter = null) {
   const data = await getRows();
-  let items = data.tickets.filter((ticket) => eq(ticket.Client_Id, clientId)).map((ticket) => asTicketRow(ticket, data.clients));
+  let items = data.tickets
+    .filter((ticket) => eq(ticket.Client_Id, clientId) && isClientOriginTicket(ticket))
+    .map((ticket) => asTicketRow(ticket, data.clients));
   if (startDate && endDate) {
     items = items.filter((ticket) => dateInRange(first(ticket, ['Plan Date', 'Date', 'Timestamp']), startDate, endDate));
   }

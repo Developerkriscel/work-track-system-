@@ -1,4 +1,4 @@
-import { CheckIcon, CircleCheckBig, ReplyArrow, Undo2, Wrench } from '@/components/common/icons';
+import { CheckIcon, CircleCheckBig, MessageCircle, ReplyArrow, Undo2, Wrench } from '@/components/common/icons';
 import { StatusPill } from '@/components/common/StatusPill';
 import { DataTableShell, useDataTableState } from '@/components/tables';
 
@@ -7,6 +7,7 @@ function ActionIcon({ action }) {
   if (action === 'approve') return <CheckIcon className={className} />;
   if (action === 'reopen') return <Undo2 className={className} />;
   if (action === 'respond') return <ReplyArrow className={className} />;
+  if (action === 'chat') return <MessageCircle className={className} />;
   if (action === 'closed') return <CircleCheckBig className={`${className} client-ticket-table__action-icon--closed`} />;
   return <Wrench className={`${className} client-ticket-table__action-icon--muted`} />;
 }
@@ -14,7 +15,7 @@ function ActionIcon({ action }) {
 function actionButtonClass(action) {
   if (action === 'approve') return 'client-ticket-table__icon-btn client-ticket-table__icon-btn--approve';
   if (action === 'reopen') return 'client-ticket-table__icon-btn client-ticket-table__icon-btn--reopen';
-  if (action === 'respond') return 'client-ticket-table__reply-btn';
+  if (action === 'respond' || action === 'chat') return 'client-ticket-table__reply-btn';
   return 'client-ticket-table__icon-indicator';
 }
 
@@ -25,6 +26,7 @@ export function ClientTicketTable({
   latestUpdatePreview,
   loading,
   onApprove,
+  onChat,
   onOpenDetails,
   onReopen,
   onRespond,
@@ -165,6 +167,15 @@ export function ClientTicketTable({
                           <span>Reply</span>
                         </button>
                       ) : null}
+                      <button
+                        type="button"
+                        className={actionButtonClass('chat')}
+                        disabled={submitting}
+                        onClick={() => onChat(row)}
+                      >
+                        <ActionIcon action="chat" />
+                        <span>Chat</span>
+                      </button>
                       {canApprove ? (
                         <button
                           type="button"

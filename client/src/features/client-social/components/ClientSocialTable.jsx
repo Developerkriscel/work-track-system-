@@ -1,5 +1,7 @@
 import { StatusPill } from '@/components/common/StatusPill';
 import {
+  canApproveClientSocial,
+  canRequestChangesClientSocial,
   clientSocialStatusTone,
   formatClientSocialDate
 } from '@/features/client-social/services/clientSocialPresentation';
@@ -40,12 +42,16 @@ export function ClientSocialTable({ rows = [], submitting, onOpenDetails, onAppr
                       <button type="button" className="attendance-cta attendance-cta--gray" onClick={() => onOpenDetails(row)}>
                         Details
                       </button>
-                      <button type="button" className="attendance-cta attendance-cta--green" disabled={submitting} onClick={() => onApprove(row)}>
-                        Approve
-                      </button>
-                      <button type="button" className="attendance-cta attendance-cta--red" disabled={submitting} onClick={() => onFeedback(row)}>
-                        Request Changes
-                      </button>
+                      {canApproveClientSocial(row.Status) ? (
+                        <button type="button" className="attendance-cta attendance-cta--green" disabled={submitting} onClick={() => onApprove(row)}>
+                          Approve
+                        </button>
+                      ) : null}
+                      {canRequestChangesClientSocial(row.Status) ? (
+                        <button type="button" className="attendance-cta attendance-cta--red" disabled={submitting} onClick={() => onFeedback(row)}>
+                          Request Changes
+                        </button>
+                      ) : null}
                     </div>
                   </td>
                 </tr>

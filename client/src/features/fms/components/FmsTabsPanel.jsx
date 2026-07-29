@@ -1,8 +1,8 @@
 import { StatusPill } from '@/components/common/StatusPill';
 import { fmsTabs, showFmsTeamTabs } from '@/features/fms/services/fmsPresentation';
 
-export function FmsTabsPanel({ role, tab, tabCounts, onTabChange }) {
-  const allowTeamTabs = showFmsTeamTabs(role);
+export function FmsTabsPanel({ role, tab, tabCounts, teamTabsVisible, onTabChange }) {
+  const allowTeamTabs = showFmsTeamTabs(role) && teamTabsVisible;
 
   return (
     <article className="migration-panel migration-panel--full">

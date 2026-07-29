@@ -8,6 +8,7 @@ export const shellNavigationOrder = [
   'clientsPortal',
   'expenses',
   'reports',
-  'admin',
+  'managementDashboard',
+  'peopleMaster',
   'settings'
 ];

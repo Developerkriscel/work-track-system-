@@ -198,6 +198,7 @@ export function ClientTicketsPage() {
               latestUpdatePreview={latestUpdatePreview}
               loading={loading}
               onApprove={handleApprove}
+              onChat={handleOpenChat}
               onOpenDetails={handleOpenDetails}
               onReopen={handleReopen}
               onRespond={handleRespond}

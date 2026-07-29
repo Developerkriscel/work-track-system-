@@ -53,6 +53,10 @@ html,body{max-width:100vw;overflow-x:hidden}
   .dashboard-table{min-width:550px}
   .ticket-table{min-width:900px;width:900px;table-layout:auto}
   .attendance-form-grid{grid-template-columns:1fr}
+  .attendance-policy-card__grid{grid-template-columns:1fr}
+  .attendance-policy-card__actions{flex-direction:column;align-items:stretch}
+  .attendance-policy-card__action-buttons{width:100%}
+  .attendance-policy-card__action-buttons .attendance-cta{width:100%;justify-content:center}
   .attendance-camera-card{width:100%}
   .attendance-camera{min-height:200px}
   .attendance-captured-photo{width:100%}
@@ -64,6 +68,7 @@ html,body{max-width:100vw;overflow-x:hidden}
   .attendance-tab{flex-shrink:0;padding:8px 14px 12px;font-size:12.5px}
   .attendance-team-toolbar{grid-template-columns:1fr}
   .attendance-team-modal__grid{grid-template-columns:1fr}
+  .attendance-time-picker{grid-template-columns:1fr 1fr 1fr}
   .emp-master-page__header{flex-direction:column;align-items:flex-start}
   .emp-master-page__actions{width:100%;justify-content:flex-start;flex-wrap:wrap}
   .emp-master-tabs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;gap:8px;padding-bottom:4px}

@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { ConfirmDialog } from '@/features/tickets/components/ConfirmDialog';
 import { StatusPill } from '@/components/common/StatusPill';
 import { TicketCreateForm } from '@/features/tickets/components/TicketCreateForm';
-import { TicketChatDialog } from '@/features/tickets/components/TicketChatDialog';
 import { TicketFilterPanel } from '@/features/tickets/components/TicketFilterPanel';
+import { TicketChatDialog } from '@/features/tickets/components/TicketChatDialog';
 import { TicketReassignDialog } from '@/features/tickets/components/TicketReassignDialog';
 import { TicketScheduleDialog } from '@/features/tickets/components/TicketScheduleDialog';
 import { TicketActionDialog } from '@/features/tickets/components/TicketActionDialog';
@@ -25,6 +25,8 @@ export function TicketSystemPage() {
     users,
     categories,
     tickets,
+    clientOriginTickets,
+    canViewClientTickets,
     filters,
     setFilters,
     applyFilters,
@@ -45,19 +47,25 @@ export function TicketSystemPage() {
   const [message, setMessage] = useState(null);
   const [reassignTicket, setReassignTicket] = useState(null);
   const [scheduleTicket, setScheduleTicket] = useState(null);
-  const [chatTicket, setChatTicket] = useState(null);
-  const [chatMessages, setChatMessages] = useState([]);
-  const [chatLoading, setChatLoading] = useState(false);
-  const [chatSending, setChatSending] = useState(false);
   const [activeTab, setActiveTab] = useState('my');
   const [actionDialog, setActionDialog] = useState(null);
   const [transferDialog, setTransferDialog] = useState(null);
   const [clientResponseTicket, setClientResponseTicket] = useState(null);
+  const [chatTicketState, setChatTicketState] = useState({ ticket: null, messages: [], loading: false, sending: false });
   const [detailsTicket, setDetailsTicket] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null); // { onConfirm }
   const role = currentUser?.Role || currentUser?.role || 'User';
+  const employeeLabel = currentUser?.['Employee Name'] && employeeId
+    ? `${currentUser['Employee Name']} | ${employeeId}`
+    : employeeId || 'Ticket Workspace';
   const canViewTeam = ['Super Admin', 'Admin', 'Manager', 'HR'].includes(role);
-  const visibleTickets = activeTab === 'team' && canViewTeam ? tickets : tickets.filter((ticket) => String(ticket['Employee ID'] || '').toLowerCase() === String(employeeId).toLowerCase());
+  const myTickets = tickets.filter((ticket) => String(ticket['Employee ID'] || '').toLowerCase() === String(employeeId).toLowerCase());
+  const teamTickets = tickets.filter((ticket) => !ticket._isClientOrigin);
+  const visibleTickets = activeTab === 'team' && canViewTeam
+    ? teamTickets
+    : activeTab === 'client' && canViewClientTickets
+      ? clientOriginTickets
+      : myTickets;
 
   const handleCreate = async (payload) => {
     const result = Array.isArray(payload) ? await submitNewTickets(payload) : await submitNewTicket(payload);
@@ -139,6 +147,54 @@ export function TicketSystemPage() {
     setScheduleTicket(ticket);
   };
 
+  const handleChatOpen = async (ticket) => {
+    const ticketId = ticket?.['Ticket ID'];
+    if (!ticketId) return;
+    setChatTicketState({ ticket, messages: [], loading: true, sending: false });
+    try {
+      const response = await loadTicketMessages(ticketId);
+      if (response?.success === false) {
+        setMessage({ tone: 'danger', text: response.message || 'Unable to load ticket discussion.' });
+        setChatTicketState({ ticket: null, messages: [], loading: false, sending: false });
+        return;
+      }
+      setChatTicketState({
+        ticket,
+        messages: response.messages || response.data || [],
+        loading: false,
+        sending: false
+      });
+    } catch (errorMessage) {
+      setMessage({ tone: 'danger', text: errorMessage.message || 'Unable to load ticket discussion.' });
+      setChatTicketState({ ticket: null, messages: [], loading: false, sending: false });
+    }
+  };
+
+  const handleChatSend = async (messageText) => {
+    const ticketId = chatTicketState.ticket?.['Ticket ID'];
+    if (!ticketId) return { success: false };
+    setChatTicketState((current) => ({ ...current, sending: true }));
+    try {
+      const response = await submitTicketMessage(ticketId, messageText);
+      if (response?.success === false) {
+        setMessage({ tone: 'danger', text: response.message || 'Unable to send message.' });
+        setChatTicketState((current) => ({ ...current, sending: false }));
+        return response;
+      }
+      const refreshResponse = await loadTicketMessages(ticketId);
+      setChatTicketState((current) => ({
+        ...current,
+        messages: refreshResponse.messages || refreshResponse.data || [],
+        sending: false
+      }));
+      return response;
+    } catch (errorMessage) {
+      setMessage({ tone: 'danger', text: errorMessage.message || 'Unable to send message.' });
+      setChatTicketState((current) => ({ ...current, sending: false }));
+      return { success: false, message: errorMessage.message };
+    }
+  };
+
   const handleScheduleSubmit = async (tat, planDate, reason) => {
     const ticket = scheduleTicket;
     const result = await submitSchedule(ticket['Ticket ID'], tat, planDate, reason);
@@ -162,32 +218,6 @@ export function TicketSystemPage() {
     if (result.success) setReassignTicket(null);
   };
 
-  const openChat = async (ticket) => {
-    setChatTicket(ticket);
-    setChatMessages([]);
-    setChatLoading(true);
-    try {
-      const result = await loadTicketMessages(ticket['Ticket ID']);
-      setChatMessages(result.messages || result.data || []);
-    } catch (error) {
-      setMessage({ tone: 'danger', text: error.message || 'Unable to load ticket discussion.' });
-    } finally {
-      setChatLoading(false);
-    }
-  };
-
-  const sendChat = async (text) => {
-    setChatSending(true);
-    const result = await submitTicketMessage(chatTicket['Ticket ID'], text);
-    if (result.success) {
-      const latest = await loadTicketMessages(chatTicket['Ticket ID']);
-      setChatMessages(latest.messages || latest.data || []);
-    }
-    setChatSending(false);
-    if (!result.success) setMessage({ tone: 'danger', text: result.message });
-    return result;
-  };
-
   const handleToggleCreateForm = () => {
     const openTicket = visibleTickets.find(
       (t) =>
@@ -208,7 +238,7 @@ export function TicketSystemPage() {
 
   return (
     <section className="page-card">
-
+      <TicketHeader employeeLabel={employeeLabel} />
 
       <TicketFilterPanel
         showCreateForm={showCreateForm}
@@ -261,6 +291,12 @@ export function TicketSystemPage() {
                 Team Tickets
               </button>
             ) : null}
+            {canViewClientTickets ? (
+              <button type="button" className={activeTab === 'client' ? 'view-mode-tab view-mode-tab--active' : 'view-mode-tab'} onClick={() => setActiveTab('client')}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="view-mode-tab__icon"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+                Client Tickets
+              </button>
+            ) : null}
           </div>
           <StatusPill tone={loading ? 'neutral' : 'info'}>
             {loading ? 'Refreshing' : `${visibleTickets.length} tickets`}
@@ -273,9 +309,9 @@ export function TicketSystemPage() {
           onStatusAction={handleStatusAction}
           onScheduleAction={handleScheduleAction}
           onReassign={setReassignTicket}
-          onChat={openChat}
           onApprovalAction={handleApprovalAction}
           onApprovalTransfer={setTransferDialog}
+          onChat={handleChatOpen}
           onClientResponse={(ticket, mode) => {
             if (mode === 'client-send') {
               setReassignTicket({ ticket, mode: 'client' });
@@ -288,10 +324,19 @@ export function TicketSystemPage() {
       </article>
       {reassignTicket ? <TicketReassignDialog ticket={reassignTicket.ticket || reassignTicket} mode={reassignTicket.mode || 'user'} users={users} saving={submitting} onClose={() => setReassignTicket(null)} onSubmit={handleReassign} /> : null}
       {scheduleTicket ? <TicketScheduleDialog ticket={scheduleTicket} saving={submitting} onClose={() => setScheduleTicket(null)} onSubmit={handleScheduleSubmit} /> : null}
-      {chatTicket ? <TicketChatDialog ticket={chatTicket} messages={chatMessages} loading={chatLoading} sending={chatSending} onClose={() => setChatTicket(null)} onSend={sendChat} /> : null}
       {actionDialog ? <TicketActionDialog ticket={actionDialog.ticket} action={actionDialog.action} saving={submitting} onClose={() => setActionDialog(null)} onSubmit={submitActionDialog} /> : null}
       {transferDialog ? <TicketApprovalTransferDialog ticket={transferDialog} users={users} saving={submitting} onClose={() => setTransferDialog(null)} onSubmit={async (target, remarks) => { const result = await submitApprovalTransfer(transferDialog['Ticket ID'], target, remarks); setMessage({ tone: result.success ? 'success' : 'danger', text: result.success ? 'Approval transferred.' : result.message }); if (result.success) setTransferDialog(null); }} /> : null}
       {clientResponseTicket ? <TicketClientResponseDialog ticket={clientResponseTicket} saving={submitting} onClose={() => setClientResponseTicket(null)} onSubmit={async (responseText, planDate, attachment) => { const result = await submitClientTicketResponse(clientResponseTicket['Ticket ID'], responseText, planDate, attachment); setMessage({ tone: result.success ? 'success' : 'danger', text: result.success ? 'Client response saved.' : result.message }); if (result.success) setClientResponseTicket(null); }} /> : null}
+      {chatTicketState.ticket ? (
+        <TicketChatDialog
+          ticket={chatTicketState.ticket}
+          messages={chatTicketState.messages}
+          loading={chatTicketState.loading}
+          sending={chatTicketState.sending}
+          onClose={() => setChatTicketState({ ticket: null, messages: [], loading: false, sending: false })}
+          onSend={handleChatSend}
+        />
+      ) : null}
       {detailsTicket ? <TicketDetailsDialog ticket={detailsTicket} onClose={() => setDetailsTicket(null)} /> : null}
       {confirmDialog ? (
         <ConfirmDialog

@@ -75,6 +75,8 @@ function normalizeEmpMasterRow(input = {}, category = 'Master') {
     'Employee Name': name,
     Designation: designation,
     Role: first(input, ['Role', 'Designation', 'role', 'designation'], designation),
+    'Manager ID': first(input, ['Manager ID', 'Manager', 'managerId']),
+    'Task Approver': first(input, ['Task Approver', 'Approver', 'taskApprover']),
     'Date of Joining': joiningDate,
     'Joining Date': joiningDate,
     'Phone No': mobile,
@@ -135,10 +137,10 @@ async function syncToLoginUser(row, adminId, portalPassword = '') {
     'User ID': loginId,
     'Employee Name': row.Name || row['Employee Name'],
     Department: row.Department || first(existing, ['Department', 'department']) || '',
-    Role: first(existing, ['Role', 'role'], 'User'),
+    Role: first(row, ['Role', 'Designation', 'role', 'designation'], first(existing, ['Role', 'role'], 'User')),
     Status: userStatusForEmp(row.Status),
-    'Manager ID': first(existing, ['Manager ID', 'Manager', 'managerId']),
-    'Task Approver': first(existing, ['Task Approver', 'taskApprover']),
+    'Manager ID': first(row, ['Manager ID', 'Manager', 'managerId'], first(existing, ['Manager ID', 'Manager', 'managerId'])),
+    'Task Approver': first(row, ['Task Approver', 'Approver', 'taskApprover'], first(existing, ['Task Approver', 'taskApprover'])),
     'Mobile Number': row['Phone No'] || row['Mobile Number'] || first(existing, ['Mobile Number', 'Mobile', 'mobile']) || '',
     Email: row['Official mail id if any'] || row.Email || row['Personal Email ID'] || first(existing, ['Email', 'email']) || ''
   };

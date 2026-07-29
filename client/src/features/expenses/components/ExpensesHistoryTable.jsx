@@ -1,12 +1,18 @@
 import { StatusPill } from '@/components/common/StatusPill';
 import { expenseStatusTone, formatExpenseDate } from '@/features/expenses/services/expensesPresentation';
 
-export function ExpensesHistoryTable({ expenses = [] }) {
+export function ExpensesHistoryTable({ expenses = [], title = 'My Recent Expenses' }) {
+  const rows = [...expenses].sort((left, right) => {
+    const rightTime = new Date(right?.['Last Update Date'] || right?.Date || 0).getTime() || 0;
+    const leftTime = new Date(left?.['Last Update Date'] || left?.Date || 0).getTime() || 0;
+    return rightTime - leftTime;
+  });
+
   return (
     <article className="migration-panel migration-panel--full">
       <div className="migration-panel__row">
-        <h2>My Recent Expenses</h2>
-        <StatusPill tone="info">{expenses.length} items</StatusPill>
+        <h2>{title}</h2>
+        <StatusPill tone="info">{rows.length} items</StatusPill>
       </div>
 
       <div className="dashboard-table-wrap">
@@ -22,8 +28,8 @@ export function ExpensesHistoryTable({ expenses = [] }) {
             </tr>
           </thead>
           <tbody>
-            {expenses.length ? (
-              expenses.map((expense) => (
+            {rows.length ? (
+              rows.map((expense) => (
                 <tr key={expense.ExpenseID || expense._id}>
                   <td>{formatExpenseDate(expense.Date)}</td>
                   <td>{expense.Type || '-'}</td>

@@ -146,6 +146,10 @@
   zoom: 0.8;
 }
 
+.app-shell--client .shell-main__inner--client {
+  zoom: 0.9;
+}
+
 .topbar {
   height: var(--wt-topbar-height);
   background: rgba(255, 255, 255, 0.96);

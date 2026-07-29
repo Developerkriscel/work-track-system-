@@ -1,13 +1,15 @@
 import express from 'express';
 import {
   checkUserAttendanceActive,
+  getAttendanceLocationPolicyForUser,
   enforceAttendanceGate,
   getAttendanceForUser,
   recordAttendance,
   getTeamAttendanceForReviewer,
   submitIntimation,
   submitLeaveRequest,
-  updateTeamAttendanceEntry
+  updateTeamAttendanceEntry,
+  updateAttendanceLocationPolicy
 } from '../services/attendance.service.js';
 
 const router = express.Router();
@@ -78,6 +80,24 @@ router.post('/active-status', async (req, res) => {
 router.post('/gate', async (req, res) => {
   try {
     const result = await enforceAttendanceGate(req.auth.sub);
+    if (!result.success) return res.status(403).json(result);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get('/location-policy', async (_req, res) => {
+  try {
+    res.json(await getAttendanceLocationPolicyForUser());
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/location-policy', async (req, res) => {
+  try {
+    const result = await updateAttendanceLocationPolicy(req.auth.sub, req.auth.role, req.body.payload || {});
     if (!result.success) return res.status(403).json(result);
     res.json(result);
   } catch (error) {

@@ -1,5 +1,6 @@
 import express from 'express';
 import {
+  deleteUserByEmployeeId,
   getAllManagersList,
   getAllUsersForAdmin,
   saveOrUpdateUser
@@ -49,6 +50,19 @@ router.post('/next-code', async (req, res) => {
 router.post('/save-user', async (req, res) => {
   try {
     const result = await saveOrUpdateUser(req.body.userData || {}, req.auth.sub);
+    if (!result.success) return res.status(400).json(result);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/delete-user', async (req, res) => {
+  try {
+    const result = await deleteUserByEmployeeId(
+      req.body.employeeId || req.body.userId || req.body.identifier,
+      req.auth.role
+    );
     if (!result.success) return res.status(400).json(result);
     res.json(result);
   } catch (error) {

@@ -11,7 +11,7 @@ import { useState } from 'react';
 export function ClientSocialPage() {
   const {
     clientId,
-    setClientId,
+    clientName,
     loading,
     error,
     rows,
@@ -57,7 +57,7 @@ export function ClientSocialPage() {
 
   return (
     <section className="page-card">
-      <ClientSocialHeader clientId={clientId} onClientIdChange={setClientId} onRefresh={refresh} />
+      <ClientSocialHeader clientId={clientId} clientName={clientName} onRefresh={refresh} />
 
       {error ? (
         <div className="dashboard-banner dashboard-banner--error">{error}</div>
@@ -83,6 +83,8 @@ export function ClientSocialPage() {
       />
 
       <ClientSocialDetailsPanel details={details} submitting={submitting} onClose={closeDetails} onAddRemark={handleAddRemark} />
+
+      {loading ? <div className="dashboard-banner">Loading social tasks...</div> : null}
 
       <ClientSocialTable
         rows={rows}

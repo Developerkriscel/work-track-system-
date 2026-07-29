@@ -1,15 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchFmsTasks, markFmsTaskDone } from '@/features/fms/api';
+import { createFmsTask, fetchFmsAssignableUsers, fetchFmsTasks, markFmsTaskDone } from '@/features/fms/api';
 import { useAuth } from '@/features/auth/AuthProvider';
 
 function normalizedDate(value) {
   if (!value) return null;
-  const date = new Date(`${value}T00:00:00`);
+  const raw = String(value).trim();
+  const ymd = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (ymd) return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+  const dmy = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+  if (dmy) return new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+  const date = new Date(raw);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function isCompleted(task) {
-  return !!(task.actualDate || task['Done Date'] || '').toString().trim();
+  const doneDate = (task.actualDate || task['Done Date'] || '').toString().trim();
+  if (doneDate) return true;
+  return /complete|done/i.test(String(task.Status || task.status || '').trim());
 }
 
 function classifyTask(task, today) {
@@ -25,6 +32,15 @@ function classifyTask(task, today) {
     _future: future,
     _pending: pending
   };
+}
+
+function sortTasks(tasks) {
+  return [...tasks].sort((left, right) => {
+    const leftDate = left._planDateObj?.getTime() || 0;
+    const rightDate = right._planDateObj?.getTime() || 0;
+    if (left._completed !== right._completed) return Number(left._completed) - Number(right._completed);
+    return leftDate - rightDate;
+  });
 }
 
 function visibleByTab(tasks, tab) {
@@ -60,7 +76,31 @@ function applyFilters(tasks, filters) {
       !filters.date ||
       String(task.planDate || task['Plan Date'] || task.Date || '').trim() === filters.date;
 
-    return employeeMatch && categoryMatch && dateMatch;
+    const searchHaystack = [
+      task.empId,
+      task.who,
+      task.what,
+      task.when,
+      task.how,
+      task.fmsName,
+      task['Client Name'],
+      task.Client,
+      task.taskName,
+      task['Task Description'],
+      task.Description,
+      task.stepNo,
+      task.Status,
+      task['On Time Status']
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    const searchMatch =
+      !filters.search ||
+      searchHaystack.includes(String(filters.search || '').trim().toLowerCase());
+
+    return employeeMatch && categoryMatch && dateMatch && searchMatch;
   });
 }
 
@@ -68,9 +108,11 @@ export function useFmsData() {
   const { user } = useAuth();
   const employeeId = user?.['Employee ID'] || '';
   const [tab, setTab] = useState('my-pending');
-  const [filters, setFilters] = useState({ emp: '', name: '', date: '' });
+  const [filters, setFilters] = useState({ emp: '', name: '', date: '', search: '' });
   const [state, setState] = useState({ loading: true, error: null, payload: null });
   const [submitting, setSubmitting] = useState(false);
+  const [assignableUsers, setAssignableUsers] = useState([]);
+  const [assignableLoading, setAssignableLoading] = useState(false);
   const refreshKey = useRef(0);
 
   const reload = () => {
@@ -119,21 +161,66 @@ export function useFmsData() {
   }, []);
 
   const tasks = useMemo(
-    () => (state.payload?.data || []).map((task) => classifyTask(task, today)),
+    () => sortTasks((state.payload?.data || []).map((task) => classifyTask(task, today))),
     [state.payload, today]
   );
 
   const meta = state.payload?.meta || { role: 'User', teamCount: 0 };
+  const canCreateFms = Boolean(meta.canCreate);
+
+  useEffect(() => {
+    if (!employeeId || !canCreateFms) {
+      setAssignableUsers([]);
+      setAssignableLoading(false);
+      return undefined;
+    }
+
+    let alive = true;
+
+    async function loadAssignableUsers() {
+      setAssignableLoading(true);
+      try {
+        const response = await fetchFmsAssignableUsers(employeeId);
+        if (!alive) return;
+        setAssignableUsers(Array.isArray(response.data) ? response.data : []);
+      } catch (error) {
+        if (!alive) return;
+        setAssignableUsers([]);
+      } finally {
+        if (alive) setAssignableLoading(false);
+      }
+    }
+
+    loadAssignableUsers();
+    return () => {
+      alive = false;
+    };
+  }, [employeeId, canCreateFms]);
+
   const visibleTasks = useMemo(
     () => applyFilters(visibleByTab(tasks, tab), filters),
     [tasks, tab, filters]
   );
 
+  const teamTabsVisible = useMemo(
+    () => ['team-pending', 'team-future', 'team-completed'].some((key) => (tabCountsCache(tasks)[key] || 0) > 0),
+    [tasks]
+  );
+
   const employeeOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(tasks.map((task) => String(task.empId || task['Employee ID'] || '').trim()).filter(Boolean))
-      ),
+    () => {
+      const seen = new Map();
+      tasks
+        .filter((task) => task._isTeamTask)
+        .forEach((task) => {
+          const value = String(task.empId || task['Employee ID'] || '').trim();
+          if (!value || seen.has(value)) return;
+          const person = String(task.who || task['Employee Name'] || value).trim();
+          const label = person && person !== value ? `${person} (${value})` : value;
+          seen.set(value, { value, label });
+        });
+      return Array.from(seen.values());
+    },
     [tasks]
   );
 
@@ -146,16 +233,15 @@ export function useFmsData() {
   );
 
   const tabCounts = useMemo(
-    () => ({
-      'my-pending': tasks.filter((task) => task._isMyTask && task._pending).length,
-      'my-future': tasks.filter((task) => task._isMyTask && task._future).length,
-      'my-completed': tasks.filter((task) => task._isMyTask && task._completed).length,
-      'team-pending': tasks.filter((task) => task._isTeamTask && task._pending).length,
-      'team-future': tasks.filter((task) => task._isTeamTask && task._future).length,
-      'team-completed': tasks.filter((task) => task._isTeamTask && task._completed).length
-    }),
+    () => tabCountsCache(tasks),
     [tasks]
   );
+
+  useEffect(() => {
+    if (!teamTabsVisible && tab.startsWith('team-')) {
+      setTab('my-pending');
+    }
+  }, [teamTabsVisible, tab]);
 
   async function completeTask(rowId, remarks) {
     setSubmitting(true);
@@ -165,6 +251,19 @@ export function useFmsData() {
       return { success: true, response };
     } catch (error) {
       return { success: false, message: error.message || 'FMS complete failed.' };
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function createTask(payload) {
+    setSubmitting(true);
+    try {
+      const response = await createFmsTask(payload, employeeId);
+      reload();
+      return { success: true, response };
+    } catch (error) {
+      return { success: false, message: error.message || 'FMS create failed.' };
     } finally {
       setSubmitting(false);
     }
@@ -180,11 +279,28 @@ export function useFmsData() {
     setTab,
     filters,
     setFilters,
+    reload,
     tasks: visibleTasks,
     meta,
+    canCreateFms,
+    assignableUsers,
+    assignableLoading,
+    teamTabsVisible,
     employeeOptions,
     categoryOptions,
     tabCounts,
-    completeTask
+    completeTask,
+    createTask
+  };
+}
+
+function tabCountsCache(tasks) {
+  return {
+    'my-pending': tasks.filter((task) => task._isMyTask && task._pending).length,
+    'my-future': tasks.filter((task) => task._isMyTask && task._future).length,
+    'my-completed': tasks.filter((task) => task._isMyTask && task._completed).length,
+    'team-pending': tasks.filter((task) => task._isTeamTask && task._pending).length,
+    'team-future': tasks.filter((task) => task._isTeamTask && task._future).length,
+    'team-completed': tasks.filter((task) => task._isTeamTask && task._completed).length
   };
 }

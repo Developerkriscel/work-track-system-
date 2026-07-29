@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { AppModal } from '@/components/modals';
 import { StatusPill } from '@/components/common/StatusPill';
 import { AdminEditor } from '@/features/admin/components/AdminEditor';
 import { AdminHeader } from '@/features/admin/components/AdminHeader';
@@ -5,10 +7,13 @@ import { AdminSummaryCards } from '@/features/admin/components/AdminSummaryCards
 import { AdminTabsAndFilters } from '@/features/admin/components/AdminTabsAndFilters';
 import { AdminUsersTable } from '@/features/admin/components/AdminUsersTable';
 import { useAdminData } from '@/features/admin/useAdminData';
+import { ConfirmDialog } from '@/features/tickets/components/ConfirmDialog';
 
 export function AdminPage() {
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const {
     employeeId,
+    currentRole,
     setEmployeeId,
     activeTab,
     setActiveTab,
@@ -16,6 +21,7 @@ export function AdminPage() {
     error,
     message,
     submitting,
+    deletingId,
     users,
     allUsersCount,
     summary,
@@ -32,9 +38,11 @@ export function AdminPage() {
     editor,
     openAddEditor,
     openEditEditor,
+    openViewEditor,
     closeEditor,
     updateEditor,
     submitEditor,
+    removeUser,
     refresh
   } = useAdminData();
 
@@ -77,21 +85,49 @@ export function AdminPage() {
       />
 
       {editor.open ? (
-        <AdminEditor
-          editor={editor}
-          managerOptions={managerOptions}
-          roleOptions={roleOptions}
-          statusOptions={statusOptions}
-          departmentOptions={departmentOptions}
-          categoryOptions={categoryOptions}
-          submitting={submitting}
-          onUpdate={updateEditor}
+        <AppModal
+          title={editor.mode === 'view' ? 'User Details' : editor.mode === 'edit' ? 'Edit User Details' : 'Add New Employee'}
           onClose={closeEditor}
-          onSubmit={submitEditor}
-        />
+          width="860px"
+        >
+          <AdminEditor
+            editor={editor}
+            managerOptions={managerOptions}
+            roleOptions={roleOptions}
+            statusOptions={statusOptions}
+            departmentOptions={departmentOptions}
+            categoryOptions={categoryOptions}
+            submitting={submitting}
+            onUpdate={updateEditor}
+            onClose={closeEditor}
+            onSubmit={submitEditor}
+          />
+        </AppModal>
       ) : null}
 
-      <AdminUsersTable rows={users} count={allUsersCount} onEdit={(row) => openEditEditor('users', row)} />
+      <AdminUsersTable
+        rows={users}
+        count={allUsersCount}
+        currentRole={currentRole}
+        deletingId={deletingId}
+        onView={(row) => openViewEditor('users', row)}
+        onEdit={(row) => openEditEditor('users', row)}
+        onDelete={(row) => setDeleteTarget(row)}
+      />
+
+      {deleteTarget ? (
+        <ConfirmDialog
+          title="Delete User?"
+          message={`Delete ${deleteTarget['Employee Name'] || 'this user'} (${deleteTarget['Employee ID'] || ''})? This action cannot be undone.`}
+          confirmLabel="Delete User"
+          tone="danger"
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={async () => {
+            await removeUser(deleteTarget);
+            setDeleteTarget(null);
+          }}
+        />
+      ) : null}
     </section>
   );
 }

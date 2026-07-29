@@ -71,12 +71,12 @@ export function useClientsPortalData() {
     };
   }, [refreshVersion]);
 
-  const isAdmin = useMemo(
-    () => /admin|super admin|hr/i.test(String(user?.Role || '')),
+  const canManageClients = useMemo(
+    () => /^(admin|super admin)$/i.test(String(user?.Role || '').trim()),
     [user?.Role]
   );
   const isSuperAdmin = useMemo(
-    () => /super admin/i.test(String(user?.Role || '')),
+    () => /^super admin$/i.test(String(user?.Role || '').trim()),
     [user?.Role]
   );
 
@@ -200,7 +200,8 @@ export function useClientsPortalData() {
     error: state.error,
     clients: filteredClients,
     allClientsCount: state.clients.length,
-    isAdmin,
+    isAdmin: canManageClients,
+    canManageClients,
     isSuperAdmin,
     submitting,
     message,

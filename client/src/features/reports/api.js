@@ -14,9 +14,9 @@ export async function fetchFmsReportData(employeeId, role, startDate, endDate) {
   });
 }
 
-export async function exportReportForWeb(format, sheetName, employeeId, role, startDate, endDate) {
+export async function exportReportForWeb(format, sheetName, employeeId, role, startDate, endDate, filters = {}) {
   return httpClient('/api/reports/export', {
     method: 'POST',
-    body: JSON.stringify({ format, sheetName, employeeId, role, startDate, endDate })
+    body: JSON.stringify({ format, sheetName, employeeId, role, startDate, endDate, filters })
   });
 }

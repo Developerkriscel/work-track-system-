@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchTeamAttendance,
   fetchAttendanceForUser,
+  fetchAttendanceLocationPolicy,
   submitAttendanceRecord,
+  saveAttendanceLocationPolicy,
   submitIntimation,
   submitLeaveRequest,
   updateTeamAttendance
@@ -216,8 +218,10 @@ export function useAttendanceData() {
   const [range, setRange] = useState('today');
   const [customStart, setCustomStart] = useState(toYmd(new Date()));
   const [customEnd, setCustomEnd] = useState(toYmd(new Date()));
+  const [teamFilterDate, setTeamFilterDate] = useState(todayYmd());
   const [attendanceState, setAttendanceState] = useState({ loading: true, error: null, rows: [], leaves: [], intimations: [] });
   const [teamAttendanceState, setTeamAttendanceState] = useState({ loading: false, error: null, rows: [], users: [] });
+  const [locationPolicyState, setLocationPolicyState] = useState({ loading: true, error: null, data: null, saving: false });
   const [todayRows, setTodayRows] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const refreshTick = useRef(0);
@@ -247,12 +251,14 @@ export function useAttendanceData() {
         setTeamAttendanceState((current) => ({ ...current, loading: true, error: null }));
       }
       try {
+        const teamStartDate = teamFilterDate || bounds.startDate;
+        const teamEndDate = teamFilterDate || bounds.endDate;
         const requests = [
           fetchAttendanceForUser(employeeId, bounds.startDate, bounds.endDate),
           fetchAttendanceForUser(employeeId, todayYmd(), todayYmd())
         ];
         if (canManageTeamAttendance) {
-          requests.push(fetchTeamAttendance(bounds.startDate, bounds.endDate));
+          requests.push(fetchTeamAttendance(teamStartDate, teamEndDate));
         }
         const [payload, todayPayload, teamPayload] = await Promise.all(requests);
         if (!alive) return;
@@ -274,6 +280,24 @@ export function useAttendanceData() {
         } else {
           setTeamAttendanceState({ loading: false, error: null, rows: [], users: [] });
         }
+        try {
+          const policyPayload = await fetchAttendanceLocationPolicy();
+          if (!alive) return;
+          setLocationPolicyState({
+            loading: false,
+            error: null,
+            data: policyPayload?.data || null,
+            saving: false
+          });
+        } catch (policyError) {
+          if (!alive) return;
+          setLocationPolicyState({
+            loading: false,
+            error: policyError.message || 'Failed to load attendance location policy.',
+            data: null,
+            saving: false
+          });
+        }
       } catch (error) {
         if (!alive) return;
         setAttendanceState({
@@ -283,6 +307,11 @@ export function useAttendanceData() {
           leaves: [],
           intimations: []
         });
+        setLocationPolicyState((current) => ({
+          ...current,
+          loading: false,
+          error: error.message || 'Failed to load attendance location policy.'
+        }));
         if (canManageTeamAttendance) {
           setTeamAttendanceState({
             loading: false,
@@ -298,7 +327,7 @@ export function useAttendanceData() {
     return () => {
       alive = false;
     };
-  }, [employeeId, bounds.startDate, bounds.endDate, canManageTeamAttendance, refreshTick.current]);
+  }, [employeeId, bounds.startDate, bounds.endDate, canManageTeamAttendance, teamFilterDate, refreshTick.current]);
 
   const groupedRows = useMemo(
     () => groupAttendanceRows(attendanceState.rows, bounds),
@@ -398,6 +427,27 @@ export function useAttendanceData() {
     }
   }
 
+  async function saveLocationPolicy(payload) {
+    if (!canManageTeamAttendance) {
+      return { success: false, message: 'Only Admin, Super Admin, or HR can update the attendance location policy.' };
+    }
+    setLocationPolicyState((current) => ({ ...current, saving: true, error: null }));
+    try {
+      const response = await saveAttendanceLocationPolicy(payload);
+      if (!response?.success) return { success: false, message: response?.message || 'Policy update failed.' };
+      setLocationPolicyState((current) => ({
+        ...current,
+        data: response.data || response.item || current.data,
+        saving: false
+      }));
+      reload();
+      return { success: true, message: response.message, item: response.item };
+    } catch (error) {
+      setLocationPolicyState((current) => ({ ...current, saving: false, error: error.message || 'Policy update failed.' }));
+      return { success: false, message: error.message || 'Policy update failed.' };
+    }
+  }
+
   return {
     employeeId,
     currentUser: user || null,
@@ -409,6 +459,8 @@ export function useAttendanceData() {
     setCustomStart,
     customEnd,
     setCustomEnd,
+    teamFilterDate,
+    setTeamFilterDate,
     bounds,
     attendanceLoading: attendanceState.loading,
     attendanceError: attendanceState.error,
@@ -419,11 +471,16 @@ export function useAttendanceData() {
     teamAttendanceError: teamAttendanceState.error,
     teamAttendanceRows: teamAttendanceState.rows,
     teamAttendanceUsers: teamAttendanceState.users,
+    locationPolicy: locationPolicyState.data,
+    locationPolicyLoading: locationPolicyState.loading,
+    locationPolicyError: locationPolicyState.error,
+    locationPolicySaving: locationPolicyState.saving,
     submitting,
     session,
     recordPunch,
     createLeave,
     createIntimation,
-    saveTeamAttendance
+    saveTeamAttendance,
+    saveLocationPolicy
   };
 }

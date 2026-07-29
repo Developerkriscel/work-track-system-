@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  deleteUserAccount,
   fetchAllManagersList,
   fetchAllUsersForAdmin,
   fetchEmpMasterData,
@@ -60,6 +61,7 @@ function safeArray(value) {
 export function useAdminData() {
   const { user } = useAuth();
   const authenticatedEmployeeId = user?.['Employee ID'] || '';
+  const currentRole = user?.Role || user?.role || '';
   const [employeeId, setEmployeeIdState] = useState(() => readStoredEmployeeId(authenticatedEmployeeId));
   const [activeTab, setActiveTab] = useState('users');
   const [filters, setFilters] = useState({
@@ -77,6 +79,7 @@ export function useAdminData() {
   });
   const [message, setMessage] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState('');
   const [editor, setEditor] = useState({
     open: false,
     mode: 'edit',
@@ -257,6 +260,15 @@ export function useAdminData() {
     });
   }
 
+  function openViewEditor(source, row) {
+    setEditor({
+      open: true,
+      mode: 'view',
+      source,
+      form: normalizeUser(row)
+    });
+  }
+
   async function runAction(action, successText) {
     setSubmitting(true);
     setMessage(null);
@@ -302,8 +314,28 @@ export function useAdminData() {
     return result;
   }
 
+  async function removeUser(row) {
+    const normalized = normalizeUser(row);
+    const targetId = normalized['Employee ID'];
+    if (!targetId) {
+      setMessage({ tone: 'danger', text: 'Employee ID is required.' });
+      return { success: false, message: 'Employee ID is required.' };
+    }
+
+    setDeletingId(targetId);
+    try {
+      return await runAction(
+        () => deleteUserAccount(targetId, employeeId),
+        `${normalized['Employee Name'] || targetId} (${targetId}) deleted successfully.`
+      );
+    } finally {
+      setDeletingId('');
+    }
+  }
+
   return {
     employeeId,
+    currentRole,
     setEmployeeId,
     activeTab,
     setActiveTab,
@@ -311,6 +343,7 @@ export function useAdminData() {
     error: state.error,
     message,
     submitting,
+    deletingId,
     users: filteredUsers,
     allUsersCount: state.users.length,
     empMaster: filteredEmpMaster,
@@ -329,9 +362,11 @@ export function useAdminData() {
     editor,
     openAddEditor,
     openEditEditor,
+    openViewEditor,
     closeEditor,
     updateEditor,
     submitEditor,
+    removeUser,
     refresh
   };
 }

@@ -41,3 +41,10 @@ export async function saveEmpMasterData(category, formData, adminId) {
     body: JSON.stringify({ category, formData, adminId })
   });
 }
+
+export async function deleteUserAccount(employeeId, adminId) {
+  return httpClient('/api/admin/delete-user', {
+    method: 'POST',
+    body: JSON.stringify({ employeeId, adminId })
+  });
+}

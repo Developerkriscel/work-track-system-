@@ -17,7 +17,7 @@ export function ClientShell() {
   });
 
   return (
-    <div className="app-shell">
+    <div className="app-shell app-shell--client">
       <aside className="sidebar">
         <div className="sidebar__brand">
           <img src="/worktrack-logo.png" alt="WorkTrack Client Portal" className="sidebar__logo" />
@@ -33,6 +33,7 @@ export function ClientShell() {
               <NavLink
                 key={route.key}
                 to={route.path}
+                end={route.path === '/client'}
                 className={({ isActive }) => `sidebar__link${isActive ? ' sidebar__link--active' : ''}`}
               >
                 <Icon className="sidebar__link-icon" />
@@ -44,42 +45,44 @@ export function ClientShell() {
       </aside>
 
       <div className="shell-main">
-        <header className="topbar">
-          <div>
-            <div className="topbar__title">{activeRoute.title}</div>
-          </div>
-          <div className="topbar__actions">
-            <UserProfileMenu
-              notificationCount={notifications.count}
-              onRefresh={() => window.location.reload()}
-              onBell={notifications.toggleOpen}
-              onToggleTheme={toggleMode}
-              onLogout={signOut}
-              allowPasswordChange={false}
-              notificationsOpen={notifications.open}
-              onCloseNotifications={notifications.close}
-              notificationPanel={
-                <NotificationPanel
-                  title="Client Updates"
-                  items={notifications.items}
-                  loading={notifications.loading}
-                  error={notifications.error}
-                  onRefresh={notifications.refresh}
-                />
-              }
-              user={{
-                'Employee Name': client?.['Client Name'] || client?.Name || 'Client',
-                Role: 'Client',
-                Email: client?.['Client Email ID'] || client?.Email || '',
-                Avatar: null
-              }}
-            />
-          </div>
-        </header>
+        <div className="shell-main__inner shell-main__inner--client">
+          <header className="topbar">
+            <div>
+              <div className="topbar__title">{activeRoute.title}</div>
+            </div>
+            <div className="topbar__actions">
+              <UserProfileMenu
+                notificationCount={notifications.count}
+                onRefresh={() => window.location.reload()}
+                onBell={notifications.toggleOpen}
+                onToggleTheme={toggleMode}
+                onLogout={signOut}
+                allowPasswordChange={false}
+                notificationsOpen={notifications.open}
+                onCloseNotifications={notifications.close}
+                notificationPanel={
+                  <NotificationPanel
+                    title="Client Updates"
+                    items={notifications.items}
+                    loading={notifications.loading}
+                    error={notifications.error}
+                    onRefresh={notifications.refresh}
+                  />
+                }
+                user={{
+                  'Employee Name': client?.['Client Name'] || client?.Name || 'Client',
+                  Role: 'Client',
+                  Email: client?.['Client Email ID'] || client?.Email || '',
+                  Avatar: null
+                }}
+              />
+            </div>
+          </header>
 
-        <main className="content-area">
-          <Outlet />
-        </main>
+          <main className="content-area">
+            <Outlet />
+          </main>
+        </div>
       </div>
     </div>
   );

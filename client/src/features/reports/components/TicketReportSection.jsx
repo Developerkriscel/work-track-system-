@@ -3,14 +3,23 @@ import { formatReportDate, toneForReportStatus } from '@/features/reports/servic
 
 export function TicketReportSection({
   tickets,
+  ticketStatuses,
   ticketPriorities,
   ticketCategories,
   ticketFilters,
-  onTicketFiltersChange
+  onTicketFiltersChange,
+  onResetFilters
 }) {
   return (
     <>
       <article className="migration-panel migration-panel--full">
+        <div className="migration-panel__row">
+          <h2>Ticket Filters</h2>
+          <button type="button" className="attendance-cta attendance-cta--gray" onClick={onResetFilters}>
+            Reset
+          </button>
+        </div>
+
         <div className="approval-filter-grid">
           <label className="dashboard-control">
             <span>Priority</span>
@@ -41,6 +50,31 @@ export function TicketReportSection({
               ))}
             </select>
           </label>
+
+          <label className="dashboard-control">
+            <span>Status</span>
+            <select
+              value={ticketFilters.status}
+              onChange={(event) => onTicketFiltersChange((current) => ({ ...current, status: event.target.value }))}
+            >
+              <option value="">All Statuses</option>
+              {ticketStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="dashboard-control">
+            <span>Search</span>
+            <input
+              type="text"
+              value={ticketFilters.search}
+              onChange={(event) => onTicketFiltersChange((current) => ({ ...current, search: event.target.value }))}
+              placeholder="Ticket ID, client, employee, description..."
+            />
+          </label>
         </div>
       </article>
 
@@ -55,7 +89,8 @@ export function TicketReportSection({
             <thead>
               <tr>
                 <th>Ticket ID</th>
-                <th>Name</th>
+                <th>Client</th>
+                <th>Employee</th>
                 <th>Description</th>
                 <th>Priority</th>
                 <th>Status</th>
@@ -68,7 +103,8 @@ export function TicketReportSection({
                 tickets.map((item) => (
                   <tr key={item['Ticket ID'] || item._id}>
                     <td><span className="ticket-id-chip">{item['Ticket ID'] || '-'}</span></td>
-                    <td>{item.Name || item['Employee Name'] || '-'}</td>
+                    <td>{item.Name || item['Client Name'] || item.Client || '-'}</td>
+                    <td>{item['Employee Name'] || item.User || '-'}</td>
                     <td className="approval-table__copy">{item['Task Description'] || item.Description || '-'}</td>
                     <td>{item.Priority || '-'}</td>
                     <td>
@@ -80,7 +116,7 @@ export function TicketReportSection({
                 ))
               ) : (
                 <tr>
-                  <td colSpan="7" className="dashboard-table__empty">No ticket report data found.</td>
+                  <td colSpan="8" className="dashboard-table__empty">No ticket report data found.</td>
                 </tr>
               )}
             </tbody>

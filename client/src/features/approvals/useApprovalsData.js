@@ -36,6 +36,17 @@ function safeArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function sortApprovalRows(rows = [], getDateValue) {
+  return [...rows].sort((left, right) => {
+    const actionableDiff = Number(Boolean(right?._isActionableByMe)) - Number(Boolean(left?._isActionableByMe));
+    if (actionableDiff) return actionableDiff;
+
+    const rightDate = new Date(getDateValue(right) || right?.['Last Update Date'] || right?.Timestamp || 0).getTime();
+    const leftDate = new Date(getDateValue(left) || left?.['Last Update Date'] || left?.Timestamp || 0).getTime();
+    return rightDate - leftDate;
+  });
+}
+
 export function useApprovalsData() {
   const { user } = useAuth();
   const employeeId = user?.['Employee ID'] || '';
@@ -164,7 +175,7 @@ export function useApprovalsData() {
 
   const filteredLeaves = useMemo(() => {
     const filter = filters.leaves;
-    return state.data.leaves.filter((item) => {
+    const rows = state.data.leaves.filter((item) => {
       const employeeText = `${item['Employee Name'] || item.employeeName || ''} ${item['Employee ID'] || item.employeeId || ''}`;
       const searchable = [item['Leave Type'] || item.leaveType || item.type, item.Reason || item.reason, item['Day Type'] || item.dayType].join(' ');
       const isPending = /pending/i.test(item.Status);
@@ -181,11 +192,12 @@ export function useApprovalsData() {
         includesFilter(searchable, filter.search)
       );
     });
+    return sortApprovalRows(rows, (item) => item?.['Start Date'] || item?.startDate);
   }, [filters.leaves, state.data.leaves]);
 
   const filteredIntimations = useMemo(() => {
     const filter = filters.intimations;
-    return state.data.intimations.filter((item) => {
+    const rows = state.data.intimations.filter((item) => {
       const employeeText = `${item['Employee Name'] || item.employeeName || ''} ${item['Employee ID'] || item.employeeId || ''}`;
       const searchable = [item['Intimation Type'] || item.type, item.Reason || item.reason].join(' ');
       const isPending = /pending|submitted/i.test(item.Status);
@@ -201,6 +213,7 @@ export function useApprovalsData() {
         includesFilter(searchable, filter.search)
       );
     });
+    return sortApprovalRows(rows, (item) => item?.['Intimation Date'] || item?.Date || item?.date);
   }, [filters.intimations, state.data.intimations]);
 
   const filteredAttendance = useMemo(() => {
@@ -262,6 +275,19 @@ export function useApprovalsData() {
     setState((current) => ({ ...current }));
   }
 
+  function keepApprovedItemVisible(tab) {
+    setFilters((current) => {
+      if (!current?.[tab] || current[tab].status !== 'pending') return current;
+      return {
+        ...current,
+        [tab]: {
+          ...current[tab],
+          status: ''
+        }
+      };
+    });
+  }
+
   async function runAction(action, successMessage) {
     setSubmitting(true);
     setMessage(null);
@@ -295,7 +321,13 @@ export function useApprovalsData() {
         ...(payload.newPunchOut ? { newPunchOut: payload.newPunchOut } : {})
       }),
       `${type} approved successfully.`
-    );
+    ).then((result) => {
+      if (result?.success) {
+        const tab = /leave/i.test(type) ? 'leaves' : /intimation/i.test(type) ? 'intimations' : /attendance/i.test(type) ? 'attendance' : '';
+        if (tab) keepApprovedItemVisible(tab);
+      }
+      return result;
+    });
   }
 
   function rejectItem(type, id, values = {}) {
@@ -309,7 +341,13 @@ export function useApprovalsData() {
         remarks: payload.remarks || ''
       }),
       `${type} rejected successfully.`
-    );
+    ).then((result) => {
+      if (result?.success) {
+        const tab = /leave/i.test(type) ? 'leaves' : /intimation/i.test(type) ? 'intimations' : /attendance/i.test(type) ? 'attendance' : '';
+        if (tab) keepApprovedItemVisible(tab);
+      }
+      return result;
+    });
   }
 
   function approveTicket(ticketId, remarks = '') {

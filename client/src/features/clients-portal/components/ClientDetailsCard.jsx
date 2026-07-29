@@ -46,10 +46,6 @@ export function ClientDetailsCard({ client, onClose }) {
           <span className="kv-grid__label">Services</span>
           <strong>{client.Services || '-'}</strong>
         </div>
-        <div>
-          <span className="kv-grid__label">Password</span>
-          <strong>{client.Password || '-'}</strong>
-        </div>
       </div>
     </article>
   );

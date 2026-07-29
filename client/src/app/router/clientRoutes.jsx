@@ -1,6 +1,5 @@
 import {
   BarChart3,
-  FileText,
   LayoutDashboard,
   Receipt,
   Tickets
@@ -9,7 +8,6 @@ import { ClientDashboardPage } from '@/features/client-portal/ClientDashboardPag
 import { ClientInvoicesPage } from '@/features/client-portal/ClientInvoicesPage';
 import { ClientReportsPage } from '@/features/client-portal/ClientReportsPage';
 import { ClientTicketsPage } from '@/features/client-portal/ClientTicketsPage';
-import { ClientSocialPage } from '@/features/client-social/ClientSocialPage';
 
 export const clientRoutes = [
   {
@@ -25,13 +23,6 @@ export const clientRoutes = [
     title: 'My Tickets',
     icon: Tickets,
     element: <ClientTicketsPage />
-  },
-  {
-    path: '/client/social',
-    key: 'clientSocial',
-    title: 'Social Tasks',
-    icon: FileText,
-    element: <ClientSocialPage />
   },
   {
     path: '/client/invoices',

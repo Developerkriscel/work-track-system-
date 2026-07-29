@@ -1,6 +1,6 @@
 import { useState } from 'react';
+import { AppModal, ConfirmDialog } from '@/components/modals';
 import { StatusPill } from '@/components/common/StatusPill';
-import { ConfirmDialog } from '@/components/modals';
 import { FormsPortalEditor } from '@/features/forms-portal/components/FormsPortalEditor';
 import { FormsPortalFilterPanel } from '@/features/forms-portal/components/FormsPortalFilterPanel';
 import { FormsPortalHeader } from '@/features/forms-portal/components/FormsPortalHeader';
@@ -65,14 +65,20 @@ export function FormsPortalPage() {
       />
 
       {editor.open && isAdmin ? (
-        <FormsPortalEditor
-          editor={editor}
-          assignableUsers={assignableUsers}
-          submitting={submitting}
-          onUpdate={updateEditor}
+        <AppModal
+          title={editor.mode === 'edit' ? `Edit Form: ${editor.form['Sheet name'] || ''}` : 'Add New Form'}
           onClose={closeEditor}
-          onSubmit={submitEditor}
-        />
+          width="860px"
+        >
+          <FormsPortalEditor
+            editor={editor}
+            assignableUsers={assignableUsers}
+            submitting={submitting}
+            onUpdate={updateEditor}
+            onClose={closeEditor}
+            onSubmit={submitEditor}
+          />
+        </AppModal>
       ) : null}
 
       <FormsPortalTable

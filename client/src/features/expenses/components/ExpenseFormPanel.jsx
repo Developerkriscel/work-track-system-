@@ -28,14 +28,7 @@ export function ExpenseFormPanel({ form, submitting, onChange, onClose, onSubmit
   };
 
   return (
-    <article className="migration-panel migration-panel--full">
-      <div className="migration-panel__row">
-        <h2>Record an Expense</h2>
-        <button type="button" className="attendance-cta attendance-cta--red" onClick={onClose}>
-          Cancel
-        </button>
-      </div>
-
+    <article className="forms-editor">
       <div className="forms-editor__grid">
         <label className="dashboard-control">
           <span>Date of Expense</span>

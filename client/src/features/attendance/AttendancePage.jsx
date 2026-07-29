@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { AppModal } from '@/components/modals';
 import { StatusPill } from '@/components/common/StatusPill';
 import { AttendanceActionRow } from '@/features/attendance/components/AttendanceActionRow';
 import { AttendanceEntryPanel } from '@/features/attendance/components/AttendanceEntryPanel';
@@ -9,6 +10,7 @@ import {
   TeamAttendanceEditDialog,
   TeamAttendanceTable
 } from '@/features/attendance/components/AttendanceTables';
+import { AttendanceLocationPolicyCard } from '@/features/attendance/components';
 import { formatElapsed, todayYmd } from '@/features/attendance/services/attendancePresentation';
 import { useAttendanceData } from '@/features/attendance/useAttendanceData';
 
@@ -24,6 +26,8 @@ export function AttendancePage() {
     setCustomStart,
     customEnd,
     setCustomEnd,
+    teamFilterDate,
+    setTeamFilterDate,
     attendanceLoading,
     attendanceError,
     attendanceRows,
@@ -32,25 +36,30 @@ export function AttendancePage() {
     teamAttendanceLoading,
     teamAttendanceError,
     teamAttendanceRows,
+    locationPolicy,
+    locationPolicyLoading,
+    locationPolicySaving,
     submitting,
     session,
     recordPunch,
     createLeave,
     createIntimation,
-    saveTeamAttendance
+    saveTeamAttendance,
+    saveLocationPolicy
   } = useAttendanceData();
 
   const [activeTab, setActiveTab] = useState('punch');
   const [activeView, setActiveView] = useState('self');
   const [showForm, setShowForm] = useState(false);
+  const [showLocationPolicy, setShowLocationPolicy] = useState(false);
   const [timer, setTimer] = useState('00:00:00');
   const [message, setMessage] = useState(null);
+  const [submitNotice, setSubmitNotice] = useState(null);
   const [punchAction, setPunchAction] = useState(null);
   const [photoBase64, setPhotoBase64] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraCycle, setCameraCycle] = useState(0);
   const [teamSearch, setTeamSearch] = useState('');
-  const [teamDateFilter, setTeamDateFilter] = useState('');
   const [teamEditor, setTeamEditor] = useState(null);
   const [teamEditorForm, setTeamEditorForm] = useState({ punchInTime: '', punchOutTime: '' });
   const [leaveForm, setLeaveForm] = useState({
@@ -82,6 +91,14 @@ export function AttendancePage() {
 
     return () => window.clearInterval(timerId);
   }, [session.isPunchedIn, session.startedAt]);
+
+  useEffect(() => {
+    if (!submitNotice) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      setSubmitNotice(null);
+    }, 2400);
+    return () => window.clearTimeout(timeoutId);
+  }, [submitNotice]);
 
   useEffect(() => {
     if (!showForm || activeTab !== 'punch') return undefined;
@@ -119,12 +136,9 @@ export function AttendancePage() {
     };
   }, [showForm, activeTab, cameraCycle]);
 
-  const teamDates = Array.from(new Set((teamAttendanceRows || []).map((row) => row.date).filter(Boolean)))
-    .sort((left, right) => right.localeCompare(left));
-
   const visibleTeamRows = (teamAttendanceRows || []).filter((row) => {
     const query = teamSearch.trim().toLowerCase();
-    const matchesDate = !teamDateFilter || row.date === teamDateFilter;
+    const matchesDate = !teamFilterDate || row.date === teamFilterDate;
     if (!query) return matchesDate;
     const searchable = [
       row.employeeName,
@@ -220,32 +234,59 @@ export function AttendancePage() {
   const handleLeaveSubmit = async (event) => {
     event.preventDefault();
     const result = await createLeave(leaveForm);
-    setMessage({
-      tone: result.success ? 'success' : 'danger',
-      text: result.success ? 'Leave request submitted.' : result.message
-    });
     if (result.success) {
-      setLeaveForm((current) => ({ ...current, reason: '' }));
+      setMessage(null);
+      setSubmitNotice({
+        title: 'Leave Submitted',
+        text: 'Leave submitted successfully.',
+        tone: 'success'
+      });
+      setLeaveForm((current) => ({ ...current, reason: '', startDate: current.startDate, endDate: current.endDate }));
+    } else {
+      setSubmitNotice({
+        title: 'Leave Submission Failed',
+        text: result.message || 'Leave could not be submitted.',
+        tone: 'danger'
+      });
     }
   };
 
   const handleIntimationSubmit = async (event) => {
     event.preventDefault();
     const result = await createIntimation(intimationForm);
-    setMessage({
-      tone: result.success ? 'success' : 'danger',
-      text: result.success ? 'Intimation submitted.' : result.message
-    });
     if (result.success) {
-      setIntimationForm((current) => ({ ...current, reason: '' }));
+      setMessage(null);
+      setSubmitNotice({
+        title: 'Intimation Submitted',
+        text: 'Intimation submitted successfully.',
+        tone: 'success'
+      });
+      setIntimationForm((current) => ({ ...current, reason: '', date: today }));
+    } else {
+      setSubmitNotice({
+        title: 'Intimation Submission Failed',
+        text: result.message || 'Intimation could not be submitted.',
+        tone: 'danger'
+      });
     }
   };
 
   const openTeamEditor = (row) => {
+    const currentPunchIn =
+      row?.punchInTime ||
+      row?.punchIn?.Time ||
+      row?.punchIn?.['Punch In'] ||
+      '';
+    const currentPunchOut =
+      row?.punchOutTime ||
+      row?.punchOut?.Time ||
+      row?.punchOut?.['Punch Out'] ||
+      '';
+
     setTeamEditor(row);
     setTeamEditorForm({
-      punchInTime: row?.punchInTime || '',
-      punchOutTime: row?.punchOutTime || ''
+      punchInTime: currentPunchIn,
+      punchOutTime: currentPunchOut
     });
     setMessage(null);
   };
@@ -274,7 +315,13 @@ export function AttendancePage() {
         employeeLabel={`${currentUser?.['Employee Name'] || currentUser?.Name || 'Employee'}${employeeId ? ` | ${employeeId}` : ''}`}
         isPunchedIn={session.isPunchedIn}
         timer={timer}
-        actions={<AttendanceActionRow onOpenForm={openForm} />}
+        actions={
+          <AttendanceActionRow
+            onOpenForm={openForm}
+            canManageTeamAttendance={canManageTeamAttendance}
+            onOpenLocationPolicy={() => setShowLocationPolicy(true)}
+          />
+        }
       />
 
       {message ? (
@@ -282,6 +329,46 @@ export function AttendancePage() {
           <StatusPill tone={message.tone === 'danger' ? 'danger' : 'success'}>{message.tone === 'danger' ? 'Issue' : 'Done'}</StatusPill>
           <span>{message.text}</span>
         </div>
+      ) : null}
+
+      {showLocationPolicy ? (
+        <AppModal
+          title="Attendance Location Policy"
+          onClose={() => setShowLocationPolicy(false)}
+          width="840px"
+        >
+          <AttendanceLocationPolicyCard
+            policy={locationPolicy}
+            canEdit={canManageTeamAttendance}
+            loading={locationPolicyLoading}
+            saving={locationPolicySaving}
+            onSave={async (payload) => {
+              const result = await saveLocationPolicy(payload);
+              setMessage({
+                tone: result.success ? 'success' : 'danger',
+                text: result.success ? (result.message || 'Attendance policy saved.') : result.message
+              });
+              if (result.success) {
+                setShowLocationPolicy(false);
+              }
+            }}
+          />
+        </AppModal>
+      ) : null}
+
+      {submitNotice ? (
+        <AppModal
+          title={submitNotice.title}
+          onClose={() => setSubmitNotice(null)}
+          width="420px"
+        >
+          <div className={`attendance-submit-notice attendance-submit-notice--${submitNotice.tone}`}>
+            <p>{submitNotice.text}</p>
+            <button type="button" className="attendance-cta attendance-cta--blue" onClick={() => setSubmitNotice(null)}>
+              OK
+            </button>
+          </div>
+        </AppModal>
       ) : null}
 
       <AttendanceEntryPanel
@@ -357,14 +444,11 @@ export function AttendancePage() {
               </label>
               <label className="dashboard-control attendance-team-toolbar__date">
                 <span>Attendance Date</span>
-                <select value={teamDateFilter} onChange={(event) => setTeamDateFilter(event.target.value)}>
-                  <option value="">All Dates In Range</option>
-                  {teamDates.map((date) => (
-                    <option key={date} value={date}>
-                      {date}
-                    </option>
-                  ))}
-                </select>
+                <input
+                  type="date"
+                  value={teamFilterDate}
+                  onChange={(event) => setTeamFilterDate(event.target.value || today)}
+                />
               </label>
             </div>
             <TeamAttendanceTable rows={visibleTeamRows} onEdit={openTeamEditor} />

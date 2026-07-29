@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { fetchExpensesForUser, submitExpenseRecord } from '@/features/expenses/api';
+import { fetchExpenseApprovalQueue, fetchExpensesForUser, submitExpenseApproval, submitExpenseRecord } from '@/features/expenses/api';
 import { useAuth } from '@/features/auth/AuthProvider';
 
 function todayYmd() {
@@ -14,14 +14,22 @@ export function useExpensesData() {
   const { user } = useAuth();
   const employeeId = user?.['Employee ID'] || '';
   const employeeName = user?.['Employee Name'] || user?.Name || employeeId;
+  const role = String(user?.Role || user?.role || 'User').trim().toLowerCase();
+  const canApproveExpenses = ['admin', 'super admin', 'hr'].includes(role);
   const [state, setState] = useState({
     loading: true,
     error: null,
-    expenses: []
+    expenses: [],
+    approvals: []
   });
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [approvalFilters, setApprovalFilters] = useState({
+    employee: '',
+    status: '',
+    search: ''
+  });
   const [form, setForm] = useState({
     date: todayYmd(),
     type: 'Travel',
@@ -37,7 +45,8 @@ export function useExpensesData() {
       setState({
         loading: false,
         error: null,
-        expenses: []
+        expenses: [],
+        approvals: []
       });
       return undefined;
     }
@@ -47,19 +56,24 @@ export function useExpensesData() {
     async function loadExpenses() {
       setState((current) => ({ ...current, loading: true, error: null }));
       try {
-        const payload = await fetchExpensesForUser(employeeId);
+        const [expensePayload, approvalPayload] = await Promise.all([
+          fetchExpensesForUser(employeeId),
+          canApproveExpenses ? fetchExpenseApprovalQueue() : Promise.resolve({ success: true, data: [] })
+        ]);
         if (!alive) return;
         setState({
           loading: false,
           error: null,
-          expenses: Array.isArray(payload.data) ? payload.data : []
+          expenses: Array.isArray(expensePayload.data) ? expensePayload.data : [],
+          approvals: Array.isArray(approvalPayload.data) ? approvalPayload.data : []
         });
       } catch (error) {
         if (!alive) return;
         setState({
           loading: false,
           error: error.message || 'Failed to load expenses.',
-          expenses: []
+          expenses: [],
+          approvals: []
         });
       }
     }
@@ -137,12 +151,63 @@ export function useExpensesData() {
     }
   }
 
+  function updateApprovalFilters(patch) {
+    setApprovalFilters((current) => ({ ...current, ...patch }));
+  }
+
+  function resetApprovalFilters() {
+    setApprovalFilters({
+      employee: '',
+      status: '',
+      search: ''
+    });
+  }
+
+  async function processApproval(expense, status, remarks) {
+    setSubmitting(true);
+    setMessage(null);
+    try {
+      const result = await submitExpenseApproval({
+        expenseId: expense?.ExpenseID || expense?.['Expense ID'],
+        status,
+        remarks
+      });
+      setMessage({
+        tone: result.success ? 'success' : 'danger',
+        text: result.success ? result.message || `Expense claim ${status.toLowerCase()} successfully.` : result.message
+      });
+      if (result.success) refresh();
+      return result;
+    } catch (error) {
+      const result = { success: false, message: error.message || 'Expense approval failed.' };
+      setMessage({ tone: 'danger', text: result.message });
+      return result;
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const filteredApprovals = state.approvals.filter((expense) => {
+    const employeeText = `${expense['Employee Name'] || ''} ${expense['Employee ID'] || ''}`.toLowerCase();
+    const searchText = `${expense.Type || ''} ${expense.Description || ''} ${expense['Admin Remarks'] || ''}`.toLowerCase();
+    const employeeMatch = !approvalFilters.employee || employeeText.includes(approvalFilters.employee.toLowerCase());
+    const statusMatch = !approvalFilters.status || String(expense.Status || '').toLowerCase() === approvalFilters.status.toLowerCase();
+    const searchMatch = !approvalFilters.search || searchText.includes(approvalFilters.search.toLowerCase());
+    return employeeMatch && statusMatch && searchMatch;
+  });
+
   return {
     employeeId,
     currentUser: user || null,
+    canApproveExpenses,
     loading: state.loading,
     error: state.error,
     expenses: state.expenses,
+    approvalQueue: state.approvals,
+    filteredApprovals,
+    approvalFilters,
+    updateApprovalFilters,
+    resetApprovalFilters,
     submitting,
     message,
     formOpen,
@@ -152,6 +217,7 @@ export function useExpensesData() {
     updateForm,
     resetForm,
     submitForm,
+    processApproval,
     refresh
   };
 }

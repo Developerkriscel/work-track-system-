@@ -40,8 +40,12 @@ router.post('/history', async (req, res) => {
 
 router.post('/update-status', async (req, res) => {
   try {
-    const { postId, newStatus, remarks } = req.body;
-    const result = await updateSocialPostStatusByClient(postId, newStatus, remarks, { Client_Id: req.auth.sub, 'Client ID': req.auth.sub });
+    const { postId, newStatus, remarks, client } = req.body;
+    const result = await updateSocialPostStatusByClient(postId, newStatus, remarks, {
+      ...(client && typeof client === 'object' ? client : {}),
+      Client_Id: req.auth.sub,
+      'Client ID': req.auth.sub
+    });
     if (!result.success) return res.status(400).json(result);
     res.json(result);
   } catch (error) {

@@ -1,10 +1,23 @@
 import { StatusPill } from '@/components/common/StatusPill';
 import { formatReportDate, toneForReportStatus } from '@/features/reports/services/reportsPresentation';
 
-export function FmsReportSection({ fms, fmsStatuses, fmsFilters, onFmsFiltersChange }) {
+export function FmsReportSection({
+  fms,
+  fmsStatuses,
+  fmsFilters,
+  onFmsFiltersChange,
+  onResetFilters
+}) {
   return (
     <>
       <article className="migration-panel migration-panel--full">
+        <div className="migration-panel__row">
+          <h2>FMS Filters</h2>
+          <button type="button" className="attendance-cta attendance-cta--gray" onClick={onResetFilters}>
+            Reset
+          </button>
+        </div>
+
         <div className="approval-filter-grid">
           <label className="dashboard-control">
             <span>Status</span>
@@ -19,6 +32,16 @@ export function FmsReportSection({ fms, fmsStatuses, fmsFilters, onFmsFiltersCha
                 </option>
               ))}
             </select>
+          </label>
+
+          <label className="dashboard-control">
+            <span>Search</span>
+            <input
+              type="text"
+              value={fmsFilters.search}
+              onChange={(event) => onFmsFiltersChange((current) => ({ ...current, search: event.target.value }))}
+              placeholder="FMS name, task, employee, status..."
+            />
           </label>
         </div>
       </article>
@@ -46,7 +69,7 @@ export function FmsReportSection({ fms, fmsStatuses, fmsFilters, onFmsFiltersCha
                 fms.map((item, index) => (
                   <tr key={item.ID || item['Task ID'] || `${item['Task Name'] || 'fms'}-${index}`}>
                     <td>{item['FMS Name'] || item.Name || '-'}</td>
-                    <td className="approval-table__copy">{item['Task Name'] || '-'}</td>
+                    <td className="approval-table__copy">{item['Task Name'] || item['Task Description'] || item.Description || '-'}</td>
                     <td>{item.Who || item['Assigned To'] || '-'}</td>
                     <td>{formatReportDate(item['Plan Date'])}</td>
                     <td>{formatReportDate(item['Actual Date'])}</td>

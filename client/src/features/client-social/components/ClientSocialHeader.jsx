@@ -1,6 +1,7 @@
 import { RefreshCw } from '@/components/common/icons';
+import { StatusPill } from '@/components/common/StatusPill';
 
-export function ClientSocialHeader({ clientId, onClientIdChange, onRefresh }) {
+export function ClientSocialHeader({ clientId, clientName, onRefresh }) {
   return (
     <div className="page-card__header">
       <div>
@@ -9,10 +10,7 @@ export function ClientSocialHeader({ clientId, onClientIdChange, onRefresh }) {
       </div>
 
       <div className="dashboard-controls">
-        <label className="dashboard-control">
-          <span>Client ID</span>
-          <input value={clientId} onChange={(event) => onClientIdChange(event.target.value)} placeholder="e.g. CL000" />
-        </label>
+        <StatusPill tone="info">{clientName || clientId || 'Client Session'}</StatusPill>
         <button type="button" className="attendance-cta attendance-cta--blue approvals-refresh-btn" onClick={onRefresh}>
           <RefreshCw className="approvals-refresh-btn__icon" />
           Refresh

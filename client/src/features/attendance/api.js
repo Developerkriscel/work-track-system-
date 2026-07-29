@@ -56,3 +56,18 @@ export async function updateTeamAttendance(payload) {
     })
   });
 }
+
+export async function fetchAttendanceLocationPolicy() {
+  return httpClient('/api/attendance/location-policy', {
+    method: 'GET'
+  });
+}
+
+export async function saveAttendanceLocationPolicy(payload) {
+  return httpClient('/api/attendance/location-policy', {
+    method: 'POST',
+    body: JSON.stringify({
+      payload
+    })
+  });
+}

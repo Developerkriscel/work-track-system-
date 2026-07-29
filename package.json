@@ -46,6 +46,7 @@
     "verify:all": "npm run build && npm run verify:independence && npm run verify:import && npm run verify:contracts && npm run verify:attendance-ui && npm run verify:user-panel && npm run verify:client-panel && npm run verify:auth-settings && npm run verify:admin && npm run verify:dashboard && npm run verify:management-dashboard && npm run verify:reports && npm run verify:notifications && npm run verify:fms && npm run verify:expenses && npm run verify:expense-approvals && npm run verify:todo"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1095.0",
     "@fortawesome/fontawesome-free": "^7.3.0",
     "bcryptjs": "^2.4.3",
     "canvas-confetti": "^1.9.4",
@@ -53,13 +54,16 @@
     "cors": "^2.8.5",
     "datatables.net": "^2.3.8",
     "datatables.net-dt": "^2.3.8",
-    "dotenv": "^16.4.5",
+    "dotenv": "^16.6.1",
     "express": "^4.19.2",
     "jquery": "^4.0.0",
+    "mime-types": "^3.0.2",
     "mongoose": "^8.4.3",
+    "multer": "^2.2.0",
     "select2": "^4.1.0",
     "sweetalert2": "^11.26.25",
     "tailwindcss": "^4.3.2",
+    "uuid": "^14.0.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

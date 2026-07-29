@@ -44,7 +44,6 @@ function normalizedDate(value) {
   return Number.isNaN(parsed.getTime()) ? raw : parsed.toISOString().slice(0, 10);
 }
 
-const restrictedApprovalIds = new Set(['NL106', 'S103', 'AS101']);
 const elevatedRoles = new Set(['admin', 'super admin', 'hr', 'manager']);
 
 function userId(user = {}) {
@@ -59,11 +58,18 @@ function assignedIds(value) {
   return safe(value).split(',').map((item) => item.trim().toLowerCase()).filter(Boolean);
 }
 
+function isHigherRoleProtected(admin, employee) {
+  const adminRole = userRole(admin);
+  const employeeRole = userRole(employee);
+  return employeeRole === 'super admin' && adminRole !== 'super admin';
+}
+
 function canReviewEmployee(admin, employee, users) {
   const adminId = userId(admin).toUpperCase();
   const role = userRole(admin);
   const employeeRole = userRole(employee);
-  if (!elevatedRoles.has(role) || restrictedApprovalIds.has(adminId)) return false;
+  if (!elevatedRoles.has(role)) return false;
+  if (isHigherRoleProtected(admin, employee)) return false;
   if (role === 'super admin') return true;
   if (role === 'hr') return employeeRole !== 'super admin';
   const team = users.filter((user) => {
@@ -91,36 +97,49 @@ function isPendingAttendanceStatus(status = '') {
 }
 
 function requestApprovalDecision(admin, row, users, type) {
-  const adminId = userId(admin).toUpperCase();
   const role = userRole(admin);
   const employeeId = first(row, ['Employee ID', 'employeeId', 'EmpID']);
   const employee = users.find((user) => eq(userId(user), employeeId));
   const status = safe(first(row, ['Status', 'status']));
-  const restricted = restrictedApprovalIds.has(adminId);
-  const canSeeEmployee = employee ? canReviewEmployee(admin, employee, users) : role === 'super admin';
-
-  if (!canSeeEmployee && role !== 'super admin') {
+  if (employee && isHigherRoleProtected(admin, employee)) {
     return { visible: false, actionable: false, canApprove: false };
   }
+  const canSeeEmployee =
+    role === 'super admin' ||
+    role === 'admin' ||
+    (role === 'hr' && userRole(employee) !== 'super admin') ||
+    (role === 'manager' && employee ? canReviewEmployee(admin, employee, users) : false);
 
   let pending = false;
   if (/leave/i.test(type)) pending = isPendingLeaveStatus(status);
   else if (/intimation/i.test(type)) pending = isPendingIntimationStatus(status);
   else if (/attendance/i.test(type)) pending = isPendingAttendanceStatus(status);
 
+  if (/leave|intimation/i.test(type)) {
+    if (!canSeeEmployee) {
+      return { visible: false, actionable: false, canApprove: false };
+    }
+
+    if (pending) {
+      return { visible: true, actionable: true, canApprove: true };
+    }
+
+    return { visible: true, actionable: false, canApprove: false };
+  }
+
   if (!pending) {
     return { visible: false, actionable: false, canApprove: false };
   }
 
-  if (restricted) {
-    return { visible: true, actionable: false, canApprove: false };
-  }
-
-  if (role === 'super admin' || role === 'hr') {
+  if (role === 'super admin' || role === 'hr' || role === 'admin') {
     return { visible: true, actionable: true, canApprove: true };
   }
 
-  if (role === 'manager' || role === 'admin') {
+  if (role === 'manager') {
+    const canSeeEmployee = employee ? canReviewEmployee(admin, employee, users) : false;
+    if (!canSeeEmployee) {
+      return { visible: false, actionable: false, canApprove: false };
+    }
     return { visible: true, actionable: true, canApprove: true };
   }
 
@@ -133,6 +152,9 @@ function ticketApprovalDecision(admin, ticket, users) {
   const ownerId = safe(first(ticket, ['Employee ID', 'employeeId', 'EmpID'])).toUpperCase();
   const owner = users.find((user) => userId(user).toUpperCase() === ownerId);
   if (!owner) return { visible: false, actionable: false, canApprove: false };
+  if (isHigherRoleProtected(admin, owner)) {
+    return { visible: false, actionable: false, canApprove: false };
+  }
   const ownTicket = ownerId === adminId;
   const taskApprover = safe(first(owner, ['Task Approver', 'taskApprover']));
   const managerId = safe(first(owner, ['Manager ID', 'Manager', 'managerId', 'Reporting Manager']));
@@ -354,14 +376,9 @@ export async function processApprovalAction(actionData = {}) {
   const id = actionData.id || actionData.ID;
   const status = actionData.status || actionData.Status || actionData.action;
   const adminId = actionData.adminId || actionData.AdminID || actionData['Admin ID'] || actionData.approvedBy || actionData['Approved By'];
-  const gate = await requireAttendanceActive(adminId);
-  if (gate) return gate;
   const users = await listRows('User');
   const admin = users.find((user) => eq(userId(user), adminId));
   if (!admin || !elevatedRoles.has(userRole(admin))) return fail('Unauthorized: Admin/HR access required.');
-  if (restrictedApprovalIds.has(safe(adminId).toUpperCase())) {
-    return fail('Access Denied: You do not have permission to approve attendance, leaves, or intimations.');
-  }
   const remarks = first(actionData, ['remarks', 'Remarks', 'Admin Remarks']);
   const approved = safe(status).toLowerCase() === 'approved';
   

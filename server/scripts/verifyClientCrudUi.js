@@ -27,7 +27,10 @@ try {
     localStorage.setItem('worktrack.mern.employeeSession', JSON.stringify(session));
   }, { user, token: employeeToken(user) });
   await page.goto(`${baseUrl}/clients-portal`, { waitUntil: 'domcontentloaded' });
-  await page.getByRole('button', { name: /Add Client/i }).click();
+  await page.getByRole('heading', { name: /Clients Portal/i }).waitFor();
+  const addClientButton = page.getByRole('button', { name: /Add Client/i });
+  await addClientButton.waitFor({ state: 'visible', timeout: 15000 });
+  await addClientButton.click();
   await page.getByLabel('Client Name').fill(`${prefix} name`);
   await page.getByLabel('Password').fill('UiVerifyPass123');
   await page.getByRole('button', { name: 'Save Details', exact: true }).click();

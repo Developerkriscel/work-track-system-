@@ -7,6 +7,7 @@ const first = (row, keys, fallback = '') => keys.map((key) => row?.[key]).find((
 const num = (value) => Number(String(value ?? 0).replace(/[^0-9.-]/g, '')) || 0;
 const ok = (payload = {}) => ({ success: true, ...payload });
 const fail = (message) => ({ success: false, message });
+const ATTENDANCE_POLICY_ID = 'ATTENDANCE_LOCATION_POLICY';
 
 function parseReferenceNow(value) {
   if (!value) return new Date();
@@ -108,6 +109,161 @@ function isActiveUser(user = {}) {
 
 function canManageTeamAttendance(user = {}) {
   return /^(admin|super admin|hr)$/i.test(first(user, ['Role', 'role'], ''));
+}
+
+function isApprovedStatus(value = '') {
+  return /approved|hr approved|accepted/i.test(safe(value));
+}
+
+function isWorkFromHomeIntimation(row = {}) {
+  return /work\s*from\s*home/i.test(first(row, ['Intimation Type', 'IntimationType', 'Type', 'SubType']));
+}
+
+function getPolicyNumber(value, fallback = 0) {
+  const parsed = Number(String(value ?? '').replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeLocationPolicy(row = {}) {
+  return {
+    policyId: first(row, ['PolicyID', 'ID', 'policyId', 'AttendancePolicyID'], ATTENDANCE_POLICY_ID),
+    officeName: first(row, ['Office Name', 'Office', 'Location Name', 'Location', 'officeName'], ''),
+    latitude: first(row, ['Latitude', 'Lattitude', 'Office Latitude', 'latitude'], ''),
+    longitude: first(row, ['Longitude', 'Office Longitude', 'longitude'], ''),
+    radiusMeters: getPolicyNumber(first(row, ['Radius (Meters)', 'Radius', 'Allowed Radius', 'radiusMeters'], 200), 200) || 200,
+    enabled: !/^(false|0|no|off)$/i.test(safe(first(row, ['Enabled', 'Active', 'Status', 'enabled'], 'true'))),
+    updatedBy: first(row, ['Updated By', 'UpdatedBy', 'updatedBy'], ''),
+    updatedAt: first(row, ['Updated At', 'UpdatedAt', 'updatedAt'], '')
+  };
+}
+
+function locationPolicyRecord(policy = {}) {
+  const normalized = normalizeLocationPolicy(policy);
+  return {
+    PolicyID: normalized.policyId,
+    AttendancePolicyID: normalized.policyId,
+    ID: normalized.policyId,
+    policyId: normalized.policyId,
+    'Office Name': normalized.officeName,
+    officeName: normalized.officeName,
+    Latitude: normalized.latitude,
+    Lattitude: normalized.latitude,
+    latitude: normalized.latitude,
+    Longitude: normalized.longitude,
+    longitude: normalized.longitude,
+    'Radius (Meters)': normalized.radiusMeters,
+    Radius: normalized.radiusMeters,
+    radiusMeters: normalized.radiusMeters,
+    Enabled: normalized.enabled ? 'true' : 'false',
+    enabled: normalized.enabled,
+    'Updated By': normalized.updatedBy,
+    updatedBy: normalized.updatedBy,
+    'Updated At': normalized.updatedAt,
+    updatedAt: normalized.updatedAt
+  };
+}
+
+async function getAttendanceLocationPolicy() {
+  const rows = await listRows('AttendancePolicy');
+  const row = rows.find((item) => eq(first(item, ['PolicyID', 'ID', 'policyId', 'AttendancePolicyID']), ATTENDANCE_POLICY_ID)) || rows[0];
+  if (!row) {
+    return normalizeLocationPolicy(locationPolicyRecord({
+      PolicyID: ATTENDANCE_POLICY_ID,
+      Enabled: true,
+      'Radius (Meters)': 200
+    }));
+  }
+  return normalizeLocationPolicy(row);
+}
+
+async function saveAttendanceLocationPolicy(policy = {}, editorId = '') {
+  const next = locationPolicyRecord({
+    PolicyID: ATTENDANCE_POLICY_ID,
+    'Office Name': safe(policy.officeName || policy.office || policy.locationName || ''),
+    Latitude: safe(policy.latitude || policy.lat || ''),
+    Longitude: safe(policy.longitude || policy.lng || ''),
+    'Radius (Meters)': getPolicyNumber(policy.radiusMeters || policy.radius || 200, 200) || 200,
+    Enabled: policy.enabled === false ? 'false' : 'true',
+    'Updated By': safe(editorId),
+    'Updated At': nowIso()
+  });
+  await upsertRow('AttendancePolicy', 'PolicyID', ATTENDANCE_POLICY_ID, next);
+  return normalizeLocationPolicy(next);
+}
+
+function haversineDistanceMeters(leftLat, leftLng, rightLat, rightLng) {
+  const toRad = (value) => (Number(value) * Math.PI) / 180;
+  const lat1 = Number(leftLat);
+  const lng1 = Number(leftLng);
+  const lat2 = Number(rightLat);
+  const lng2 = Number(rightLng);
+  if (![lat1, lng1, lat2, lng2].every((value) => Number.isFinite(value))) return Number.NaN;
+  const R = 6371000;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function isWFHApprovedForDate(employeeId, dateValue) {
+  const intimationRows = await listRows('Intimation');
+  const date = normalizedDate(dateValue || today());
+  return intimationRows.some((row) => {
+    const rowEmployeeId = safe(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID'])).toUpperCase();
+    if (!eq(rowEmployeeId, employeeId)) return false;
+    const rowDate = normalizedDate(first(row, ['Intimation Date', 'Date', 'date']));
+    if (rowDate !== date) return false;
+    return isWorkFromHomeIntimation(row) && isApprovedStatus(first(row, ['Status', 'status']));
+  });
+}
+
+async function canPunchAtLocation(employeeId, latitude, longitude, dateValue = today()) {
+  const policy = await getAttendanceLocationPolicy();
+  const wfhApproved = await isWFHApprovedForDate(employeeId, dateValue);
+  if (!policy.enabled || wfhApproved) {
+    return { allowed: true, policy, wfhApproved, mode: wfhApproved ? 'WFH' : 'Open' };
+  }
+
+  const hasPolicyCoords = safe(policy.latitude) && safe(policy.longitude);
+  if (!hasPolicyCoords) {
+    return { allowed: true, policy, wfhApproved: false, mode: 'Open' };
+  }
+
+  const distanceMeters = haversineDistanceMeters(policy.latitude, policy.longitude, latitude, longitude);
+  if (!Number.isFinite(distanceMeters)) {
+    return {
+      allowed: false,
+      policy,
+      wfhApproved: false,
+      mode: 'Office',
+      message: 'Attendance location check failed. Invalid GPS coordinates received.'
+    };
+  }
+
+  const radiusMeters = Math.max(25, getPolicyNumber(policy.radiusMeters, 200) || 200);
+  if (distanceMeters <= radiusMeters) {
+    return {
+      allowed: true,
+      policy,
+      wfhApproved: false,
+      mode: 'Office',
+      distanceMeters,
+      radiusMeters
+    };
+  }
+
+  return {
+    allowed: false,
+    policy,
+    wfhApproved: false,
+    mode: 'Office',
+    distanceMeters,
+    radiusMeters,
+    message: `Aap allowed office location se bahar hain (${Math.round(distanceMeters)}m away). Work from Home approval ke bina attendance nahi lag sakti.`
+  };
 }
 
 function durationLabel(start, end) {
@@ -383,6 +539,11 @@ export async function recordAttendance(attendanceData = {}) {
     return { success: false, message: 'Live GPS location required hai. Location permission allow karke dobara try karein.' };
   }
 
+  const locationCheck = await canPunchAtLocation(employeeId, latitude, longitude, today());
+  if (!locationCheck.allowed) {
+    return fail(locationCheck.message || 'Aap allowed location ke bahar hain.');
+  }
+
   const existingAttendance = await listRows('Attendance');
   const latest = latestAttendanceEvent(existingAttendance, employeeId, today());
   if (action === 'Punch In' && latest?.Action === 'Punch In') {
@@ -423,6 +584,9 @@ export async function recordAttendance(attendanceData = {}) {
   row['Total Working Hours'] = row.Duration || '';
   row['Admin Approval'] = 'Pending';
   row['Admin Remarks'] = '';
+  row['Attendance Mode'] = locationCheck.wfhApproved ? 'Work From Home' : 'Office';
+  row['Location Policy'] = locationCheck.wfhApproved ? 'WFH Approved' : locationCheck.policy?.enabled ? 'Office Restricted' : 'Open';
+  row['Location Distance (m)'] = locationCheck.distanceMeters ? Math.round(locationCheck.distanceMeters) : '';
 
   if (action === 'Punch Out' && latest) {
     const elapsedMinutes = Math.max(0, Math.floor((new Date(row.Time).getTime() - latest.eventTime) / 60000));
@@ -446,6 +610,22 @@ export async function recordAttendance(attendanceData = {}) {
     ? 'Punch In Submitted (Waiting for Approval).'
     : `Punch Out Submitted. Duration: ${row.Duration || '0h 0m'}`;
   return ok({ message, item: row });
+}
+
+export async function getAttendanceLocationPolicyForUser() {
+  return ok({ data: await getAttendanceLocationPolicy() });
+}
+
+export async function updateAttendanceLocationPolicy(editorId, editorRole, policy = {}) {
+  if (!/^(admin|super admin|hr)$/i.test(safe(editorRole))) {
+    return fail('Only Admin, Super Admin, or HR can update the attendance location policy.');
+  }
+  const saved = await saveAttendanceLocationPolicy(policy, editorId);
+  return ok({
+    message: 'Attendance location policy updated successfully.',
+    item: saved,
+    data: saved
+  });
 }
 
 export async function getAttendanceForUser(employeeId, startDate, endDate) {
