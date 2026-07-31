@@ -60,6 +60,8 @@
     "mime-types": "^3.0.2",
     "mongoose": "^8.4.3",
     "multer": "^2.2.0",
+    "pdfkit": "^0.19.1",
+    "pdfkit-table": "^0.2.11",
     "select2": "^4.1.0",
     "sweetalert2": "^11.26.25",
     "tailwindcss": "^4.3.2",

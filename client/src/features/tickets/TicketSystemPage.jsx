@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ConfirmDialog } from '@/features/tickets/components/ConfirmDialog';
 import { StatusPill } from '@/components/common/StatusPill';
+import { AppModal } from '@/components/modals';
 import { TicketCreateForm } from '@/features/tickets/components/TicketCreateForm';
 import { TicketFilterPanel } from '@/features/tickets/components/TicketFilterPanel';
 import { TicketChatDialog } from '@/features/tickets/components/TicketChatDialog';
@@ -8,7 +9,6 @@ import { TicketReassignDialog } from '@/features/tickets/components/TicketReassi
 import { TicketScheduleDialog } from '@/features/tickets/components/TicketScheduleDialog';
 import { TicketActionDialog } from '@/features/tickets/components/TicketActionDialog';
 import { TicketApprovalTransferDialog } from '@/features/tickets/components/TicketApprovalTransferDialog';
-import { TicketClientResponseDialog } from '@/features/tickets/components/TicketClientResponseDialog';
 import { TicketDetailsDialog } from '@/features/tickets/components/TicketDetailsDialog';
 import { TicketHeader } from '@/features/tickets/components/TicketHeader';
 import { TicketTable } from '@/features/tickets/components/TicketTable';
@@ -19,7 +19,7 @@ export function TicketSystemPage() {
     employeeId,
     currentUser,
     loading,
-    error,
+    error, clearError,
     submitting,
     clients,
     users,
@@ -38,7 +38,6 @@ export function TicketSystemPage() {
     submitReassign,
     submitApprovalAction,
     submitApprovalTransfer,
-    submitClientTicketResponse,
     loadTicketMessages,
     submitTicketMessage
   } = useTicketSystemData();
@@ -50,7 +49,6 @@ export function TicketSystemPage() {
   const [activeTab, setActiveTab] = useState('my');
   const [actionDialog, setActionDialog] = useState(null);
   const [transferDialog, setTransferDialog] = useState(null);
-  const [clientResponseTicket, setClientResponseTicket] = useState(null);
   const [chatTicketState, setChatTicketState] = useState({ ticket: null, messages: [], loading: false, sending: false });
   const [detailsTicket, setDetailsTicket] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null); // { onConfirm }
@@ -59,6 +57,7 @@ export function TicketSystemPage() {
     ? `${currentUser['Employee Name']} | ${employeeId}`
     : employeeId || 'Ticket Workspace';
   const canViewTeam = ['Super Admin', 'Admin', 'Manager', 'HR'].includes(role);
+  const clearMessage = () => setMessage(null);
   const myTickets = tickets.filter((ticket) => String(ticket['Employee ID'] || '').toLowerCase() === String(employeeId).toLowerCase());
   const teamTickets = tickets.filter((ticket) => !ticket._isClientOrigin);
   const visibleTickets = activeTab === 'team' && canViewTeam
@@ -219,20 +218,6 @@ export function TicketSystemPage() {
   };
 
   const handleToggleCreateForm = () => {
-    const openTicket = visibleTickets.find(
-      (t) =>
-        t.Status && t.Status.toLowerCase() === 'in progress' &&
-        String(t['Employee ID'] || t['employeeId'] || '').toLowerCase() === String(employeeId || '').toLowerCase()
-    );
-    if (openTicket) {
-      setConfirmDialog({
-        onConfirm: () => {
-          setConfirmDialog(null);
-          setShowCreateForm(true);
-        }
-      });
-      return;
-    }
     setShowCreateForm((current) => !current);
   };
 
@@ -257,12 +242,12 @@ export function TicketSystemPage() {
             {message.tone === 'danger' ? 'Issue' : 'Done'}
           </StatusPill>
           <span>{message.text}</span>
+          <button type="button" className="dashboard-banner__close" onClick={clearMessage}>OK</button>
         </div>
       ) : null}
 
       {showCreateForm ? (
-        <article className="migration-panel migration-panel--full">
-          <h2>Create New Ticket</h2>
+        <AppModal title="Create New Ticket" onClose={() => setShowCreateForm(false)} width="800px">
           <TicketCreateForm
             clients={clients}
             categories={categories}
@@ -273,10 +258,10 @@ export function TicketSystemPage() {
             onSubmit={handleCreate}
             onCancel={() => setShowCreateForm(false)}
           />
-        </article>
+        </AppModal>
       ) : null}
 
-      {error ? <div className="dashboard-banner dashboard-banner--error">{error}</div> : null}
+      {error ? <div className="dashboard-banner dashboard-banner--error"><span>{error}</span><button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button></div> : null}
 
       <article className="migration-panel migration-panel--full">
         <div className="migration-panel__row" style={{ justifyContent: 'space-between', paddingBottom: '12px' }}>
@@ -312,13 +297,6 @@ export function TicketSystemPage() {
           onApprovalAction={handleApprovalAction}
           onApprovalTransfer={setTransferDialog}
           onChat={handleChatOpen}
-          onClientResponse={(ticket, mode) => {
-            if (mode === 'client-send') {
-              setReassignTicket({ ticket, mode: 'client' });
-              return;
-            }
-            setClientResponseTicket(ticket);
-          }}
           onDetails={setDetailsTicket}
         />
       </article>
@@ -326,7 +304,6 @@ export function TicketSystemPage() {
       {scheduleTicket ? <TicketScheduleDialog ticket={scheduleTicket} saving={submitting} onClose={() => setScheduleTicket(null)} onSubmit={handleScheduleSubmit} /> : null}
       {actionDialog ? <TicketActionDialog ticket={actionDialog.ticket} action={actionDialog.action} saving={submitting} onClose={() => setActionDialog(null)} onSubmit={submitActionDialog} /> : null}
       {transferDialog ? <TicketApprovalTransferDialog ticket={transferDialog} users={users} saving={submitting} onClose={() => setTransferDialog(null)} onSubmit={async (target, remarks) => { const result = await submitApprovalTransfer(transferDialog['Ticket ID'], target, remarks); setMessage({ tone: result.success ? 'success' : 'danger', text: result.success ? 'Approval transferred.' : result.message }); if (result.success) setTransferDialog(null); }} /> : null}
-      {clientResponseTicket ? <TicketClientResponseDialog ticket={clientResponseTicket} saving={submitting} onClose={() => setClientResponseTicket(null)} onSubmit={async (responseText, planDate, attachment) => { const result = await submitClientTicketResponse(clientResponseTicket['Ticket ID'], responseText, planDate, attachment); setMessage({ tone: result.success ? 'success' : 'danger', text: result.success ? 'Client response saved.' : result.message }); if (result.success) setClientResponseTicket(null); }} /> : null}
       {chatTicketState.ticket ? (
         <TicketChatDialog
           ticket={chatTicketState.ticket}

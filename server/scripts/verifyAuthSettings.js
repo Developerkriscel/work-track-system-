@@ -1,6 +1,4 @@
 import 'dotenv/config';
-import fs from 'fs';
-import path from 'path';
 import mongoose from 'mongoose';
 import { connectDatabase } from '../config/database.js';
 import { LegacyModels } from '../models/legacyModels.js';
@@ -22,11 +20,16 @@ import { upsertRow } from '../services/legacyStore.service.js';
 const failures = [];
 const cleanupUsers = new Set();
 const cleanupClients = new Set();
-const cleanupFiles = new Set();
-
 const assert = (condition, message) => {
   if (!condition) failures.push(message);
 };
+
+function isExpectedR2Url(url, folderName) {
+  const value = String(url || '');
+  if (!value) return false;
+  const escapedFolder = folderName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`/([^/]+/)?${escapedFolder}/`, 'i').test(value);
+}
 
 function tempId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`.toUpperCase();
@@ -101,12 +104,12 @@ try {
     phone: '9999999999'
   });
   assert(!!updatedProfile, 'Employee profile update should succeed.');
-  assert(String(updatedProfile.Avatar || '').startsWith('/uploads/user_avatars/'), 'Profile avatar should persist to uploads.');
+  assert(
+    isExpectedR2Url(updatedProfile.Avatar, 'user_avatars'),
+    'Profile avatar should persist to the configured R2 user_avatars path.'
+  );
   assert(updatedProfile.Email === 'auth.verifier@kriscel.test', 'Profile email should persist.');
   assert(updatedProfile['Phone No'] === '9999999999', 'Profile phone should persist.');
-
-  const avatarPath = String(updatedProfile.Avatar || '').replace(/^\//, '');
-  if (avatarPath) cleanupFiles.add(path.join(process.cwd(), avatarPath.replace(/\//g, path.sep)));
 
   const profileSession = await getEmployeeSessionFromMongo(employeeId);
   assert(profileSession?.Email === 'auth.verifier@kriscel.test', 'Updated employee email should be visible in session data.');
@@ -142,14 +145,6 @@ try {
       }))
     });
   }
-
-  cleanupFiles.forEach((filePath) => {
-    try {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch {
-      // Best-effort cleanup only.
-    }
-  });
 
   if (mongoose.connection.readyState !== 0) {
     await mongoose.disconnect();

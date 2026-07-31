@@ -1,3 +1,5 @@
+import { CustomSelect } from '@/components/common/CustomSelect';
+
 function TabButton({ active, count, onClick, children }) {
   return (
     <button
@@ -18,38 +20,38 @@ function FilterBar({ tab, filters, userOptions, ticketCategories = [], onChange,
       <div className="approval-filter-grid">
         <label className="dashboard-control">
           <span>Employee</span>
-          <select value={filters.employee} onChange={(event) => onChange({ employee: event.target.value })}>
-            <option value="">All employees</option>
-            {userOptions.map((user) => (
-              <option key={user.id} value={`${user.name} ${user.id}`}>
-                {user.name} ({user.id})
-              </option>
-            ))}
-          </select>
+          <CustomSelect
+            value={filters.employee}
+            onChange={(val) => onChange({ employee: val })}
+            options={userOptions.map((user) => ({ value: `${user.name} ${user.id}`, label: `${user.name} (${user.id})` }))}
+            defaultLabel="All employees"
+          />
         </label>
 
         {showCategory ? (
           <label className="dashboard-control">
             <span>Category</span>
-            <select value={filters.category} onChange={(event) => onChange({ category: event.target.value })}>
-              <option value="">All categories</option>
-              {ticketCategories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
+            <CustomSelect
+              value={filters.category}
+              onChange={(val) => onChange({ category: val })}
+              options={ticketCategories.map((category) => ({ value: category, label: category }))}
+              defaultLabel="All categories"
+            />
           </label>
         ) : null}
 
         <label className="dashboard-control">
           <span>Status</span>
-          <select value={filters.status} onChange={(event) => onChange({ status: event.target.value })}>
-            <option value="">All Statuses</option>
-            <option value="pending">Pending Action</option>
-            <option value="approved">Approved / Closed</option>
-            <option value="rejected">Rejected / Rework</option>
-          </select>
+          <CustomSelect
+            value={filters.status}
+            onChange={(val) => onChange({ status: val })}
+            options={[
+              { value: 'pending', label: 'Pending Action' },
+              { value: 'approved', label: 'Approved / Closed' },
+              { value: 'rejected', label: 'Rejected / Rework' }
+            ]}
+            defaultLabel="All Statuses"
+          />
         </label>
 
         <label className="dashboard-control">

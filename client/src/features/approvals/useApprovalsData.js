@@ -147,7 +147,7 @@ export function useApprovalsData() {
 
   const filteredTickets = useMemo(() => {
     const filter = filters.tickets;
-    return state.data.tickets.filter((ticket) => {
+    const rows = state.data.tickets.filter((ticket) => {
       const employeeText = `${ticket['Employee Name'] || ''} ${ticket['Employee ID'] || ''}`;
       const searchable = [
         ticket['Ticket ID'],
@@ -171,6 +171,7 @@ export function useApprovalsData() {
         includesFilter(searchable, filter.search)
       );
     });
+    return sortApprovalRows(rows, (item) => item?.['Plan Date']);
   }, [filters.tickets, state.data.tickets]);
 
   const filteredLeaves = useMemo(() => {
@@ -218,7 +219,7 @@ export function useApprovalsData() {
 
   const filteredAttendance = useMemo(() => {
     const filter = filters.attendance;
-    return state.data.attendance.filter((item) => {
+    const rows = state.data.attendance.filter((item) => {
       const employeeText = `${item['Employee Name'] || ''} ${item['Employee ID'] || ''}`;
       const searchable = [item.Status, item.Remarks, item['Admin Remarks']].join(' ');
       const isPending = /pending|need approval/i.test(item.Status);
@@ -234,6 +235,7 @@ export function useApprovalsData() {
         includesFilter(searchable, filter.search)
       );
     });
+    return sortApprovalRows(rows, (item) => item?.Date || item?.DateStr);
   }, [filters.attendance, state.data.attendance]);
 
   const counts = useMemo(
@@ -377,9 +379,9 @@ export function useApprovalsData() {
     activeTab,
     setActiveTab,
     loading: state.loading,
-    error: state.error,
+    error: state.error, clearError: () => setState((current) => ({ ...current, error: null })),
     submitting,
-    message,
+    message, clearMessage: () => setMessage(null),
     userOptions,
     approvers,
     ticketCategories,

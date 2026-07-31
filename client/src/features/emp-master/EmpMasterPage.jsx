@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import { AlertDialog } from '@/components/modals/AlertDialog';
 import { RefreshCw } from '@/components/common/icons';
 import { StatusPill } from '@/components/common/StatusPill';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { fetchAllManagersList, fetchAllUsersForAdmin } from '@/features/admin/api';
 import { AdminSummaryCards } from '@/features/admin/components/AdminSummaryCards';
+import { openProtectedFile, toPreviewUrl } from '@/lib/fileLinks';
 import { ConfirmDialog } from '@/features/tickets/components/ConfirmDialog';
 import { deleteEmpMasterRecord, fetchEmpMasterData, fetchNextEmpCode, saveEmpMasterRecord } from '@/features/emp-master/api';
 
@@ -12,7 +14,8 @@ const categories = [
   ['EMP', 'Employees'],
   ['Freelancer', 'Freelancers'],
   ['Intern', 'Interns'],
-  ['Inactive', 'Inactive Users']
+  ['Inactive', 'Inactive Users'],
+  ['Documents', 'Documents']
 ];
 
 const statuses = ['Active', 'Pending', 'Inactive', 'Resigned', 'Terminated'];
@@ -67,6 +70,10 @@ const emptyForm = () => ({
   CTC: '',
   'OFFER LETTER LINK': '',
   'APPOINTMENT LETTER LINK': '',
+  'AADHAAR CARD LINK': '',
+  'PAN CARD LINK': '',
+  'BANK PROOF LINK': '',
+  'EDUCATION CERTIFICATE LINK': '',
   'Documents of Employee': ''
 });
 
@@ -194,27 +201,90 @@ function Field({
 }
 
 function DocumentLinks({ form }) {
-  const links = [
-    ['Offer Letter', form['OFFER LETTER LINK']],
-    ['Appointment Letter', form['APPOINTMENT LETTER LINK']],
-    ...safe(form['Documents of Employee'])
-      .split(',')
-      .map((url) => url.trim())
-      .filter(Boolean)
-      .map((url) => [`Document`, url])
-  ];
+  const [alertMsg, setAlertMsg] = useState(null);
+  const links = extractDocumentItems(form);
 
   if (!links.length) return null;
 
   return (
     <div className="emp-document-links">
-      {links.map(([label, url], index) => (
-        <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer">
-          {label} {links.length > 2 ? index + 1 : ''}
+      {links.map((doc, index) => (
+        <a
+          key={`${doc.url}-${index}`}
+          href={toPreviewUrl(doc.url)}
+          target="_blank"
+          rel="noreferrer"
+          onClick={async (event) => {
+            event.preventDefault();
+            try {
+              await openProtectedFile(doc.url);
+            } catch (error) {
+              setAlertMsg(error.message || 'Document could not be opened.');
+            }
+          }}
+        >
+          {doc.label} {links.length > 6 ? index + 1 : ''}
         </a>
       ))}
+      <AlertDialog message={alertMsg} onClose={() => setAlertMsg(null)} />
     </div>
   );
+}
+
+function extractDocumentItems(row = {}) {
+  const items = [];
+  const pushItem = (label, url) => {
+    const value = safe(url);
+    if (!value) return;
+    items.push({ label, url: value });
+  };
+
+  pushItem('Offer Letter', row['OFFER LETTER LINK']);
+  pushItem('Appointment Letter', row['APPOINTMENT LETTER LINK']);
+  pushItem('Aadhaar Card', row['AADHAAR CARD LINK']);
+  pushItem('PAN Card', row['PAN CARD LINK']);
+  pushItem('Bank Proof', row['BANK PROOF LINK']);
+  pushItem('Education Cert.', row['EDUCATION CERTIFICATE LINK']);
+
+  safe(row['Documents of Employee'])
+    .split(',')
+    .map((url) => url.trim())
+    .filter(Boolean)
+    .forEach((url, index) => pushItem(`Document ${index + 1}`, url));
+
+  return items;
+}
+
+function getRowIdentity(row = {}) {
+  return safe(first(row, ['EMP Code', 'Employee ID', 'User ID']));
+}
+
+function scoreDocumentRow(row = {}) {
+  return extractDocumentItems(row).length;
+}
+
+function dedupeRowsByIdentity(rows = []) {
+  const map = new Map();
+
+  rows.forEach((row) => {
+    const identity = getRowIdentity(row);
+    if (!identity) return;
+
+    const key = identity.toLowerCase();
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, row);
+      return;
+    }
+
+    const existingScore = scoreDocumentRow(existing);
+    const nextScore = scoreDocumentRow(row);
+    if (nextScore > existingScore) {
+      map.set(key, row);
+    }
+  });
+
+  return [...map.values()];
 }
 
 function mergeRowsWithUsers(rows = [], users = []) {
@@ -255,7 +325,7 @@ function buildSummary(users = []) {
 
 function EmpEditor({ mode, category, initialRow, managerOptions, onClose, onSaved }) {
   const [form, setForm] = useState(() => (initialRow ? toForm(initialRow, category, managerOptions) : { ...emptyForm(), Category: category }));
-  const [files, setFiles] = useState({ offer: null, appointment: null, bunch: [] });
+  const [files, setFiles] = useState({ offer: null, appointment: null, aadhaar: null, pan: null, bank: null, education: null, bunch: [] });
   const [loadingCode, setLoadingCode] = useState(!initialRow);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -299,6 +369,10 @@ function EmpEditor({ mode, category, initialRow, managerOptions, onClose, onSave
       const filePayloads = {
         offer: files.offer ? await fileToPayload(files.offer, form['EMP Code']) : null,
         appointment: files.appointment ? await fileToPayload(files.appointment, form['EMP Code']) : null,
+        aadhaar: files.aadhaar ? await fileToPayload(files.aadhaar, form['EMP Code']) : null,
+        pan: files.pan ? await fileToPayload(files.pan, form['EMP Code']) : null,
+        bank: files.bank ? await fileToPayload(files.bank, form['EMP Code']) : null,
+        education: files.education ? await fileToPayload(files.education, form['EMP Code']) : null,
         bunch: await Promise.all(files.bunch.map((file) => fileToPayload(file, form['EMP Code'])))
       };
       const result = await saveEmpMasterRecord(category, form, filePayloads);
@@ -425,16 +499,32 @@ function EmpEditor({ mode, category, initialRow, managerOptions, onClose, onSave
           <section className="emp-editor__section">
             <h3>Documents Upload</h3>
             <div className="emp-editor__grid">
-              <label className="dashboard-control">
+              <label className="dashboard-control emp-editor__half">
                 <span>Offer Letter</span>
                 <input type="file" disabled={readOnly} accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => setFiles((current) => ({ ...current, offer: event.target.files?.[0] || null }))} />
               </label>
-              <label className="dashboard-control">
+              <label className="dashboard-control emp-editor__half">
                 <span>Appointment Letter</span>
                 <input type="file" disabled={readOnly} accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => setFiles((current) => ({ ...current, appointment: event.target.files?.[0] || null }))} />
               </label>
+              <label className="dashboard-control emp-editor__half">
+                <span>Aadhaar Card</span>
+                <input type="file" disabled={readOnly} accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => setFiles((current) => ({ ...current, aadhaar: event.target.files?.[0] || null }))} />
+              </label>
+              <label className="dashboard-control emp-editor__half">
+                <span>PAN Card</span>
+                <input type="file" disabled={readOnly} accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => setFiles((current) => ({ ...current, pan: event.target.files?.[0] || null }))} />
+              </label>
+              <label className="dashboard-control emp-editor__half">
+                <span>Bank Proof</span>
+                <input type="file" disabled={readOnly} accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => setFiles((current) => ({ ...current, bank: event.target.files?.[0] || null }))} />
+              </label>
+              <label className="dashboard-control emp-editor__half">
+                <span>Education Certificate</span>
+                <input type="file" disabled={readOnly} accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => setFiles((current) => ({ ...current, education: event.target.files?.[0] || null }))} />
+              </label>
               <label className="dashboard-control emp-editor__full">
-                <span>Employee Documents</span>
+                <span>Other Employee Documents</span>
                 <input type="file" disabled={readOnly} multiple accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => setFiles((current) => ({ ...current, bunch: Array.from(event.target.files || []) }))} />
               </label>
               <DocumentLinks form={form} />
@@ -472,18 +562,25 @@ export function EmpMasterPage() {
   const [editor, setEditor] = useState(null);
   const [deletingId, setDeletingId] = useState('');
   const [confirmAction, setConfirmAction] = useState(null);
+  const [alertMsg, setAlertMsg] = useState(null);
   const currentRole = useMemo(() => normalizeRole(user?.Role || user?.role), [user]);
 
   async function load(nextCategory = category) {
     setLoading(true);
     setError('');
     try {
-      const [empPayload, usersPayload, managersPayload] = await Promise.all([
-        fetchEmpMasterData(nextCategory),
+      const requestedCategories =
+        nextCategory === 'Documents'
+          ? categories.map(([value]) => value).filter((value) => value !== 'Documents')
+          : [nextCategory];
+      const categoryPayloads = await Promise.all(requestedCategories.map((value) => fetchEmpMasterData(value)));
+      const [usersPayload, managersPayload] = await Promise.all([
         fetchAllUsersForAdmin(user?.['Employee ID'] || user?.employeeId || ''),
         fetchAllManagersList()
       ]);
-      setRows(Array.isArray(empPayload.data) ? empPayload.data : []);
+
+      const payloadRows = categoryPayloads.flatMap((payload) => (Array.isArray(payload?.data) ? payload.data : []));
+      setRows(nextCategory === 'Documents' ? dedupeRowsByIdentity(payloadRows) : payloadRows);
       setAllUsers(Array.isArray(usersPayload?.data) ? usersPayload.data : []);
       setManagerOptions(Array.isArray(managersPayload) ? managersPayload : []);
     } catch (reason) {
@@ -506,7 +603,12 @@ export function EmpMasterPage() {
     [mergedRows, search]
   );
   const activeCategoryLabel = categories.find(([value]) => value === category)?.[1] || 'Master Data';
-  const summary = useMemo(() => buildSummary(allUsers), [allUsers]);
+  const summary = useMemo(() => buildSummary(mergedRows), [mergedRows]);
+  const visibleDocumentRows = useMemo(
+    () => visibleRows.filter((row) => extractDocumentItems(row).length > 0),
+    [visibleRows]
+  );
+  const visibleCount = category === 'Documents' ? visibleDocumentRows.length : visibleRows.length;
 
   function changeCategory(nextCategory) {
     setCategory(nextCategory);
@@ -582,29 +684,29 @@ export function EmpMasterPage() {
           <button type="button" className="attendance-cta attendance-cta--purple" onClick={() => add('EMP')}>
             Add Employee
           </button>
-          <button type="button" className="attendance-cta attendance-cta--green" onClick={() => add('Intern')}>
-            Add Intern
-          </button>
-          <button type="button" className="attendance-cta attendance-cta--orange" onClick={() => add('Freelancer')}>
-            Add Freelancer
-          </button>
         </div>
       </header>
 
       {message ? (
-        <div className="dashboard-banner">
-          <StatusPill tone="success">Saved</StatusPill>
-          <span>{message}</span>
+        <div 
+          style={{ position: 'fixed', inset: 0, zIndex: 999998 }} 
+          onClick={() => setMessage('')}
+        >
+          <div className="dashboard-banner" onClick={(e) => e.stopPropagation()}>
+            <StatusPill tone="success">Saved</StatusPill>
+            <span>{message}</span>
+            <button type="button" className="dashboard-banner__close" onClick={() => setMessage('')}>OK</button>
+          </div>
         </div>
       ) : null}
-      {error ? <div className="dashboard-banner dashboard-banner--error">{error}</div> : null}
+      {error ? <div className="dashboard-banner dashboard-banner--error"><span>{error}</span><button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button></div> : null}
 
       <AdminSummaryCards summary={summary} />
 
       <article className="migration-panel migration-panel--full">
         <div className="migration-panel__row">
           <h2>{activeCategoryLabel}</h2>
-          <StatusPill tone="info">{`${visibleRows.length} records`}</StatusPill>
+          <StatusPill tone="info">{`${visibleCount} records`}</StatusPill>
         </div>
 
         <div className="migration-panel__row">
@@ -631,83 +733,143 @@ export function EmpMasterPage() {
           />
         </label>
 
-        <div className="dashboard-table-wrap">
-          <table className="dashboard-table emp-master-table">
-            <thead>
-              <tr>
-                <th>Employee ID</th>
-                <th>Employee Name</th>
-                <th>Role</th>
-                <th>Manager ID</th>
-                <th>Task Approver</th>
-                <th>Department</th>
-                <th>Status</th>
-                <th>Mobile Number</th>
-                <th>Joining Date</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
+        {category === 'Documents' ? (
+          <div className="dashboard-table-wrap">
+            <table className="dashboard-table emp-master-table emp-master-table--documents">
+              <thead>
                 <tr>
-                  <td colSpan="10" className="dashboard-table__empty">Loading people records...</td>
+                  <th>Employee ID</th>
+                  <th>Employee Name</th>
+                  <th>Documents</th>
                 </tr>
-              ) : visibleRows.length ? (
-                visibleRows.map((row) => {
-                  const id = first(row, ['EMP Code', 'Employee ID', 'User ID'], '-');
-                  const rowCategory = row.Category || category;
-                  const editable = canEditEmpMasterRow(currentRole, row);
-                  return (
-                    <tr key={`${rowCategory}-${id}`}>
-                      <td><span className="ticket-id-chip">{id}</span></td>
-                      <td>
-                        <div>{first(row, ['Name', 'Employee Name'], '-')}</div>
-                        {category === 'Inactive' && row._sourceSheet ? (
-                          <small className="emp-source-badge">{row._sourceSheet === 'EMP' ? 'Employee' : row._sourceSheet}</small>
-                        ) : null}
-                      </td>
-                      <td>{first(row, ['Role', 'Designation'], '-')}</td>
-                      <td>{first(row, ['Manager ID', 'Manager'], '-')}</td>
-                      <td>{first(row, ['Task Approver', 'Approver'], '-')}</td>
-                      <td>{row.Department || '-'}</td>
-                      <td><StatusPill tone={statusTone(row.Status)}>{row.Status || 'Active'}</StatusPill></td>
-                      <td>{first(row, ['Phone No', 'Mobile Number'], '-')}</td>
-                      <td>{first(row, ['Date of Joining', 'Joining Date'], '-')}</td>
-                      <td>
-                        <div className="emp-master-actions">
-                          <button type="button" className="attendance-cta attendance-cta--gray" onClick={() => openView(row)}>
-                            View
-                          </button>
-                          {editable ? (
-                            <>
-                              <button type="button" className="attendance-cta attendance-cta--blue" onClick={() => openEdit(row)}>
-                                Edit
-                              </button>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan="3" className="dashboard-table__empty">Loading document links...</td>
+                  </tr>
+                ) : visibleDocumentRows.length ? (
+                  visibleDocumentRows.map((row) => {
+                    const id = first(row, ['EMP Code', 'Employee ID', 'User ID'], '-');
+                    const name = first(row, ['Name', 'Employee Name'], '-');
+                    const docs = extractDocumentItems(row);
+                    return (
+                      <tr key={`doc-${id}`}>
+                        <td><span className="ticket-id-chip">{id}</span></td>
+                        <td>
+                          <div>{name}</div>
+                          <small className="emp-source-badge">{row.Category || 'EMP Master'}</small>
+                        </td>
+                        <td>
+                          <div className="emp-master-documents">
+                            {docs.map((doc) => (
                               <button
+                                key={`${id}-${doc.label}-${doc.url}`}
                                 type="button"
-                                className="attendance-cta attendance-cta--red"
-                                disabled={deletingId === id}
-                                onClick={() => requestDelete(row)}
+                                className="emp-master-document-link"
+                                onClick={async () => {
+                                  try {
+                                    await openProtectedFile(doc.url);
+                                  } catch (fileError) {
+                                    setAlertMsg(fileError.message || 'Document could not be opened.');
+                                  }
+                                }}
                               >
-                                {deletingId === id ? 'Deleting...' : 'Delete'}
+                                {doc.label}
                               </button>
-                            </>
-                          ) : (
-                            <span className="attendance-cta attendance-cta--gray cursor-not-allowed">View Only</span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="3" className="dashboard-table__empty">No uploaded documents found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="dashboard-table-wrap">
+            <table className="dashboard-table emp-master-table">
+              <thead>
                 <tr>
-                  <td colSpan="10" className="dashboard-table__empty">No people records found.</td>
+                  <th>Employee ID</th>
+                  <th>Employee Name</th>
+                  <th>Role</th>
+                  <th>Manager ID</th>
+                  <th>Task Approver</th>
+                  <th>Department</th>
+                  <th>Status</th>
+                  <th>Mobile Number</th>
+                  <th>Joining Date</th>
+                  <th>Action</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan="10" className="dashboard-table__empty">Loading people records...</td>
+                  </tr>
+                ) : visibleRows.length ? (
+                  visibleRows.map((row) => {
+                    const id = first(row, ['EMP Code', 'Employee ID', 'User ID'], '-');
+                    const rowCategory = row.Category || category;
+                    const editable = canEditEmpMasterRow(currentRole, row);
+                    return (
+                      <tr key={`${rowCategory}-${id}`}>
+                        <td><span className="ticket-id-chip">{id}</span></td>
+                        <td>
+                          <div>{first(row, ['Name', 'Employee Name'], '-')}</div>
+                          {category === 'Inactive' && row._sourceSheet ? (
+                            <small className="emp-source-badge">{row._sourceSheet === 'EMP' ? 'Employee' : row._sourceSheet}</small>
+                          ) : null}
+                        </td>
+                        <td>{first(row, ['Role', 'Designation'], '-')}</td>
+                        <td>{first(row, ['Manager ID', 'Manager'], '-')}</td>
+                        <td>{first(row, ['Task Approver', 'Approver'], '-')}</td>
+                        <td>{row.Department || '-'}</td>
+                        <td><StatusPill tone={statusTone(row.Status)}>{row.Status || 'Active'}</StatusPill></td>
+                        <td>{first(row, ['Phone No', 'Mobile Number'], '-')}</td>
+                        <td>{first(row, ['Date of Joining', 'Joining Date'], '-')}</td>
+                        <td>
+                          <div className="emp-master-actions">
+                            <button type="button" className="attendance-cta attendance-cta--gray" onClick={() => openView(row)}>
+                              View
+                            </button>
+                            {editable ? (
+                              <>
+                                <button type="button" className="attendance-cta attendance-cta--blue" onClick={() => openEdit(row)}>
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  className="attendance-cta attendance-cta--red"
+                                  disabled={deletingId === id}
+                                  onClick={() => requestDelete(row)}
+                                >
+                                  {deletingId === id ? 'Deleting...' : 'Delete'}
+                                </button>
+                              </>
+                            ) : (
+                              <span className="attendance-cta attendance-cta--gray cursor-not-allowed">View Only</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="10" className="dashboard-table__empty">No people records found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </article>
 
       {editor ? (
@@ -735,6 +897,8 @@ export function EmpMasterPage() {
           onConfirm={confirmPendingAction}
         />
       ) : null}
+
+      <AlertDialog message={alertMsg} onClose={() => setAlertMsg(null)} />
     </section>
   );
 }

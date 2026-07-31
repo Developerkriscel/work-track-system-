@@ -154,7 +154,7 @@ export function ClientTicketsPage() {
     <section className="page-card">
       <ClientPortalHeader title="My Tickets" statusLabel={client?.['Client Name'] || 'Client Workspace'} />
 
-      {error ? <div className="dashboard-banner dashboard-banner--error">{error}</div> : null}
+      {error ? <div className="dashboard-banner dashboard-banner--error"><span>{error}</span><button type="button" className="dashboard-banner__close" onClick={() => window.location.reload()}>OK</button></div> : null}
 
       {message ? (
         <div className={`dashboard-banner${message.tone === 'danger' ? ' dashboard-banner--error' : ''}`}>
@@ -162,9 +162,7 @@ export function ClientTicketsPage() {
             {message.tone === 'danger' ? 'Issue' : 'Done'}
           </StatusPill>
           <span>{message.text}</span>
-          <button type="button" className="inline-action inline-action--ghost" onClick={() => setMessage(null)}>
-            Dismiss
-          </button>
+          <button type="button" className="dashboard-banner__close" onClick={() => setMessage(null)}>OK</button>
         </div>
       ) : null}
 

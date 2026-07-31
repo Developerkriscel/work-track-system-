@@ -1,10 +1,15 @@
+import { useState } from 'react';
+import { AlertDialog } from '@/components/modals/AlertDialog';
 import { StatusPill } from '@/components/common/StatusPill';
+import { openProtectedFile, toPreviewUrl } from '@/lib/fileLinks';
 import {
   clientSocialStatusTone,
   formatClientSocialDate
 } from '@/features/client-social/services/clientSocialPresentation';
 
 export function ClientSocialDetailsPanel({ details, submitting, onClose, onAddRemark }) {
+  const [alertMsg, setAlertMsg] = useState(null);
+
   if (!details.post && !details.loading) return null;
 
   const post = details.post || {};
@@ -32,7 +37,20 @@ export function ClientSocialDetailsPanel({ details, submitting, onClose, onAddRe
               <p><strong>Status:</strong> <StatusPill tone={clientSocialStatusTone(post.Status)}>{post.Status || '-'}</StatusPill></p>
               <p><strong>Caption:</strong> {post.Caption || '-'}</p>
               {post.CreativeLink ? (
-                <a className="forms-open-link attendance-cta attendance-cta--purple" href={post.CreativeLink} target="_blank" rel="noreferrer">
+                <a
+                  className="forms-open-link attendance-cta attendance-cta--purple"
+                  href={toPreviewUrl(post.CreativeLink)}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={async (event) => {
+                    event.preventDefault();
+                    try {
+                      await openProtectedFile(post.CreativeLink, { preferClient: true });
+                    } catch (error) {
+                      setAlertMsg(error.message || 'Creative file could not be opened.');
+                    }
+                  }}
+                >
                   Open Creative
                 </a>
               ) : null}
@@ -66,6 +84,7 @@ export function ClientSocialDetailsPanel({ details, submitting, onClose, onAddRe
           </div>
         </>
       )}
+      <AlertDialog message={alertMsg} onClose={() => setAlertMsg(null)} />
     </article>
   );
 }

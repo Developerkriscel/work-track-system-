@@ -150,6 +150,7 @@ export const appRoutes = [
     title: 'Management Dashboard',
     icon: BarChart3,
     iconColor: '#818cf8',
+    hiddenInNav: true,
     accessCheck: (user) => /manager|admin|hr|super admin/i.test(String(user?.Role || user?.role || '')),
     page: { ...placeholder('Review overview analytics, user explorer, client explorer, and planning tools.'), ...migrationModules.managementDashboard },
     element: <ManagementDashboardPage />

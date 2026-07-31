@@ -15,7 +15,7 @@ export const dashboardRanges = [
 export function useDashboardData() {
   const { user } = useAuth();
   const employeeId = user?.['Employee ID'] || '';
-  const [range, setRange] = useState('month');
+  const [range, setRange] = useState('today');
   const [state, setState] = useState({
     loading: true,
     error: null,
@@ -74,7 +74,7 @@ export function useDashboardData() {
     setRange,
     ranges: dashboardRanges,
     loading: state.loading,
-    error: state.error,
+    error: state.error, clearError: () => setState((current) => ({ ...current, error: null })),
     data
   };
 }

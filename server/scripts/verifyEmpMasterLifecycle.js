@@ -1,7 +1,5 @@
 import 'dotenv/config';
-import fs from 'fs';
 import mongoose from 'mongoose';
-import path from 'path';
 import { connectDatabase } from '../config/database.js';
 import { createAccessToken } from '../middleware/auth.middleware.js';
 import { LegacyModels } from '../models/legacyModels.js';
@@ -11,6 +9,12 @@ const baseUrl = process.env.PARITY_URL || `http://localhost:${process.env.PORT |
 const safe = (value = '') => String(value ?? '').trim();
 const first = (row, keys, fallback = '') => keys.map((key) => row?.[key]).find((value) => safe(value)) ?? fallback;
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
+const isExpectedR2Url = (url, folderName) => {
+  const value = String(url || '');
+  if (!value) return false;
+  const escapedFolder = folderName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`/([^/]+/)?${escapedFolder}/`, 'i').test(value);
+};
 
 await connectDatabase();
 const users = await listRows('User');
@@ -23,7 +27,6 @@ const token = createAccessToken({ kind: 'employee', id: adminId, role });
 const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 const code = `VERIFY_EMP_${Date.now()}`;
 const password = `Verify@${Date.now()}`;
-let uploadedFilePath = '';
 
 async function post(path, body) {
   const response = await fetch(`${baseUrl}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
@@ -56,8 +59,10 @@ try {
     }
   });
   const offerLink = first(createPayload.item, ['OFFER LETTER LINK']);
-  uploadedFilePath = offerLink ? path.resolve(process.cwd(), offerLink.replace(/^\//, '')) : '';
-  assert(offerLink && fs.existsSync(uploadedFilePath), 'Employee document upload was not stored locally.');
+  assert(
+    isExpectedR2Url(offerLink, 'emp_documents'),
+    'Employee document upload should persist to the configured R2 emp_documents path.'
+  );
 
   let empRows = await listRows('EmpMaster');
   let userRows = await listRows('User');
@@ -105,6 +110,5 @@ try {
     LegacyModels.EmpMaster.deleteMany(identityQuery),
     LegacyModels.User.deleteMany(identityQuery)
   ]);
-  if (uploadedFilePath && fs.existsSync(uploadedFilePath)) fs.unlinkSync(uploadedFilePath);
   if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
 }

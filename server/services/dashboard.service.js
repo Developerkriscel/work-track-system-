@@ -214,11 +214,11 @@ export async function getDashboardData(employeeId, filterRange) {
   const myTodos = allMyTodos.filter((task) => dateInRange(task.Date, start, end));
 
   const allTasks = [...allMyTickets, ...allMyFms, ...allMyTodos];
-  const todaysTasks = allTasks.filter((task) => task.Date === today());
   const dashboardTickets = myTickets;
   const dashboardFms = myFms;
   const dashboardTodos = myTodos;
   const dashboardTasks = [...dashboardTickets, ...dashboardFms, ...dashboardTodos];
+  const todaysTasks = dashboardTasks;
   const upcomingTasks = dashboardTasks.filter((task) => isDashboardActionableStatus(task.Status));
   const pendingTickets = dashboardTickets.filter((task) => isDashboardActionableStatus(task.Status)).length;
   const doneTickets = dashboardTickets.filter((task) => isUserCompletedStatus(task.Status)).length;

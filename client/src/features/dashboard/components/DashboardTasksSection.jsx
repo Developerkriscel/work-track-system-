@@ -41,7 +41,7 @@ export function DashboardTasksSection({ tasks = [] }) {
   return (
     <article className="migration-panel migration-panel--full">
       <div className="migration-panel__row">
-        <h2>Today's Tasks</h2>
+        <h2>Tasks in Selected Range</h2>
         <StatusPill tone="info">{tasks.length} items</StatusPill>
       </div>
       <DashboardTaskTable tasks={tasks} />

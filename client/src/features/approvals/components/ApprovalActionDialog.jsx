@@ -28,8 +28,8 @@ export function ApprovalActionDialog({ action, approvers = [], saving, onClose, 
         {isTransfer ? <label className="dashboard-control"><span>Transfer To</span><select value={target} onChange={(event) => setTarget(event.target.value)} required><option value="">Select approver</option>{approvers.map((approver) => <option key={approver.id} value={approver.id}>{approver.name} ({approver.id})</option>)}</select></label> : null}
         {isAttendanceApprove ? (
           <>
-            <div className="dashboard-banner">
-              <span>You can correct punch timings before approving this attendance entry.</span>
+            <div style={{ background: '#eff6ff', color: '#1e3a8a', padding: '12px 16px', borderRadius: '8px', fontSize: '14px', marginBottom: '16px', gridColumn: '1 / -1' }}>
+              <span>💡 You can correct punch timings before approving this attendance entry.</span>
             </div>
             <label className="dashboard-control">
               <span>Punch In</span>

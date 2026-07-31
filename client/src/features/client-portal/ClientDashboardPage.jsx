@@ -12,7 +12,7 @@ export function ClientDashboardPage() {
   const {
     client,
     loading,
-    error,
+    error, clearError,
     summaryItems,
     pendingActions,
     recentActivity,
@@ -25,7 +25,7 @@ export function ClientDashboardPage() {
     <section className="page-card">
       <ClientPortalHeader title="Dashboard" statusLabel={client?.['Client Name'] || 'Client Workspace'} />
 
-      {error ? <div className="dashboard-banner dashboard-banner--error">{error}</div> : null}
+      {error ? <div className="dashboard-banner dashboard-banner--error"><span>{error}</span><button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button></div> : null}
 
       <ClientDashboardKpiGrid items={summaryItems} />
 

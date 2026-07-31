@@ -13,11 +13,11 @@ export function ClientSocialPage() {
     clientId,
     clientName,
     loading,
-    error,
+    error, clearError,
     rows,
     allRows,
     submitting,
-    message,
+    message, clearMessage,
     filters,
     updateFilters,
     resetFilters,
@@ -60,7 +60,10 @@ export function ClientSocialPage() {
       <ClientSocialHeader clientId={clientId} clientName={clientName} onRefresh={refresh} />
 
       {error ? (
-        <div className="dashboard-banner dashboard-banner--error">{error}</div>
+        <div className="dashboard-banner dashboard-banner--error">
+          <span>{error}</span>
+          <button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button>
+        </div>
       ) : null}
 
       {message ? (
@@ -69,6 +72,8 @@ export function ClientSocialPage() {
             {message.tone === 'danger' ? 'Update failed' : 'Update complete'}
           </StatusPill>
           <span>{message.text}</span>
+        
+          <button type="button" className="dashboard-banner__close" onClick={clearMessage}>OK</button>
         </div>
       ) : null}
 

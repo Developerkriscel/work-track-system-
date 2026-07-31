@@ -15,9 +15,9 @@ export function ApprovalsPage() {
     activeTab,
     setActiveTab,
     loading,
-    error,
+    error, clearError,
     submitting,
-    message,
+    message, clearMessage,
     userOptions,
     approvers,
     ticketCategories,
@@ -61,13 +61,18 @@ export function ApprovalsPage() {
       />
 
       {error ? (
-        <div className="dashboard-banner dashboard-banner--error">{error}</div>
+        <div className="dashboard-banner dashboard-banner--error">
+          <span>{error}</span>
+          <button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button>
+        </div>
       ) : null}
 
       {message ? (
         <div className={`dashboard-banner${message.tone === 'danger' ? ' dashboard-banner--error' : ''}`}>
           <StatusPill tone={message.tone === 'danger' ? 'danger' : 'success'}>{message.tone === 'danger' ? 'Action failed' : 'Action complete'}</StatusPill>
           <span>{message.text}</span>
+        
+          <button type="button" className="dashboard-banner__close" onClick={clearMessage}>OK</button>
         </div>
       ) : null}
 

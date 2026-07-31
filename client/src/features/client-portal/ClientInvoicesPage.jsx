@@ -7,7 +7,7 @@ export function ClientInvoicesPage() {
     activeTab,
     client,
     loading,
-    error,
+    error, clearError,
     summaryItems,
     invoiceTone,
     formatDate,
@@ -21,7 +21,7 @@ export function ClientInvoicesPage() {
     <section className="page-card">
       <ClientPortalHeader title="Invoices" statusLabel={client?.['Client Name'] || 'Finance View'} />
 
-      {error ? <div className="dashboard-banner dashboard-banner--error">{error}</div> : null}
+      {error ? <div className="dashboard-banner dashboard-banner--error"><span>{error}</span><button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button></div> : null}
 
       <ClientPortalSummaryGrid items={summaryItems} />
 

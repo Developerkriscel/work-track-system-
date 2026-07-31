@@ -1,3 +1,5 @@
+import { CustomSelect } from '@/components/common/CustomSelect';
+
 export function FormsPortalFilterPanel({
   filters,
   departmentOptions,
@@ -6,7 +8,7 @@ export function FormsPortalFilterPanel({
   onResetFilters
 }) {
   return (
-    <article className="migration-panel migration-panel--full">
+    <article className="migration-panel migration-panel--full" style={{ position: 'relative', zIndex: 10 }}>
       <div className="migration-panel__row">
         <h2>Filter & Search Forms</h2>
         <button type="button" className="attendance-cta attendance-cta--gray" onClick={onResetFilters}>
@@ -17,26 +19,22 @@ export function FormsPortalFilterPanel({
       <div className="approval-filter-grid">
         <label className="dashboard-control">
           <span>Department</span>
-          <select value={filters.department} onChange={(event) => onUpdateFilters({ department: event.target.value })}>
-            <option value="">All Departments</option>
-            {departmentOptions.map((department) => (
-              <option key={department} value={department}>
-                {department}
-              </option>
-            ))}
-          </select>
+          <CustomSelect 
+            value={filters.department} 
+            onChange={(val) => onUpdateFilters({ department: val })} 
+            options={departmentOptions.map(d => ({ value: d, label: d }))}
+            defaultLabel="All Departments" 
+          />
         </label>
 
         <label className="dashboard-control">
           <span>Category / Sheet</span>
-          <select value={filters.sheet} onChange={(event) => onUpdateFilters({ sheet: event.target.value })}>
-            <option value="">All Categories</option>
-            {sheetOptions.map((sheet) => (
-              <option key={sheet} value={sheet}>
-                {sheet}
-              </option>
-            ))}
-          </select>
+          <CustomSelect 
+            value={filters.sheet} 
+            onChange={(val) => onUpdateFilters({ sheet: val })} 
+            options={sheetOptions.map(s => ({ value: s, label: s }))}
+            defaultLabel="All Categories" 
+          />
         </label>
 
         <label className="dashboard-control approval-filter-grid__wide">

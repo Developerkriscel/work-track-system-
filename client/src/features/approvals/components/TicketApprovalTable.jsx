@@ -45,17 +45,10 @@ export function TicketApprovalTable({ rows, approvers, submitting, onRequestActi
       <table className="dashboard-table approval-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>User</th>
-            <th>Client</th>
-            <th>Category</th>
-            <th>Description</th>
-            <th>Plan Date</th>
-            <th>Start</th>
-            <th>End</th>
-            <th>TAT</th>
-            <th>Status</th>
-            <th>Remarks</th>
+            <th>Ticket & User</th>
+            <th>Task Details</th>
+            <th>Schedule</th>
+            <th>Status & Remarks</th>
             <th>Action</th>
           </tr>
         </thead>
@@ -63,22 +56,44 @@ export function TicketApprovalTable({ rows, approvers, submitting, onRequestActi
           {rows.length ? (
             rows.map((row) => (
               <tr key={row['Ticket ID']}>
-                <td><span className="ticket-id-chip">{row['Ticket ID']}</span></td>
                 <td>
                   <div className="approval-user-cell">
+                    <span className="ticket-id-chip">{row['Ticket ID']}</span>
                     <strong>{row['Employee Name'] || row['Employee ID'] || '-'}</strong>
-                    <span>{row['Employee ID'] || '-'}</span>
+                    <span style={{ fontSize: '0.85em', color: 'var(--text-secondary)' }}>
+                      {row.Name || row['Client Name'] || row['Client ID'] || '-'}
+                    </span>
                   </div>
                 </td>
-                <td>{row.Name || row['Client Name'] || row['Client ID'] || '-'}</td>
-                <td>{row['Task Category'] || row.Category || '-'}</td>
-                <td className="approval-table__copy">{row['Task Description'] || row.Description || '-'}</td>
-                <td>{formatApprovalDate(row['Plan Date'])}</td>
-                <td>{row['Start Time'] || '-'}</td>
-                <td>{row['End Time'] || '-'}</td>
-                <td>{row.TAT || row.When || '-'}</td>
-                <td><StatusPill tone={toneForApprovalStatus(row.Status)}>{row.Status || 'Pending Approval'}</StatusPill></td>
-                <td className="approval-table__copy">{row.Remarks || '-'}</td>
+                <td>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    <span style={{ fontSize: '0.8em', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-primary)' }}>
+                      <strong>{row['Task Category'] || row.Category || 'General'}</strong>
+                    </span>
+                    <span className="approval-table__copy" style={{ maxWidth: '250px' }}>
+                      {row['Task Description'] || row.Description || '-'}
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.9em' }}>
+                    <span><strong>{formatApprovalDate(row['Plan Date'])}</strong></span>
+                    <span style={{ color: 'var(--text-secondary)' }}>{row['Start Time'] || '-'} to {row['End Time'] || '-'}</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>TAT: {row.TAT || row.When || '-'}</span>
+                  </div>
+                </td>
+                <td>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <div>
+                      <StatusPill tone={toneForApprovalStatus(row.Status)}>{row.Status || 'Pending Approval'}</StatusPill>
+                    </div>
+                    {row.Remarks && row.Remarks !== '-' && (
+                      <span className="approval-table__copy" style={{ maxWidth: '250px', fontSize: '0.85em' }}>
+                        {row.Remarks}
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td>
                   <TicketActions
                     row={row}
@@ -91,7 +106,7 @@ export function TicketApprovalTable({ rows, approvers, submitting, onRequestActi
             ))
           ) : (
             <tr>
-              <td colSpan="12" className="dashboard-table__empty">No ticket approvals found.</td>
+              <td colSpan="5" className="dashboard-table__empty">No ticket approvals found.</td>
             </tr>
           )}
         </tbody>
@@ -99,3 +114,4 @@ export function TicketApprovalTable({ rows, approvers, submitting, onRequestActi
     </div>
   );
 }
+

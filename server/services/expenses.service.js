@@ -103,18 +103,20 @@ async function requireManagerApprovalRole(adminId) {
   return { ok: true, admin, users };
 }
 
-function normalizeAttachmentField(value, folderName = 'expenses') {
+async function normalizeAttachmentField(value, folderName = 'expenses') {
   if (!value) return '';
   if (typeof value === 'string') return value;
   const items = Array.isArray(value) ? value : [value];
-  return items
-    .map((item) => {
-      if (!item) return '';
-      if (typeof item === 'string') return item;
-      return saveBase64File(item, folderName);
-    })
-    .filter(Boolean)
-    .join(',');
+  const normalizedItems = [];
+  for (const item of items) {
+    if (!item) continue;
+    if (typeof item === 'string') {
+      normalizedItems.push(item);
+      continue;
+    }
+    normalizedItems.push(await saveBase64File(item, folderName));
+  }
+  return normalizedItems.filter(Boolean).join(',');
 }
 
 export async function recordExpense(expenseData = {}) {
@@ -126,7 +128,7 @@ export async function recordExpense(expenseData = {}) {
     'Last Update Date': nowIso(),
     ...expenseData
   };
-  row['Receipt URL'] = normalizeAttachmentField(expenseData.Receipt || expenseData['Receipt URL'], 'expenses');
+  row['Receipt URL'] = await normalizeAttachmentField(expenseData.Receipt || expenseData['Receipt URL'], 'expenses');
   await insertRow('Expense', row);
   return ok({ message: 'Expense recorded.', item: row });
 }

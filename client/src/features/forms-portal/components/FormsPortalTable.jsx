@@ -71,7 +71,7 @@ export function FormsPortalTable({
                           </button>
                           <button
                             type="button"
-                            className="ticket-action-btn ticket-action-btn--pause"
+                            className="ticket-action-btn ticket-action-btn--delete"
                             disabled={submitting}
                             onClick={() => {
                               onRequestRemove(form);

@@ -1,13 +1,7 @@
 export function AttendanceRangeToolbar({
   activeView,
   canManageTeamAttendance,
-  range,
-  customStart,
-  customEnd,
-  onViewChange,
-  onRangeChange,
-  onCustomStartChange,
-  onCustomEndChange
+  onViewChange
 }) {
   return (
     <div className="attendance-section-head">
@@ -27,32 +21,6 @@ export function AttendanceRangeToolbar({
           >
             My Team Attendance
           </button>
-        ) : null}
-      </div>
-      <div className="dashboard-controls">
-        <label className="dashboard-control">
-          <span>Date Range</span>
-          <select value={range} onChange={(event) => onRangeChange(event.target.value)}>
-            <option value="today">Today</option>
-            <option value="week">This Week</option>
-            <option value="last_week">Last Week</option>
-            <option value="month">This Month</option>
-            <option value="last_month">Last Month</option>
-            <option value="all">All History</option>
-            <option value="custom">Custom</option>
-          </select>
-        </label>
-        {range === 'custom' ? (
-          <>
-            <label className="dashboard-control">
-              <span>Start Date</span>
-              <input type="date" value={customStart} onChange={(event) => onCustomStartChange(event.target.value)} />
-            </label>
-            <label className="dashboard-control">
-              <span>End Date</span>
-              <input type="date" value={customEnd} onChange={(event) => onCustomEndChange(event.target.value)} />
-            </label>
-          </>
         ) : null}
       </div>
     </div>

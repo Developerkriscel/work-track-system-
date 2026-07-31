@@ -54,7 +54,7 @@ export function ClientsPortalTable({
                         </button>
                         <button
                           type="button"
-                          className="ticket-action-btn ticket-action-btn--pause"
+                          className="ticket-action-btn ticket-action-btn--delete"
                           disabled={submitting}
                           onClick={() => {
                             onRequestDeactivate(client);

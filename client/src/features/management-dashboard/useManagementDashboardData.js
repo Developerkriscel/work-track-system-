@@ -143,7 +143,7 @@ export function useManagementDashboardData() {
   return {
     currentUser: user || null,
     loading: state.loading,
-    error: state.error,
+    error: state.error, clearError: () => setState((current) => ({ ...current, error: null })),
     range,
     setRange,
     rangeOptions: managementRangeOptions,

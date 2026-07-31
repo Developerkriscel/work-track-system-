@@ -90,6 +90,14 @@ export function AttendanceEntryPanel({
             >
               {punchOutBusy ? punchBusyText : 'Punch Out'}
             </button>
+            <button
+              type="button"
+              className="attendance-cta attendance-cta--gray"
+              disabled={submitting || Boolean(punchAction)}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       ) : null}

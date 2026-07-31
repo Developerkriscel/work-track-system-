@@ -18,8 +18,8 @@ export function AdminPage() {
     activeTab,
     setActiveTab,
     loading,
-    error,
-    message,
+    error, clearError,
+    message, clearMessage,
     submitting,
     deletingId,
     users,
@@ -57,7 +57,10 @@ export function AdminPage() {
       />
 
       {error ? (
-        <div className="dashboard-banner dashboard-banner--error">{error}</div>
+        <div className="dashboard-banner dashboard-banner--error">
+          <span>{error}</span>
+          <button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button>
+        </div>
       ) : null}
 
       {message ? (
@@ -66,6 +69,8 @@ export function AdminPage() {
             {message.tone === 'danger' ? 'Update failed' : 'Update complete'}
           </StatusPill>
           <span>{message.text}</span>
+        
+          <button type="button" className="dashboard-banner__close" onClick={clearMessage}>OK</button>
         </div>
       ) : null}
 

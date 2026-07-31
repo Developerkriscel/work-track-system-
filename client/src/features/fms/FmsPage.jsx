@@ -13,7 +13,7 @@ export function FmsPage() {
     employeeId,
     currentUser,
     loading,
-    error,
+    error, clearError,
     submitting,
     tab,
     setTab,
@@ -91,10 +91,12 @@ export function FmsPage() {
             {message.tone === 'danger' ? 'Issue' : 'Done'}
           </StatusPill>
           <span>{message.text}</span>
+        
+          <button type="button" className="dashboard-banner__close" onClick={clearMessage}>OK</button>
         </div>
       ) : null}
 
-      {error ? <div className="dashboard-banner dashboard-banner--error">{error}</div> : null}
+      {error ? <div className="dashboard-banner dashboard-banner--error"><span>{error}</span><button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button></div> : null}
 
       <article className="migration-panel migration-panel--full">
         <div className="migration-panel__row">

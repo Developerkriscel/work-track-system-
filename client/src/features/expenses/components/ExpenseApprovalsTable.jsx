@@ -1,5 +1,8 @@
+import { useState } from 'react';
+import { AlertDialog } from '@/components/modals/AlertDialog';
 import { StatusPill } from '@/components/common/StatusPill';
 import { expenseStatusTone, formatExpenseDate } from '@/features/expenses/services/expensesPresentation';
+import { openProtectedFile, toPreviewUrl } from '@/lib/fileLinks';
 
 export function ExpenseApprovalsTable({
   expenses = [],
@@ -8,6 +11,7 @@ export function ExpenseApprovalsTable({
   onFilterReset,
   onRequestAction
 }) {
+  const [alertMsg, setAlertMsg] = useState(null);
   return (
     <article className="migration-panel migration-panel--full">
       <div className="migration-panel__row">
@@ -89,7 +93,20 @@ export function ExpenseApprovalsTable({
                   <td className="approval-table__copy">{expense.Description || '-'}</td>
                   <td>
                     {expense['Receipt URL'] ? (
-                      <a className="forms-open-link attendance-cta attendance-cta--purple" href={expense['Receipt URL']} target="_blank" rel="noreferrer">
+                      <a
+                        className="forms-open-link attendance-cta attendance-cta--purple"
+                        href={toPreviewUrl(expense['Receipt URL'])}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={async (event) => {
+                          event.preventDefault();
+                          try {
+                            await openProtectedFile(expense['Receipt URL']);
+                          } catch (error) {
+                            setAlertMsg(error.message || 'Receipt could not be opened.');
+                          }
+                        }}
+                      >
                         View
                       </a>
                     ) : (
@@ -131,6 +148,7 @@ export function ExpenseApprovalsTable({
           </tbody>
         </table>
       </div>
+      <AlertDialog message={alertMsg} onClose={() => setAlertMsg(null)} />
     </article>
   );
 }

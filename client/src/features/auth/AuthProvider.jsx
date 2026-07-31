@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { fetchEmployeeSession, loginEmployee } from '@/features/auth/api';
 import { persistEmployeeSession, readStoredEmployeeSession } from '@/features/auth/services/sessionPersistence';
 import { persistClientSession } from '@/features/auth/services/clientSessionPersistence';
@@ -49,6 +49,28 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
+  const refreshSession = useCallback(async (employeeIdOverride) => {
+    const employeeId = employeeIdOverride
+      || session?.user?.['Employee ID']
+      || readStoredEmployeeSession()?.user?.['Employee ID'];
+
+    if (!employeeId) {
+      setSession(null);
+      persistEmployeeSession(null);
+      return null;
+    }
+
+    const payload = await fetchEmployeeSession(employeeId);
+    const nextSession = {
+      user: payload.user,
+      token: payload.token
+    };
+
+    setSession(nextSession);
+    persistEmployeeSession(nextSession);
+    return nextSession;
+  }, [session?.user]);
+
   async function signIn(employeeId, password) {
     setLoading(true);
     setError(null);
@@ -73,11 +95,11 @@ export function AuthProvider({ children }) {
     }
   }
 
-  function signOut() {
+  const signOut = useCallback(() => {
     setSession(null);
     setError(null);
     persistEmployeeSession(null);
-  }
+  }, []);
 
   const value = useMemo(() => ({
     loading,
@@ -87,8 +109,9 @@ export function AuthProvider({ children }) {
     user: session?.user || null,
     signIn,
     signOut,
+    refreshSession,
     clearError: () => setError(null)
-  }), [loading, error, session]);
+  }), [loading, error, session, signIn, signOut, refreshSession]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -1,7 +1,11 @@
+import { useState } from 'react';
+import { AlertDialog } from '@/components/modals/AlertDialog';
 import { StatusPill } from '@/components/common/StatusPill';
 import { expenseStatusTone, formatExpenseDate } from '@/features/expenses/services/expensesPresentation';
+import { openProtectedFile, toPreviewUrl } from '@/lib/fileLinks';
 
 export function ExpensesHistoryTable({ expenses = [], title = 'My Recent Expenses' }) {
+  const [alertMsg, setAlertMsg] = useState(null);
   const rows = [...expenses].sort((left, right) => {
     const rightTime = new Date(right?.['Last Update Date'] || right?.Date || 0).getTime() || 0;
     const leftTime = new Date(left?.['Last Update Date'] || left?.Date || 0).getTime() || 0;
@@ -40,7 +44,20 @@ export function ExpensesHistoryTable({ expenses = [], title = 'My Recent Expense
                   <td className="approval-table__copy">{expense.Description || '-'}</td>
                   <td>
                     {expense['Receipt URL'] ? (
-                      <a className="forms-open-link attendance-cta attendance-cta--purple" href={expense['Receipt URL']} target="_blank" rel="noreferrer">
+                      <a
+                        className="forms-open-link attendance-cta attendance-cta--purple"
+                        href={toPreviewUrl(expense['Receipt URL'])}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={async (event) => {
+                          event.preventDefault();
+                          try {
+                            await openProtectedFile(expense['Receipt URL']);
+                          } catch (error) {
+                            setAlertMsg(error.message || 'Receipt could not be opened.');
+                          }
+                        }}
+                      >
                         View
                       </a>
                     ) : (
@@ -57,6 +74,7 @@ export function ExpensesHistoryTable({ expenses = [], title = 'My Recent Expense
           </tbody>
         </table>
       </div>
+      <AlertDialog message={alertMsg} onClose={() => setAlertMsg(null)} />
     </article>
   );
 }

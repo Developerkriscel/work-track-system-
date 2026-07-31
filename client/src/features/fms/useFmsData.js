@@ -273,7 +273,7 @@ export function useFmsData() {
     employeeId,
     currentUser: user || null,
     loading: state.loading,
-    error: state.error,
+    error: state.error, clearError: () => setState((current) => ({ ...current, error: null })),
     submitting,
     tab,
     setTab,

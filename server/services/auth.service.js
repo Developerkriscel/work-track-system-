@@ -199,7 +199,7 @@ export async function updateEmployeeProfileFromMongo(employeeId, { avatarBase64,
 
   const updateData = {};
   if (avatarBase64) {
-    updateData.Avatar = saveBase64File(
+    updateData.Avatar = await saveBase64File(
       { base64: avatarBase64, fileName: `${employeeId}_avatar.jpg` },
       'user_avatars'
     );

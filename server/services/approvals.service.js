@@ -84,6 +84,10 @@ function isPendingTicketStatus(status = '') {
   return /pending approval|hr approved/i.test(safe(status));
 }
 
+function isApprovalRelevantTicketStatus(status = '') {
+  return /pending approval|hr approved|approved|closed|rework|reject|completed/i.test(safe(status));
+}
+
 function isPendingLeaveStatus(status = '') {
   return /^pending$/i.test(safe(status));
 }
@@ -115,7 +119,7 @@ function requestApprovalDecision(admin, row, users, type) {
   else if (/intimation/i.test(type)) pending = isPendingIntimationStatus(status);
   else if (/attendance/i.test(type)) pending = isPendingAttendanceStatus(status);
 
-  if (/leave|intimation/i.test(type)) {
+  if (/leave|intimation|attendance/i.test(type)) {
     if (!canSeeEmployee) {
       return { visible: false, actionable: false, canApprove: false };
     }
@@ -170,10 +174,8 @@ function ticketApprovalDecision(admin, ticket, users) {
   const isHrTicket = ownerDepartment === 'hr' || ownerDepartment.includes('hr intern') || ownerDepartment.includes('human resource');
 
   if (role === 'super admin') {
-    // Super Admin is the global approval authority in the MERN panel. Keep
-    // self-approval blocked, but do not require a missing legacy approver
-    // mapping before showing the real approval controls.
-    return { visible: true, actionable: !ownTicket, canApprove: !ownTicket };
+    // Super Admin is the global approval authority in the MERN panel. 
+    return { visible: true, actionable: true, canApprove: true };
   }
   if (role === 'hr') {
     const actionable = !ownTicket && (isDesignated || isHrTicket);
@@ -358,10 +360,16 @@ export async function getPendingApprovals(adminId) {
       .filter(Boolean),
     attendance: Array.from(attendanceGroups.values()),
     tickets: data.tickets
-      .filter((row) => ticketApprovalDecision(admin, row, data.users).visible && isPendingTicketStatus(first(row, ['Status'])))
+      .filter((row) => ticketApprovalDecision(admin, row, data.users).visible && isApprovalRelevantTicketStatus(first(row, ['Status'])))
       .map((row) => {
         const decision = ticketApprovalDecision(admin, row, data.users);
-        return { ...asTicketRow(row, data.clients), _canApprove: decision.canApprove, _isActionableByMe: decision.actionable, _canTransferApproval: decision.actionable };
+        const isPending = isPendingTicketStatus(first(row, ['Status']));
+        return { 
+          ...asTicketRow(row, data.clients), 
+          _canApprove: decision.canApprove && isPending, 
+          _isActionableByMe: decision.actionable && isPending, 
+          _canTransferApproval: decision.actionable && isPending 
+        };
       })
       .sort((left, right) => Number(right._isActionableByMe) - Number(left._isActionableByMe)),
     users: data.users.map((user) => ({

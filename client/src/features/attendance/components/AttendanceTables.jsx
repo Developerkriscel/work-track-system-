@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { AlertDialog } from '@/components/modals/AlertDialog';
 import { StatusPill } from '@/components/common/StatusPill';
 import { formatPunchTime, toneForAttendanceStatus } from '@/features/attendance/services/attendancePresentation';
+import { openProtectedFile, toPreviewUrl } from '@/lib/fileLinks';
 
 function dateParts(value) {
   const date = new Date(`${value}T00:00:00`);
@@ -13,57 +15,80 @@ function dateParts(value) {
 }
 
 function AttendanceEvent({ row, action }) {
+  const [alertMsg, setAlertMsg] = useState(null);
   const event = action === 'in' ? row.punchIn : row.punchOut;
   const value = event?.[action === 'in' ? 'Punch In' : 'Punch Out'];
   if (!event || !value) return <span className="attendance-empty-time">{action === 'in' && row.isPendingToday ? 'Not Punched Yet' : '-- : --'}</span>;
   const hasLocation = Boolean((event.Latitude || event.Lattitude) && event.Longitude);
-  const hasPhoto = Boolean(event.Photo || event['Photo Url'] || event['Photo URL']);
+  const photoUrl = event.Photo || event['Photo Url'] || event['Photo URL'] || '';
+  const hasPhoto = Boolean(photoUrl);
   return (
     <div className="attendance-event">
       <strong>{formatPunchTime(value)}</strong>
       <div className="attendance-event__meta">
         <span className={hasLocation ? 'attendance-meta-chip attendance-meta-chip--location' : 'attendance-meta-chip'} title="Location capture">Location</span>
-        <span className={hasPhoto ? 'attendance-meta-chip attendance-meta-chip--photo' : 'attendance-meta-chip'} title="Photo capture">Photo</span>
+        {hasPhoto ? (
+          <a
+            className="attendance-meta-chip attendance-meta-chip--photo"
+            title="Open captured photo"
+            href={toPreviewUrl(photoUrl)}
+            target="_blank"
+            rel="noreferrer"
+            onClick={async (event) => {
+              event.preventDefault();
+              try {
+                await openProtectedFile(photoUrl);
+              } catch (error) {
+                setAlertMsg(error.message || 'Photo could not be opened.');
+              }
+            }}
+          >
+            Photo
+          </a>
+        ) : (
+          <span className="attendance-meta-chip" title="Photo capture">Photo</span>
+        )}
       </div>
+      <AlertDialog message={alertMsg} onClose={() => setAlertMsg(null)} />
     </div>
   );
 }
 
 export function AttendanceHistoryTable({ rows }) {
   return (
-    <div className="dashboard-table-wrap">
-      <table className="dashboard-table">
+    <div className="dashboard-table-wrap" style={{ border: 'none', boxShadow: 'none', background: 'transparent' }}>
+      <table className="dashboard-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
-          <tr>
-            <th>Date</th>
-            <th>Punch In</th>
-            <th>Punch Out</th>
-            <th>Status</th>
-            <th>Duration</th>
+          <tr style={{ borderBottom: '2px solid #f1f5f9' }}>
+            <th style={{ padding: '16px', color: '#475569', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: '#f8fafc', borderRadius: '8px 0 0 8px' }}>Date</th>
+            <th style={{ padding: '16px', color: '#475569', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: '#f8fafc' }}>Punch In</th>
+            <th style={{ padding: '16px', color: '#475569', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: '#f8fafc' }}>Punch Out</th>
+            <th style={{ padding: '16px', color: '#475569', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: '#f8fafc' }}>Status</th>
+            <th style={{ padding: '16px', color: '#475569', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: '#f8fafc', borderRadius: '0 8px 8px 0' }}>Duration</th>
           </tr>
         </thead>
         <tbody>
           {rows.length ? (
             rows.map((row) => (
-              <tr key={row.date}>
-                <td>
-                  <div className="attendance-date-card">
-                    <span>{dateParts(row.date).weekday}</span>
-                    <strong>{dateParts(row.date).day}</strong>
-                    <small>{dateParts(row.date).month}</small>
+              <tr key={row.date} style={{ borderBottom: '1px solid #f1f5f9', transition: 'all 0.2s ease' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                <td style={{ padding: '16px' }}>
+                  <div className="attendance-date-card" style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '8px', textAlign: 'center', width: '60px', background: '#ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
+                    <span style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>{dateParts(row.date).weekday}</span>
+                    <strong style={{ display: 'block', fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: '2px 0' }}>{dateParts(row.date).day}</strong>
+                    <small style={{ fontSize: '11px', fontWeight: '600', color: '#94a3b8', textTransform: 'uppercase' }}>{dateParts(row.date).month}</small>
                   </div>
                 </td>
-                <td><AttendanceEvent row={row} action="in" /></td>
-                <td><AttendanceEvent row={row} action="out" /></td>
-                <td>
+                <td style={{ padding: '16px', color: '#1e293b' }}><AttendanceEvent row={row} action="in" /></td>
+                <td style={{ padding: '16px', color: '#1e293b' }}><AttendanceEvent row={row} action="out" /></td>
+                <td style={{ padding: '16px' }}>
                   <StatusPill tone={toneForAttendanceStatus(row.status)}>{row.status}</StatusPill>
                 </td>
-                <td>{row.duration}</td>
+                <td style={{ padding: '16px', fontWeight: '600', color: '#64748b' }}>{row.duration}</td>
               </tr>
             ))
           ) : (
             <tr>
-              <td colSpan="5" className="dashboard-table__empty">
+              <td colSpan="5" className="dashboard-table__empty" style={{ padding: '32px', color: '#64748b', fontSize: '14px' }}>
                 No attendance records found.
               </td>
             </tr>

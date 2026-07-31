@@ -127,7 +127,7 @@ export function useFormsPortalData() {
   }, [employeeId]);
 
   const departmentOptions = useMemo(() => {
-    return Array.from(new Set(state.forms.map((form) => form.Department).filter(Boolean))).sort((left, right) => left.localeCompare(right));
+    return Array.from(new Set(state.forms.map((form) => form.Department).filter((dept) => dept && dept.toLowerCase() !== 'all'))).sort((left, right) => left.localeCompare(right));
   }, [state.forms]);
 
   const sheetOptions = useMemo(() => {
@@ -248,7 +248,7 @@ export function useFormsPortalData() {
     employeeId,
     currentUser: user || null,
     loading: state.loading,
-    error: state.error,
+    error: state.error, clearError: () => setState((current) => ({ ...current, error: null })),
     forms: filteredForms,
     allFormsCount: state.forms.length,
     filters,
@@ -258,7 +258,7 @@ export function useFormsPortalData() {
     isAdmin,
     assignableUsers,
     submitting,
-    message,
+    message, clearMessage: () => setMessage(null),
     departmentOptions,
     sheetOptions,
     editor,

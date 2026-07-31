@@ -1,4 +1,4 @@
-export function ManagementDashboardTabs({ activeTab, onTabChange }) {
+export function ManagementDashboardTabs({ activeTab, onTabChange, children = null }) {
   const tabs = [
     { id: 'overview', label: 'Overview Dashboard' },
     { id: 'user-explorer', label: 'User Explorer' },
@@ -7,19 +7,20 @@ export function ManagementDashboardTabs({ activeTab, onTabChange }) {
   ];
 
   return (
-    <article className="migration-panel migration-panel--full">
-      <div className="approval-tabs">
+    <div className="migration-panel__row" style={{ margin: '8px 0 24px', borderBottom: 'none', paddingBottom: 0 }}>
+      <div className="inner-dashboard-tabs">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
-            className={`approval-tab-btn${activeTab === tab.id ? ' approval-tab-btn--active' : ''}`}
+            className={`inner-dashboard-tab-btn${activeTab === tab.id ? ' inner-dashboard-tab-btn--active' : ''}`}
             onClick={() => onTabChange(tab.id)}
           >
             {tab.label}
           </button>
         ))}
       </div>
-    </article>
+      {children}
+    </div>
   );
 }

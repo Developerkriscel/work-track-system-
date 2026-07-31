@@ -24,6 +24,7 @@ import managementDashboardRoutes from './server/routes/managementDashboard.route
 import myApprovalStatusRoutes from './server/routes/myApprovalStatus.routes.js';
 import notificationsRoutes from './server/routes/notifications.routes.js';
 import reportsRoutes from './server/routes/reports.routes.js';
+import filesRoutes from './server/routes/files.routes.js';
 import ticketRoutes from './server/routes/ticket.routes.js';
 import todoRoutes from './server/routes/todo.routes.js';
 import { assertAuthConfiguration, requireAuth } from './server/middleware/auth.middleware.js';
@@ -207,6 +208,7 @@ app.use('/api/forms-portal', requireAuth({ kind: 'employee' }), formsPortalRoute
 app.use('/api/management-dashboard', requireAuth({ kind: 'employee', roles: ['Manager', 'Admin', 'HR', 'Super Admin'] }), managementDashboardRoutes);
 app.use('/api/my-approval-status', requireAuth({ kind: 'employee' }), myApprovalStatusRoutes);
 app.use('/api/notifications', requireAuth(), notificationsRoutes);
+app.use('/api/files', requireAuth(), filesRoutes);
 app.use(
   '/api/reports',
   requireAuth({ kind: 'employee', roles: ['Manager', 'Admin', 'HR', 'Super Admin'] }),

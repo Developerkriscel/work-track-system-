@@ -46,8 +46,20 @@ function canSeeTicket(ticket, employeeId, role, users = []) {
 
 function isClientOriginTicket(ticket = {}) {
   const remarks = safe(first(ticket, ['Remarks', 'remarks']));
-  return remarks.toLowerCase().includes('created from client portal')
-    || remarks.toLowerCase().includes('created from mern client portal');
+  const source = safe(first(ticket, ['Source', 'source', 'Ticket Source', 'ticketSource']));
+  const origin = safe(first(ticket, ['Origin', 'origin']));
+  const clientTicketFlag = safe(first(ticket, ['Client Ticket', 'clientTicket', 'Is Client Ticket', 'isClientTicket']));
+  const normalizedRemarks = remarks.toLowerCase();
+  const normalizedSource = source.toLowerCase();
+  const normalizedOrigin = origin.toLowerCase();
+  const normalizedClientTicketFlag = clientTicketFlag.toLowerCase();
+  return normalizedOrigin === 'client'
+    || normalizedClientTicketFlag === 'yes'
+    || normalizedClientTicketFlag === 'true'
+    || normalizedSource.includes('client portal')
+    || normalizedSource === 'client'
+    || normalizedRemarks.includes('created from client portal')
+    || normalizedRemarks.includes('created from mern client portal');
 }
 
 function assignableIdsFor(employeeId, role, users = []) {
@@ -386,13 +398,13 @@ function approvalDecision(data, ticket, actorId) {
   const actor = data.users.find((user) => eq(userId(user), actorId));
   const owner = data.users.find((user) => eq(userId(user), first(ticket, ['Employee ID', 'EmpID', 'employeeId'])));
   if (!actor || !owner) return { allowed: false, message: 'User details not found.' };
-  if (eq(userId(owner), actorId)) return { allowed: false, message: 'You cannot approve your own ticket.' };
+  if (eq(userId(owner), actorId) && userRole(actor) !== 'super admin') return { allowed: false, message: 'You cannot approve your own ticket.' };
   const role = userRole(actor);
   const ownerDepartment = safe(first(owner, ['Department', 'department'])).toLowerCase();
   const reassignedTo = first(ticket, ['Reassigned To', 'reassignedTo']);
   const designated = safe(reassignedTo || first(owner, ['Task Approver', 'Manager ID', 'Manager'])).split(',')[0].trim();
   if (role === 'super admin') {
-    return { allowed: !eq(userId(owner), actorId), actor, owner };
+    return { allowed: true, actor, owner };
   }
   const allowed = eq(designated, actorId) || (role === 'hr' && (ownerDepartment === 'hr' || ownerDepartment.includes('human resource')));
   return allowed ? { allowed: true, actor, owner } : { allowed: false, message: 'You are not the designated approver for this ticket.' };
@@ -470,9 +482,19 @@ export async function createTicket(ticketData = {}) {
   const data = await getRows();
   const clientId = first(ticketData, ['Client_Id', 'Client ID']);
   const client = data.clients.find((item) => eq(item.Client_Id, clientId) || eq(item['Client ID'], clientId));
-  const initialAttachments = Array.isArray(ticketData.Attachment)
-    ? ticketData.Attachment.map((item) => item?.base64 ? saveBase64File(item, 'ticket_attachments') : safe(item)).filter(Boolean).join(',')
-    : (ticketData.Attachment?.base64 ? saveBase64File(ticketData.Attachment, 'ticket_attachments') : safe(ticketData.Attachment));
+  let initialAttachments = '';
+  if (Array.isArray(ticketData.Attachment)) {
+    const attachmentUrls = [];
+    for (const item of ticketData.Attachment) {
+      if (!item) continue;
+      attachmentUrls.push(item?.base64 ? await saveBase64File(item, 'ticket_attachments') : safe(item));
+    }
+    initialAttachments = attachmentUrls.filter(Boolean).join(',');
+  } else {
+    initialAttachments = ticketData.Attachment?.base64
+      ? await saveBase64File(ticketData.Attachment, 'ticket_attachments')
+      : safe(ticketData.Attachment);
+  }
   const row = {
     'Ticket ID': id,
     ID: id,
@@ -526,9 +548,17 @@ export async function updateTicket(ticketId, updateData = {}) {
   let finalStatus = newStatus || ticket.Status;
   let historyAction = finalStatus || 'Update';
   const systemRemarks = [];
-  const closingAttachments = Array.isArray(updateData.attachment)
-    ? updateData.attachment.map((item) => item?.base64 ? saveBase64File(item, 'ticket_closing_attachments') : safe(item)).filter(Boolean)
-    : (updateData.attachment?.base64 ? [saveBase64File(updateData.attachment, 'ticket_closing_attachments')] : (safe(updateData.attachment) ? [safe(updateData.attachment)] : []));
+  let closingAttachments = [];
+  if (Array.isArray(updateData.attachment)) {
+    for (const item of updateData.attachment) {
+      if (!item) continue;
+      closingAttachments.push(item?.base64 ? await saveBase64File(item, 'ticket_closing_attachments') : safe(item));
+    }
+  } else if (updateData.attachment?.base64) {
+    closingAttachments = [await saveBase64File(updateData.attachment, 'ticket_closing_attachments')];
+  } else if (safe(updateData.attachment)) {
+    closingAttachments = [safe(updateData.attachment)];
+  }
   if (closingAttachments.length) update['Closing Attachment'] = closingAttachments.join(',');
 
   if (newStatus === 'In Progress') {
@@ -559,7 +589,11 @@ export async function updateTicket(ticketId, updateData = {}) {
         .split(',')
         .map((value) => value.trim())
         .filter(Boolean)[0] || '';
-    if (!firstApprover || eq(firstApprover, updatedBy)) {
+    
+    const updater = data.users.find((user) => eq(user['Employee ID'], updatedBy));
+    const isSuperAdmin = safe(updater?.Role).toLowerCase() === 'super admin';
+
+    if ((!firstApprover || eq(firstApprover, updatedBy)) && !isSuperAdmin) {
       update.Status = 'Closed';
       update['Close Date'] = now.toISOString();
       finalStatus = 'Closed';
@@ -623,13 +657,22 @@ export async function reassignTicket(ticketId, reassignToId, reassignById, remar
       return fail('You can only reassign tickets to yourself or your permitted team members.');
     }
   }
+  const preserveClientOrigin = isClientOriginTicket(ticket)
+    ? {
+        Source: first(ticket, ['Source', 'source', 'Ticket Source', 'ticketSource'], 'Client Portal'),
+        'Ticket Source': first(ticket, ['Ticket Source', 'ticketSource', 'Source', 'source'], 'Client Portal'),
+        Origin: first(ticket, ['Origin', 'origin'], 'Client'),
+        'Client Ticket': first(ticket, ['Client Ticket', 'clientTicket', 'Is Client Ticket', 'isClientTicket'], 'Yes')
+      }
+    : {};
   const row = await upsertRow('Ticket', 'Ticket ID', ticketId, {
     'Ticket ID': ticketId,
     'Employee ID': safe(reassignToId).toLowerCase() === 'client' ? '' : reassignToId,
     'Reassigned By': reassignById,
     Status: safe(reassignToId).toLowerCase() === 'client' ? 'Pending Client Response' : 'Reassigned',
     Remarks: remarks,
-    'Last Update Date': nowIso()
+    'Last Update Date': nowIso(),
+    ...preserveClientOrigin
   });
   await insertRow('TicketHistory', {
     'History ID': `HIST_${Date.now()}`,
@@ -646,7 +689,7 @@ export async function processClientResponse(ticketId, clientResponse, newPlanDat
   const scope = await getTicketScope(ticketId, employeeId, role);
   if (scope.error) return scope.error;
   const { ticket } = scope;
-  const attachmentUrl = attachment?.base64 ? saveBase64File(attachment, 'client_responses') : safe(attachment);
+  const attachmentUrl = attachment?.base64 ? await saveBase64File(attachment, 'client_responses') : safe(attachment);
   const originalAssignee = first(ticket, ['Reassigned By', 'Employee ID', 'employeeId']);
   const remark = `\n\n[[Client Responded on ${new Date().toLocaleString('en-IN')}]]\n${clientResponse || ''}${attachmentUrl ? `\nAttachment: ${attachmentUrl}` : ''}`;
   const row = await upsertRow('Ticket', 'Ticket ID', ticketId, {

@@ -316,7 +316,11 @@ function buildTeamAttendanceGroups(attendanceRows, users, allowedIds, startDate,
     .filter((row) => {
       const employeeId = safe(first(row, ['Employee ID', 'employeeId', 'EmpID'])).toUpperCase();
       const date = normalizedDate(first(row, ['Date', 'date']));
-      return allowedIds.has(employeeId) && dateInRange(date, startDate, endDate);
+      if (!allowedIds.has(employeeId) || !dateInRange(date, startDate, endDate)) return false;
+      const employee = userMap.get(employeeId);
+      const joiningDateStr = employee ? first(employee, ['Date of Joining', 'Joining Date', 'Date Of Joining']) : '';
+      if (joiningDateStr && normalizedDate(joiningDateStr) > date) return false;
+      return true;
     })
     .forEach((rawRow) => {
       const employeeId = safe(first(rawRow, ['Employee ID', 'employeeId', 'EmpID'])).toUpperCase();
@@ -349,20 +353,31 @@ function buildTeamAttendanceGroups(attendanceRows, users, allowedIds, startDate,
       });
     });
 
-  if (dateWithinRange(today(), startDate, endDate)) {
+  const s = normalizedDate(startDate || today());
+  const e = normalizedDate(endDate || startDate || today());
+  const loopStart = new Date(`${s}T12:00:00+05:30`);
+  const loopEnd = new Date(`${e}T12:00:00+05:30`);
+  let currentLoop = loopStart;
+  let days = 0;
+
+  while (currentLoop <= loopEnd && days < 31) {
+    const loopDate = localDate(currentLoop);
     users
       .filter((user) => {
         const employeeId = safe(userId(user)).toUpperCase();
-        return employeeId && allowedIds.has(employeeId) && isActiveUser(user);
+        if (!(employeeId && allowedIds.has(employeeId) && isActiveUser(user))) return false;
+        const joiningDateStr = first(user, ['Date of Joining', 'Joining Date', 'Date Of Joining']);
+        if (joiningDateStr && normalizedDate(joiningDateStr) > loopDate) return false;
+        return true;
       })
       .forEach((user) => {
         const employeeId = safe(userId(user)).toUpperCase();
-        const key = `${employeeId}__${today()}`;
+        const key = `${employeeId}__${loopDate}`;
         if (!groups.has(key)) {
           groups.set(key, {
             id: key,
-            date: today(),
-            dateLabel: localDateLabel(today()),
+            date: loopDate,
+            dateLabel: localDateLabel(loopDate),
             employeeId,
             employeeName: first(user, ['Employee Name', 'Name'], employeeId),
             role: first(user, ['Role', 'role'], ''),
@@ -372,6 +387,8 @@ function buildTeamAttendanceGroups(attendanceRows, users, allowedIds, startDate,
           });
         }
       });
+    currentLoop.setDate(currentLoop.getDate() + 1);
+    days++;
   }
 
   return Array.from(groups.values())
@@ -595,7 +612,7 @@ export async function recordAttendance(attendanceData = {}) {
   }
 
   if (attendanceData.Photo?.base64 || String(attendanceData.Photo || '').includes('base64')) {
-    row.Photo = saveBase64File(
+    row.Photo = await saveBase64File(
       attendanceData.Photo?.base64
         ? attendanceData.Photo
         : { base64: attendanceData.Photo, fileName: `${row.AttendanceID}.jpg` },
@@ -629,19 +646,39 @@ export async function updateAttendanceLocationPolicy(editorId, editorRole, polic
 }
 
 export async function getAttendanceForUser(employeeId, startDate, endDate) {
-  const [attendance, leaves, intimations] = await Promise.all([
+  const [attendance, leaves, intimations, users] = await Promise.all([
     listRows('Attendance'),
     listRows('Leave'),
-    listRows('Intimation')
+    listRows('Intimation'),
+    listRows('User')
   ]);
   
+  const user = users.find(u => eq(userId(u), employeeId));
+  const joiningDateStr = user ? first(user, ['Date of Joining', 'Joining Date', 'Date Of Joining']) : '';
+  const joiningDate = joiningDateStr ? normalizedDate(joiningDateStr) : '';
+
   return ok({
     data: attendance
-      .filter((row) => eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), employeeId) && dateInRange(first(row, ['Date', 'date']), startDate, endDate))
+      .filter((row) => {
+          const rowDate = normalizedDate(first(row, ['Date', 'date']));
+          return eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), employeeId) && 
+                 dateInRange(rowDate, startDate, endDate) &&
+                 (!joiningDate || rowDate >= joiningDate);
+      })
       .map((row) => attendanceRowsForApp(row))
       .flat(),
-    leaves: leaves.filter((row) => eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), employeeId) && dateInRange(first(row, ['Start Date', 'Start Date']), startDate, endDate)),
-    intimations: intimations.filter((row) => eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), employeeId) && dateInRange(first(row, ['Intimation Date', 'Intimation Date']), startDate, endDate))
+    leaves: leaves.filter((row) => {
+        const rowDate = normalizedDate(first(row, ['Start Date', 'Start Date']));
+        return eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), employeeId) && 
+               dateInRange(rowDate, startDate, endDate) &&
+               (!joiningDate || rowDate >= joiningDate);
+    }),
+    intimations: intimations.filter((row) => {
+        const rowDate = normalizedDate(first(row, ['Intimation Date', 'Intimation Date']));
+        return eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), employeeId) && 
+               dateInRange(rowDate, startDate, endDate) &&
+               (!joiningDate || rowDate >= joiningDate);
+    })
   });
 }
 

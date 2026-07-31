@@ -35,6 +35,8 @@ export function AttendancePage() {
     intimations,
     teamAttendanceLoading,
     teamAttendanceError,
+    clearAttendanceError,
+    clearTeamAttendanceError,
     teamAttendanceRows,
     locationPolicy,
     locationPolicyLoading,
@@ -77,6 +79,8 @@ export function AttendancePage() {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const canvasRef = useRef(null);
+
+  const clearMessage = () => setMessage(null);
 
   useEffect(() => {
     if (!session.isPunchedIn) {
@@ -173,7 +177,6 @@ export function AttendancePage() {
       streamRef.current = null;
     }
     setCameraReady(false);
-    setMessage({ tone: 'success', text: 'Photo captured. You can punch now.' });
   };
 
   const retakePhoto = () => {
@@ -328,6 +331,7 @@ export function AttendancePage() {
         <div className={`dashboard-banner${message.tone === 'danger' ? ' dashboard-banner--error' : ''}`}>
           <StatusPill tone={message.tone === 'danger' ? 'danger' : 'success'}>{message.tone === 'danger' ? 'Issue' : 'Done'}</StatusPill>
           <span>{message.text}</span>
+          <button type="button" className="dashboard-banner__close" onClick={clearMessage}>OK</button>
         </div>
       ) : null}
 
@@ -401,31 +405,69 @@ export function AttendancePage() {
       <AttendanceRangeToolbar
         activeView={activeView}
         canManageTeamAttendance={canManageTeamAttendance}
-        range={range}
-        customStart={customStart}
-        customEnd={customEnd}
         onViewChange={setActiveView}
-        onRangeChange={setRange}
-        onCustomStartChange={setCustomStart}
-        onCustomEndChange={setCustomEnd}
       />
 
       {activeView === 'self' ? (
         <>
-          {attendanceError ? <div className="dashboard-banner dashboard-banner--error">{attendanceError}</div> : null}
-          <article className="migration-panel migration-panel--full">
-            <div className="migration-panel__row">
-              <h2>Attendance Log</h2>
-              <StatusPill tone={attendanceLoading ? 'neutral' : 'info'}>
-                {attendanceLoading ? 'Refreshing' : `${attendanceRows?.length || 0} rows`}
-              </StatusPill>
+          {attendanceError ? <div className="dashboard-banner dashboard-banner--error"><span>{attendanceError}</span><button type="button" className="dashboard-banner__close" onClick={clearAttendanceError}>OK</button></div> : null}
+          <article className="migration-panel migration-panel--full" style={{ boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', borderRadius: '16px', padding: '24px', border: '1px solid #e2e8f0', background: '#ffffff' }}>
+            <div className="migration-panel__row" style={{ alignItems: 'flex-end', marginBottom: '24px' }}>
+              <div>
+                <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>Attendance Log</h2>
+                <StatusPill tone={attendanceLoading ? 'neutral' : 'info'}>
+                  {attendanceLoading ? 'Refreshing' : `${attendanceRows?.length || 0} records found`}
+                </StatusPill>
+              </div>
+              
+              <div className="dashboard-controls" style={{ gap: '12px' }}>
+                <label className="dashboard-control">
+                  <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase' }}>Date Range</span>
+                  <select 
+                    value={range} 
+                    onChange={(event) => setRange(event.target.value)}
+                    style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontWeight: '500' }}
+                  >
+                    <option value="today">Today</option>
+                    <option value="week">This Week</option>
+                    <option value="last_week">Last Week</option>
+                    <option value="month">This Month</option>
+                    <option value="last_month">Last Month</option>
+                    <option value="all">All History</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </label>
+                {range === 'custom' ? (
+                  <>
+                    <label className="dashboard-control">
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase' }}>Start Date</span>
+                      <input 
+                        type="date" 
+                        value={customStart} 
+                        onChange={(event) => setCustomStart(event.target.value)} 
+                        style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontWeight: '500' }}
+                      />
+                    </label>
+                    <label className="dashboard-control">
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase' }}>End Date</span>
+                      <input 
+                        type="date" 
+                        value={customEnd} 
+                        onChange={(event) => setCustomEnd(event.target.value)} 
+                        style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#f8fafc', fontWeight: '500' }}
+                      />
+                    </label>
+                  </>
+                ) : null}
+              </div>
             </div>
+
             <AttendanceHistoryTable rows={attendanceRows || []} />
           </article>
         </>
       ) : (
         <>
-          {teamAttendanceError ? <div className="dashboard-banner dashboard-banner--error">{teamAttendanceError}</div> : null}
+          {teamAttendanceError ? <div className="dashboard-banner dashboard-banner--error"><span>{teamAttendanceError}</span><button type="button" className="dashboard-banner__close" onClick={clearTeamAttendanceError}>OK</button></div> : null}
           <article className="migration-panel migration-panel--full">
             <div className="migration-panel__row">
               <h2>My Team Attendance</h2>

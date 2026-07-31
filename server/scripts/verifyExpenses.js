@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import fs from 'fs';
-import path from 'path';
 import mongoose from 'mongoose';
 import { connectDatabase } from '../config/database.js';
 import { LegacyModels } from '../models/legacyModels.js';
@@ -11,11 +10,16 @@ const failures = [];
 const cleanupUsers = new Set();
 const cleanupAttendance = new Set();
 const cleanupExpenses = new Set();
-const cleanupFiles = new Set();
-
 const assert = (condition, message) => {
   if (!condition) failures.push(message);
 };
+
+function isExpectedR2Url(url, folderName) {
+  const value = String(url || '');
+  if (!value) return false;
+  const escapedFolder = folderName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`/([^/]+/)?${escapedFolder}/`, 'i').test(value);
+}
 
 function tempId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`.toUpperCase();
@@ -128,8 +132,8 @@ try {
   assert(!!expenseId, 'Expense record did not return an expense identifier.');
   assert(createResult.item?.Status === 'Pending', 'New expense should default to Pending.');
   assert(
-    String(createResult.item?.['Receipt URL'] || '').startsWith('/uploads/expenses/'),
-    'Expense receipt should persist as an uploads path.'
+    isExpectedR2Url(createResult.item?.['Receipt URL'], 'expenses'),
+    'Expense receipt should persist to the configured R2 expenses path.'
   );
 
   const createdDoc = expenseId
@@ -141,12 +145,10 @@ try {
   assert(createdDoc?.data?.Amount === '450.75', 'Expense amount did not persist.');
   assert(createdDoc?.data?.Description === 'Verifier expense with receipt', 'Expense description did not persist.');
 
-  const receiptUrl = String(createdDoc?.data?.['Receipt URL'] || '');
-  if (receiptUrl.startsWith('/uploads/')) {
-    const receiptPath = path.join(process.cwd(), receiptUrl.replace(/^\//, '').replace(/\//g, path.sep));
-    cleanupFiles.add(receiptPath);
-    assert(fs.existsSync(receiptPath), 'Uploaded expense receipt file was not written to disk.');
-  }
+  assert(
+    isExpectedR2Url(createdDoc?.data?.['Receipt URL'], 'expenses'),
+    'Persisted expense receipt URL should point to the configured R2 expenses path.'
+  );
 
   const ownerList = await getExpensesForUser(ownerId);
   assert(ownerList.success, 'Employee should be able to load own expenses.');
@@ -191,14 +193,6 @@ try {
       }))
     });
   }
-
-  cleanupFiles.forEach((filePath) => {
-    try {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch {
-      // Leave cleanup best-effort; verification result is based on write success.
-    }
-  });
 
   if (mongoose.connection.readyState !== 0) {
     await mongoose.disconnect();

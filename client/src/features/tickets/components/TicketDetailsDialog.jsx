@@ -1,11 +1,16 @@
-import { AppModal } from '@/components/modals';
-
-function links(value) {
-  return String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
-}
+import { useState } from 'react';
+import { AppModal, AlertDialog } from '@/components/modals';
+import { openProtectedFile, toPreviewUrl, toPreviewUrls } from '@/lib/fileLinks';
 
 export function TicketDetailsDialog({ ticket, onClose }) {
-  const attachments = [...links(ticket?.Attachment), ...links(ticket?.['Closing Attachment'])];
+  const [alertMsg, setAlertMsg] = useState(null);
+  const attachments = Array.from(
+    new Set([
+      ...toPreviewUrls(ticket?.Attachment),
+      ...toPreviewUrls(ticket?.Attachments),
+      ...toPreviewUrls(ticket?.['Closing Attachment'])
+    ])
+  );
   return (
     <AppModal title={`Ticket Details ${ticket?.['Ticket ID'] || ''}`} onClose={onClose} width="680px">
       <div className="ticket-details-grid">
@@ -17,8 +22,31 @@ export function TicketDetailsDialog({ ticket, onClose }) {
         <div><strong>Plan Date</strong><span>{ticket?.['Plan Date'] || '-'}</span></div>
         <div className="ticket-details-grid__full"><strong>Description</strong><span className="ticket-details-copy">{ticket?.['Task Description'] || '-'}</span></div>
         <div className="ticket-details-grid__full"><strong>Remarks / History</strong><span className="ticket-details-copy">{ticket?.Remarks || '-'}</span></div>
-        <div className="ticket-details-grid__full"><strong>Attachments</strong><span>{attachments.length ? attachments.map((url, index) => <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer">Attachment {index + 1}</a>) : '-'}</span></div>
+        <div className="ticket-details-grid__full">
+          <strong>Attachments</strong>
+          <span>
+            {attachments.length ? attachments.map((url, index) => (
+              <a
+                key={`${url}-${index}`}
+                href={toPreviewUrl(url)}
+                target="_blank"
+                rel="noreferrer"
+                onClick={async (event) => {
+                  event.preventDefault();
+                  try {
+                    await openProtectedFile(url);
+                  } catch (error) {
+                    setAlertMsg(error.message || 'Attachment could not be opened.');
+                  }
+                }}
+              >
+                Attachment {index + 1}
+              </a>
+            )) : '-'}
+          </span>
+        </div>
       </div>
+      <AlertDialog message={alertMsg} onClose={() => setAlertMsg(null)} />
     </AppModal>
   );
 }

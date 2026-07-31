@@ -15,11 +15,11 @@ export function TodoPage() {
     employeeId,
     currentUser,
     loading,
-    error,
+    error, clearError,
     rows,
     allRows,
     submitting,
-    message,
+    message, clearMessage,
     refresh,
     statusFilter,
     setStatusFilter,
@@ -63,7 +63,7 @@ export function TodoPage() {
       <TodoHeader currentUser={currentUser} employeeId={employeeId} onRefresh={refresh} />
 
       {error ? (
-        <div className="dashboard-banner dashboard-banner--error">{error}</div>
+        <div className="dashboard-banner dashboard-banner--error"><span>{error}</span><button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button></div>
       ) : null}
 
       {message ? (
@@ -72,6 +72,7 @@ export function TodoPage() {
             {message.tone === 'danger' ? 'Update failed' : 'Update complete'}
           </StatusPill>
           <span>{message.text}</span>
+          <button type="button" className="dashboard-banner__close" onClick={clearMessage}>OK</button>
         </div>
       ) : null}
 

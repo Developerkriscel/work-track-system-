@@ -1,10 +1,13 @@
 import { StatusPill } from '@/components/common/StatusPill';
 import { formatManagementCurrency, managementStatusTone } from '@/features/management-dashboard/services/managementDashboardPresentation';
+import { BarChart3, Users, Clock3, Receipt, CircleCheckBig, ListChecks, ShieldUser, BadgeCheck } from '@/components/common/icons';
 
-function SummaryCard({ label, value }) {
+function SummaryCard({ label, value, icon: Icon, color = 'blue' }) {
   return (
     <article className="dashboard-kpi-card">
-      <div className="dashboard-kpi-card__icon dashboard-kpi-card__icon--purple" />
+      <div className={`dashboard-kpi-card__icon dashboard-kpi-card__icon--${color}`}>
+        {Icon && <Icon className="dashboard-kpi-card__icon-svg" />}
+      </div>
       <p className="dashboard-kpi-card__label">{label}</p>
       <p className="dashboard-kpi-card__value">{value}</p>
     </article>
@@ -52,14 +55,14 @@ export function OverviewDashboardSection({ kpis, tickets, fms, todo, users, clie
   return (
     <>
       <div className="dashboard-kpi-grid approvals-kpi-grid">
-        <SummaryCard label="Attendance %" value={`${kpis.attendancePct || 0}%`} />
-        <SummaryCard label="Attendance Count" value={kpis.attendanceCount || '0'} />
-        <SummaryCard label="Planned Time" value={kpis.plannedTime || '0h 0m'} />
-        <SummaryCard label="Outstanding" value={formatManagementCurrency(kpis.outstanding)} />
-        <SummaryCard label="Completed Today" value={kpis.completedToday || 0} />
-        <SummaryCard label="Completion Rate" value={`${kpis.completedRate || 0}%`} />
-        <SummaryCard label="Active Users" value={users.length} />
-        <SummaryCard label="Active Clients" value={clients.length} />
+        <SummaryCard icon={BarChart3} color="purple" label="Attendance %" value={`${kpis.attendancePct || 0}%`} />
+        <SummaryCard icon={Users} color="blue" label="Attendance Count" value={kpis.attendanceCount || '0'} />
+        <SummaryCard icon={Clock3} color="orange" label="Planned Time" value={kpis.plannedTime || '0h 0m'} />
+        <SummaryCard icon={Receipt} color="green" label="Outstanding" value={formatManagementCurrency(kpis.outstanding)} />
+        <SummaryCard icon={CircleCheckBig} color="blue" label="Completed Today" value={kpis.completedToday || 0} />
+        <SummaryCard icon={ListChecks} color="purple" label="Completion Rate" value={`${kpis.completedRate || 0}%`} />
+        <SummaryCard icon={ShieldUser} color="orange" label="Active Users" value={users.length} />
+        <SummaryCard icon={BadgeCheck} color="green" label="Active Clients" value={clients.length} />
       </div>
 
       <div className="migration-grid">

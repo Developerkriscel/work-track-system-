@@ -17,7 +17,7 @@ export function ExpensesPage() {
     currentUser,
     canApproveExpenses,
     loading,
-    error,
+    error, clearError,
     expenses,
     approvalQueue,
     filteredApprovals,
@@ -25,7 +25,7 @@ export function ExpensesPage() {
     updateApprovalFilters,
     resetApprovalFilters,
     submitting,
-    message,
+    message, clearMessage,
     formOpen,
     openForm,
     closeForm,
@@ -51,7 +51,10 @@ export function ExpensesPage() {
       />
 
       {error ? (
-        <div className="dashboard-banner dashboard-banner--error">{error}</div>
+        <div className="dashboard-banner dashboard-banner--error">
+          <span>{error}</span>
+          <button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button>
+        </div>
       ) : null}
 
       {message ? (
@@ -60,6 +63,8 @@ export function ExpensesPage() {
             {message.tone === 'danger' ? 'Update failed' : 'Update complete'}
           </StatusPill>
           <span>{message.text}</span>
+        
+          <button type="button" className="dashboard-banner__close" onClick={clearMessage}>OK</button>
         </div>
       ) : null}
 
@@ -89,7 +94,7 @@ export function ExpensesPage() {
       {activeView === 'mine' ? <ExpensesSummaryCards expenses={expenses} /> : null}
 
       {formOpen ? (
-        <AppModal title="Record an Expense" onClose={closeForm} width="980px">
+        <AppModal title="Record an Expense" onClose={closeForm} width="800px">
           <ExpenseFormPanel
             form={form}
             submitting={submitting}

@@ -18,12 +18,6 @@ export function ClientExplorerSection({ clients, selectedClientId, onClientChang
             </select>
           </label>
         </div>
-        <div className="dashboard-banner">
-          <StatusPill tone="info">{explorer.tasks.length} tasks</StatusPill>
-          <span>
-            Explore workload, task distribution, and invoice position for {selectedClient?.['Client Name'] || selectedClient?.name || 'the selected client'}.
-          </span>
-        </div>
       </article>
 
       <div className="migration-grid">

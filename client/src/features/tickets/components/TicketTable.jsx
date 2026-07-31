@@ -11,7 +11,6 @@ export function TicketTable({
   onReassign,
   onApprovalAction,
   onApprovalTransfer,
-  onClientResponse,
   onChat,
   onDetails
 }) {
@@ -78,8 +77,8 @@ export function TicketTable({
         </thead>
         <tbody>
           {tickets.length ? (
-            pageTickets.map((ticket) => (
-              <tr key={ticket['Ticket ID']}>
+            pageTickets.map((ticket, index) => (
+              <tr key={ticket['Ticket ID'] || index} className={`react-data-table__row ${ticketStatus(ticket.Status) === 'In Progress' ? 'ticket-row--in-progress' : ''}`}>
                 <td>
                   <button type="button" className="ticket-id-chip ticket-id-chip--button" onClick={() => onDetails(ticket)}>{ticket['Ticket ID']}</button>
                 </td>
@@ -143,7 +142,6 @@ export function TicketTable({
                         </button>
                         <button type="button" className="ticket-action-btn ticket-action-btn--assign" disabled={submitting} onClick={() => onReassign(ticket)}>Reassign</button>
                         <button type="button" className="ticket-action-btn ticket-action-btn--chat" disabled={submitting} onClick={() => onChat(ticket)}>Chat</button>
-                        <button type="button" className="ticket-action-btn ticket-action-btn--client" disabled={submitting} onClick={() => onClientResponse(ticket, 'client-send')}>Client</button>
                       </>
                     ) : (
                       <span

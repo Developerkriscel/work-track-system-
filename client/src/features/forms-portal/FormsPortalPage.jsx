@@ -11,7 +11,7 @@ export function FormsPortalPage() {
   const {
     employeeId,
     currentUser,
-    error,
+    error, clearError,
     forms,
     allFormsCount,
     filters,
@@ -21,7 +21,7 @@ export function FormsPortalPage() {
     isAdmin,
     assignableUsers,
     submitting,
-    message,
+    message, clearMessage,
     departmentOptions,
     sheetOptions,
     editor,
@@ -44,7 +44,10 @@ export function FormsPortalPage() {
       />
 
       {error ? (
-        <div className="dashboard-banner dashboard-banner--error">{error}</div>
+        <div className="dashboard-banner dashboard-banner--error">
+          <span>{error}</span>
+          <button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button>
+        </div>
       ) : null}
 
       {message ? (
@@ -53,6 +56,8 @@ export function FormsPortalPage() {
             {message.tone === 'danger' ? 'Update failed' : 'Update complete'}
           </StatusPill>
           <span>{message.text}</span>
+        
+          <button type="button" className="dashboard-banner__close" onClick={clearMessage}>OK</button>
         </div>
       ) : null}
 

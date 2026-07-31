@@ -20,7 +20,7 @@ export function TicketFilterPanel({
     : 'All Statuses';
 
   return (
-    <article className="migration-panel migration-panel--full">
+    <article className="migration-panel migration-panel--full" style={{ zIndex: 10, position: 'relative' }}>
       <div className="migration-panel__row">
         <h2>Advanced Filters</h2>
         <div className="ticket-filter-actions">

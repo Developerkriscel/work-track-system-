@@ -50,14 +50,13 @@ export function TodoFormPanel({
 }) {
   return (
     <article className="migration-panel migration-panel--full forms-editor">
-      <div className="migration-panel__row">
-        <h2>{formMode === 'single' ? 'Add a To-Do Task' : 'Bulk Add To-Do Tasks'}</h2>
-        {formMode === 'bulk' ? (
+      {formMode === 'bulk' ? (
+        <div className="migration-panel__row" style={{ justifyContent: 'flex-end' }}>
           <button type="button" className="attendance-cta attendance-cta--gray" onClick={onBulkAddRow}>
             Add Row
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {formMode === 'single' ? (
         <div className="forms-editor__grid">

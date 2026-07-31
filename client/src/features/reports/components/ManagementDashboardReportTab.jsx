@@ -1,16 +1,14 @@
-import { StatusPill } from '@/components/common/StatusPill';
 import { BatchAssignmentPlanner } from '@/features/management-dashboard/components/BatchAssignmentPlanner';
 import { ClientExplorerSection } from '@/features/management-dashboard/components/ClientExplorerSection';
-import { ManagementDashboardHeader } from '@/features/management-dashboard/components/ManagementDashboardHeader';
 import { ManagementDashboardTabs } from '@/features/management-dashboard/components/ManagementDashboardTabs';
-import { OverviewDashboardSection } from '@/features/management-dashboard/components/OverviewDashboardSection';
 import { UserExplorerSection } from '@/features/management-dashboard/components/UserExplorerSection';
 import { useManagementDashboardData } from '@/features/management-dashboard/useManagementDashboardData';
+import { OverviewDashboardSection } from '@/features/management-dashboard/components/OverviewDashboardSection';
+import { RefreshCw } from '@/components/common/icons';
 
-export function ManagementDashboardPage() {
+export function ManagementDashboardReportTab() {
   const {
     currentUser,
-    loading,
     error, clearError,
     range,
     setRange,
@@ -35,23 +33,23 @@ export function ManagementDashboardPage() {
   } = useManagementDashboardData();
 
   return (
-    <section className="page-card">
-      <ManagementDashboardHeader
-        currentUser={currentUser}
-        range={range}
-        rangeOptions={rangeOptions}
-        onRangeChange={setRange}
-        onRefresh={refresh}
-      />
+    <>
+      {error ? <div className="dashboard-banner dashboard-banner--error"><span>{error}</span><button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button></div> : null}
 
-      {error ? (
-        <div className="dashboard-banner dashboard-banner--error">
-          <span>{error}</span>
-          <button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button>
+      <ManagementDashboardTabs activeTab={activeTab} onTabChange={setActiveTab}>
+        <div className="reports-toolbar__actions">
+          <label className="dashboard-control" style={{ marginRight: '12px' }}>
+            <span>Date Range</span>
+            <select value={range} onChange={(event) => setRange(event.target.value)}>
+              {rangeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-      ) : null}
-
-      <ManagementDashboardTabs activeTab={activeTab} onTabChange={setActiveTab} />
+      </ManagementDashboardTabs>
 
       {activeTab === 'overview' ? (
         <OverviewDashboardSection
@@ -92,6 +90,6 @@ export function ManagementDashboardPage() {
           onCompleted={refresh}
         />
       ) : null}
-    </section>
+    </>
   );
 }

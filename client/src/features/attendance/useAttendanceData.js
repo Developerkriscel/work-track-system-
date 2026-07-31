@@ -171,26 +171,39 @@ function groupAttendanceRows(rows, bounds) {
   });
 
   const today = todayYmd();
-  const hasTodayRow = grouped.some((row) => row.date === today);
-  if (!hasTodayRow && rangeIncludesDate(bounds?.startDate, bounds?.endDate, today)) {
-    grouped.push({
-      date: today,
-      dateLabel: formatDateLabel(today),
-      punchesIn: [],
-      punchesOut: [],
-      punchIn: null,
-      punchOut: null,
-      status: new Date(`${today}T00:00:00`).getDay() === 0 ? 'Weekly Off' : 'Absent',
-      duration: '-',
-      isPendingToday: false
-    });
-  } else {
-    grouped = grouped.map((row) => (
-      row.date === today && !row.punchIn && !row.punchOut
-        ? { ...row, isPendingToday: false, status: new Date(`${row.date}T00:00:00`).getDay() === 0 ? 'Weekly Off' : 'Absent' }
-        : row
-    ));
+
+  if (bounds?.startDate && bounds?.endDate) {
+    const startD = new Date(`${bounds.startDate}T00:00:00`);
+    const endD = new Date(`${bounds.endDate}T00:00:00`);
+    const currentD = new Date(startD);
+
+    while (currentD <= endD) {
+      const dStr = toYmd(currentD);
+      if (dStr <= today) {
+        const exists = grouped.some((row) => row.date === dStr);
+        if (!exists) {
+          grouped.push({
+            date: dStr,
+            dateLabel: formatDateLabel(dStr),
+            punchesIn: [],
+            punchesOut: [],
+            punchIn: null,
+            punchOut: null,
+            status: new Date(`${dStr}T00:00:00`).getDay() === 0 ? 'Weekly Off' : 'Absent',
+            duration: '-',
+            isPendingToday: false
+          });
+        }
+      }
+      currentD.setDate(currentD.getDate() + 1);
+    }
   }
+
+  grouped = grouped.map((row) => (
+    row.date === today && !row.punchIn && !row.punchOut
+      ? { ...row, isPendingToday: false, status: new Date(`${row.date}T00:00:00`).getDay() === 0 ? 'Weekly Off' : 'Absent' }
+      : row
+  ));
 
   return grouped.sort((a, b) => new Date(a.date) - new Date(b.date));
 }
@@ -448,6 +461,14 @@ export function useAttendanceData() {
     }
   }
 
+  function clearAttendanceError() {
+    setAttendanceState((current) => ({ ...current, error: null }));
+  }
+
+  function clearTeamAttendanceError() {
+    setTeamAttendanceState((current) => ({ ...current, error: null }));
+  }
+
   return {
     employeeId,
     currentUser: user || null,
@@ -467,8 +488,10 @@ export function useAttendanceData() {
     attendanceRows: groupedRows,
     leaves: attendanceState.leaves,
     intimations: attendanceState.intimations,
+    clearAttendanceError,
     teamAttendanceLoading: teamAttendanceState.loading,
     teamAttendanceError: teamAttendanceState.error,
+    clearTeamAttendanceError,
     teamAttendanceRows: teamAttendanceState.rows,
     teamAttendanceUsers: teamAttendanceState.users,
     locationPolicy: locationPolicyState.data,

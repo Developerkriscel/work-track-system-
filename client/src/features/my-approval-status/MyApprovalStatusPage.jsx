@@ -10,7 +10,7 @@ export function MyApprovalStatusPage() {
     employeeId,
     currentUser,
     loading,
-    error,
+    error, clearError,
     activeTab,
     rows,
     counts,
@@ -29,7 +29,7 @@ export function MyApprovalStatusPage() {
         onRefresh={refresh}
       />
 
-      {error ? <div className="dashboard-banner dashboard-banner--error">{error}</div> : null}
+      {error ? <div className="dashboard-banner dashboard-banner--error"><span>{error}</span><button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button></div> : null}
 
       {!error && loading ? (
         <div className="dashboard-banner">

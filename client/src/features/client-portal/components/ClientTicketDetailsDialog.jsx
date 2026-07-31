@@ -1,12 +1,12 @@
+import { useState } from 'react';
+import { AlertDialog } from '@/components/modals/AlertDialog';
 import { StatusPill } from '@/components/common/StatusPill';
 import { AppModal } from '@/components/modals';
 import { MessageCircle } from '@/components/common/icons';
+import { openProtectedFile, toPreviewUrl, toPreviewUrls } from '@/lib/fileLinks';
 
 function attachmentLinks(attachmentValue) {
-  return String(attachmentValue || '')
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
+  return toPreviewUrls(attachmentValue);
 }
 
 function renderRemarks(remarks) {
@@ -25,9 +25,16 @@ export function ClientTicketDetailsDialog({
   ticket,
   toneResolver
 }) {
+  const [alertMsg, setAlertMsg] = useState(null);
   if (!ticket) return null;
 
-  const attachments = attachmentLinks(ticket.Attachment);
+  const attachments = Array.from(
+    new Set([
+      ...attachmentLinks(ticket.Attachment),
+      ...attachmentLinks(ticket.Attachments),
+      ...attachmentLinks(ticket['Closing Attachment'])
+    ])
+  );
   const remarks = renderRemarks(ticket.Remarks);
   const displayStatus = statusLabelResolver(ticket);
 
@@ -66,8 +73,22 @@ export function ClientTicketDetailsDialog({
           <div className="client-ticket-details__section">
             <span className="kv-grid__label">Attachments / Files</span>
             <div className="client-ticket-details__attachments">
-              {attachments.map((link, index) => (
-                <a key={`${link}-${index}`} href={link} target="_blank" rel="noreferrer" className="inline-action forms-open-link">
+                {attachments.map((link, index) => (
+                <a
+                  key={`${link}-${index}`}
+                  href={toPreviewUrl(link)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-action forms-open-link"
+                  onClick={async (event) => {
+                    event.preventDefault();
+                    try {
+                      await openProtectedFile(link, { preferClient: true });
+                    } catch (error) {
+                      setAlertMsg(error.message || 'File could not be opened.');
+                    }
+                  }}
+                >
                   View File {index + 1}
                 </a>
               ))}
@@ -96,6 +117,7 @@ export function ClientTicketDetailsDialog({
           </button>
         </div>
       </div>
+      <AlertDialog message={alertMsg} onClose={() => setAlertMsg(null)} />
     </AppModal>
   );
 }

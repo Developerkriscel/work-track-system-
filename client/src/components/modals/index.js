@@ -9,3 +9,4 @@ export const modalComponentRoadmap = [
 
 export { AppModal } from './AppModal';
 export { ConfirmDialog } from './ConfirmDialog';
+export { AlertDialog } from './AlertDialog';

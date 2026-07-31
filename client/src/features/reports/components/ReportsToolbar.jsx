@@ -24,19 +24,22 @@ export function ReportsToolbar({
   onDownload
 }) {
   return (
-    <article className="migration-panel migration-panel--full">
-      <div className="migration-panel__row">
-        <div className="approval-tabs">
-          <ReportTab active={activeTab === 'tickets'} onClick={() => onTabChange('tickets')}>
-            Tickets Report
-          </ReportTab>
-          <ReportTab active={activeTab === 'fms'} onClick={() => onTabChange('fms')}>
-            FMS Report
-          </ReportTab>
-        </div>
+    <>
+      <div className="approval-tabs" style={{ marginBottom: activeTab === 'management' ? '16px' : '24px' }}>
+        <ReportTab active={activeTab === 'management'} onClick={() => onTabChange('management')}>
+          Management Dashboard
+        </ReportTab>
+        <ReportTab active={activeTab === 'tickets'} onClick={() => onTabChange('tickets')}>
+          Tickets Report
+        </ReportTab>
+        <ReportTab active={activeTab === 'fms'} onClick={() => onTabChange('fms')}>
+          FMS Report
+        </ReportTab>
       </div>
 
-      <div className="reports-toolbar">
+      {activeTab === 'management' ? null : (
+      <article className="migration-panel migration-panel--full" style={{ marginTop: 0 }}>
+        <div className="reports-toolbar">
         <div className="dashboard-controls">
           <label className="dashboard-control">
             <span>Date Range</span>
@@ -70,11 +73,10 @@ export function ReportsToolbar({
           <button type="button" className="attendance-cta attendance-cta--green" disabled={downloading} onClick={() => onDownload('xlsx')}>
             Excel
           </button>
-          <button type="button" className="attendance-cta attendance-cta--gray" onClick={() => window.print()}>
-            Print
-          </button>
         </div>
       </div>
-    </article>
+      </article>
+      )}
+    </>
   );
 }

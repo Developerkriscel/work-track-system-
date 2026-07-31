@@ -113,14 +113,24 @@ function mergePreservingExisting(existing = {}, incoming = {}) {
   return next;
 }
 
-function uploadFiles(row, filePayloads = {}) {
+async function uploadFiles(row, filePayloads = {}) {
   const next = { ...row };
-  if (filePayloads.offer?.base64) next['OFFER LETTER LINK'] = saveBase64File(filePayloads.offer, 'emp_documents');
-  if (filePayloads.appointment?.base64) next['APPOINTMENT LETTER LINK'] = saveBase64File(filePayloads.appointment, 'emp_documents');
+  if (filePayloads.offer?.base64) next['OFFER LETTER LINK'] = await saveBase64File(filePayloads.offer, 'emp_documents');
+  if (filePayloads.appointment?.base64) next['APPOINTMENT LETTER LINK'] = await saveBase64File(filePayloads.appointment, 'emp_documents');
+  if (filePayloads.aadhaar?.base64) next['AADHAAR CARD LINK'] = await saveBase64File(filePayloads.aadhaar, 'emp_documents');
+  if (filePayloads.pan?.base64) next['PAN CARD LINK'] = await saveBase64File(filePayloads.pan, 'emp_documents');
+  if (filePayloads.bank?.base64) next['BANK PROOF LINK'] = await saveBase64File(filePayloads.bank, 'emp_documents');
+  if (filePayloads.education?.base64) next['EDUCATION CERTIFICATE LINK'] = await saveBase64File(filePayloads.education, 'emp_documents');
   if (Array.isArray(filePayloads.bunch) && filePayloads.bunch.length) {
-    const links = filePayloads.bunch
-      .map((file) => file?.base64 ? saveBase64File(file, 'emp_documents') : safe(file))
-      .filter(Boolean);
+    const links = [];
+    for (const file of filePayloads.bunch) {
+      if (!file) continue;
+      if (file?.base64) {
+        links.push(await saveBase64File(file, 'emp_documents'));
+      } else if (safe(file)) {
+        links.push(safe(file));
+      }
+    }
     if (links.length) next['Documents of Employee'] = links.join(', ');
   }
   return next;
@@ -226,7 +236,7 @@ export async function saveEmpMasterData(category, formData = {}, filePayloads = 
   const merged = mergePreservingExisting(existing || {}, formData);
   delete merged.Password;
   delete merged.password;
-  const prepared = uploadFiles(normalizeEmpMasterRow(merged, targetCategory), filePayloads);
+  const prepared = await uploadFiles(normalizeEmpMasterRow(merged, targetCategory), filePayloads);
   if (!safe(prepared['EMP Code'])) return { success: false, message: 'EMP Code is required.' };
   if (!safe(prepared['User ID'])) return { success: false, message: 'User ID is required.' };
   if (!safe(prepared.Name)) return { success: false, message: 'Employee name is required.' };

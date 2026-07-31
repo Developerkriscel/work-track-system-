@@ -42,7 +42,7 @@ export function TicketCreateForm({ clients, categories, users, role, employeeId,
   return (
     <form className="ticket-form-grid" onSubmit={submit}>
       {rows.map((row, index) => (
-        <fieldset className="ticket-form-grid ticket-form-grid__full" key={index}>
+        <fieldset style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '12px', alignItems: 'start' }} key={index}>
           <legend>Ticket {index + 1}</legend>
           <label className="dashboard-control"><span>Client</span><select value={row.clientId} onChange={(event) => update(index, { clientId: event.target.value })}>{clients.map((client) => { const id = client.Client_Id || client['Client ID']; return <option key={id} value={id}>{client['Client Name'] || id}</option>; })}</select></label>
           <label className="dashboard-control"><span>Category</span><select value={row.category} onChange={(event) => update(index, { category: event.target.value })}>{categories.map((category) => <option key={category}>{category}</option>)}</select></label>

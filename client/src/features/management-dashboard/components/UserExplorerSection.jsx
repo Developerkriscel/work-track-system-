@@ -55,12 +55,6 @@ export function UserExplorerSection({ users, selectedUserId, onUserChange, selec
             </select>
           </label>
         </div>
-        <div className="dashboard-banner">
-          <StatusPill tone="info">{selectedUser?.Role || 'User'}</StatusPill>
-          <span>
-            Review attendance, tickets, FMS work, and to-do activity for {selectedUser?.['Employee Name'] || selectedUser?.name || 'the selected user'}.
-          </span>
-        </div>
       </article>
 
       <div className="migration-grid">

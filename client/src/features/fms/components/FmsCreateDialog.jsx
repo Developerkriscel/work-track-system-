@@ -83,7 +83,7 @@ export function FmsCreateDialog({
   }
 
   return (
-    <AppModal title="Create FMS Task" onClose={onClose} width="1040px">
+    <AppModal title="Create FMS Task" onClose={onClose} width="800px">
       <form className="ticket-form-grid" onSubmit={handleSubmit}>
         <label className="dashboard-control">
           <span>Assign To *</span>

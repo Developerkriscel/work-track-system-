@@ -109,7 +109,7 @@ export function useReportsData() {
   const { user } = useAuth();
   const employeeId = user?.['Employee ID'] || '';
   const role = user?.Role || 'User';
-  const [activeTab, setActiveTab] = useState('tickets');
+  const [activeTab, setActiveTab] = useState('management');
   const [range, setRange] = useState('month');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -328,8 +328,8 @@ export function useReportsData() {
     setCustomEnd,
     bounds,
     loading: state.loading,
-    error: state.error,
-    message,
+    error: state.error, clearError: () => setState((current) => ({ ...current, error: null })),
+    message, clearMessage: () => setMessage(null),
     downloading,
     tickets: filteredTickets,
     ticketStatuses,

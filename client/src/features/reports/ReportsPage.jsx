@@ -1,5 +1,6 @@
 import { StatusPill } from '@/components/common/StatusPill';
 import { FmsReportSection } from '@/features/reports/components/FmsReportSection';
+import { ManagementDashboardReportTab } from '@/features/reports/components/ManagementDashboardReportTab';
 import { ReportsHeader } from '@/features/reports/components/ReportsHeader';
 import { ReportsSummaryCards } from '@/features/reports/components/ReportsSummaryCards';
 import { ReportsToolbar } from '@/features/reports/components/ReportsToolbar';
@@ -20,8 +21,8 @@ export function ReportsPage() {
     setCustomStart,
     customEnd,
     setCustomEnd,
-    error,
-    message,
+    error, clearError,
+    message, clearMessage,
     downloading,
     tickets,
     ticketStatuses,
@@ -84,7 +85,10 @@ export function ReportsPage() {
       />
 
       {error ? (
-        <div className="dashboard-banner dashboard-banner--error">{error}</div>
+        <div className="dashboard-banner dashboard-banner--error">
+          <span>{error}</span>
+          <button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button>
+        </div>
       ) : null}
 
       {message ? (
@@ -93,6 +97,8 @@ export function ReportsPage() {
             {message.tone === 'danger' ? 'Update failed' : 'Update complete'}
           </StatusPill>
           <span>{message.text}</span>
+        
+          <button type="button" className="dashboard-banner__close" onClick={clearMessage}>OK</button>
         </div>
       ) : null}
 
@@ -123,7 +129,7 @@ export function ReportsPage() {
             onResetFilters={resetTicketFilters}
           />
         </>
-      ) : (
+      ) : activeTab === 'fms' ? (
         <>
           <ReportsSummaryCards items={fmsSummaryItems} />
           <FmsReportSection
@@ -134,6 +140,8 @@ export function ReportsPage() {
             onResetFilters={resetFmsFilters}
           />
         </>
+      ) : (
+        <ManagementDashboardReportTab />
       )}
     </section>
   );

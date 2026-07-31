@@ -7,7 +7,7 @@ import { DashboardTasksSection } from '@/features/dashboard/components/Dashboard
 import { useDashboardData } from '@/features/dashboard/useDashboardData';
 
 export function DashboardPage() {
-  const { employeeId, currentUser, range, setRange, ranges, error, data } = useDashboardData();
+  const { employeeId, currentUser, range, setRange, ranges, error, clearError, data } = useDashboardData();
 
   const dashboardUser = data?.currentUser || data?.user || currentUser || null;
   const kpis = data?.kpis || {};
@@ -26,7 +26,10 @@ export function DashboardPage() {
       />
 
       {error ? (
-        <div className="dashboard-banner dashboard-banner--error">{error}</div>
+        <div className="dashboard-banner dashboard-banner--error">
+          <span>{error}</span>
+          <button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button>
+        </div>
       ) : null}
 
       <DashboardKpiGrid kpis={kpis} />

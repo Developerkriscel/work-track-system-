@@ -3,13 +3,13 @@ import { ClientPortalHeader, ClientPortalSummaryGrid, ClientReportTable } from '
 import { useClientReportsData } from '@/features/client-portal/useClientReportsData';
 
 export function ClientReportsPage() {
-  const { loading, error, details, summaryItems, reportTypeTone, formatDate } = useClientReportsData();
+  const { loading, error, clearError, details, summaryItems, reportTypeTone, formatDate } = useClientReportsData();
 
   return (
     <section className="page-card">
       <ClientPortalHeader title="Reports" statusLabel="All Time" />
 
-      {error ? <div className="dashboard-banner dashboard-banner--error">{error}</div> : null}
+      {error ? <div className="dashboard-banner dashboard-banner--error"><span>{error}</span><button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button></div> : null}
 
       <ClientPortalSummaryGrid items={summaryItems} />
 

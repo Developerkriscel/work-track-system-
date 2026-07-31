@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { changeEmployeePassword, updateEmployeeProfile, fetchEmployeeSession } from '@/features/auth/api';
+import { changeEmployeePassword, updateEmployeeProfile } from '@/features/auth/api';
 import './settings.css';
 
 function getInitials(name) {
@@ -30,6 +30,24 @@ function LogoutIcon() {
   );
 }
 
+function EyeIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+      <circle cx="12" cy="12" r="3"></circle>
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+      <line x1="1" y1="1" x2="23" y2="23"></line>
+    </svg>
+  );
+}
+
 export function SettingsPage() {
   const { user, signOut, refreshSession } = useAuth();
   const fileInputRef = useRef(null);
@@ -42,6 +60,7 @@ export function SettingsPage() {
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState('');
   const [isChangingPw, setIsChangingPw] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const name = user?.['Employee Name'] || user?.Name || 'Employee';
   const avatarUrl = user?.Avatar || user?.Photo || null;
@@ -57,6 +76,20 @@ export function SettingsPage() {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState({ type: '', text: '' });
+  const [avatarVersion, setAvatarVersion] = useState(0);
+
+  const avatarSrc = avatarUrl
+    ? `${avatarUrl}${avatarUrl.includes('?') ? '&' : '?'}v=${avatarVersion}`
+    : null;
+
+  useEffect(() => {
+    setEmail(initialEmail);
+    setPhone(initialPhone);
+    setProfileMessage({ type: '', text: '' });
+    setUploadError('');
+    setUploadSuccess('');
+    setIsEditingProfile(false);
+  }, [employeeId, initialEmail, initialPhone]);
 
   // Avatar Upload Logic
   const handleFileChange = async (e) => {
@@ -89,7 +122,8 @@ export function SettingsPage() {
       setUploadSuccess('Profile picture updated successfully!');
       
       // Refresh user session to get the new avatar
-      await refreshSession?.();
+      await refreshSession?.(employeeId);
+      setAvatarVersion(version => version + 1);
       
     } catch (err) {
       setUploadError(err.message || 'Failed to upload profile picture.');
@@ -142,13 +176,12 @@ export function SettingsPage() {
       <div className="settings-card">
         <div className="settings-header">
           <h2>Profile Settings</h2>
-          <p>Manage your profile picture and view your details</p>
         </div>
 
         <div className="settings-avatar-section">
           <div className="settings-avatar-preview">
-            {avatarUrl ? (
-              <img src={avatarUrl} alt={name} />
+            {avatarSrc ? (
+              <img src={avatarSrc} alt={name} />
             ) : (
               <span className="settings-avatar-initials">{getInitials(name)}</span>
             )}
@@ -281,30 +314,63 @@ export function SettingsPage() {
         <form className="settings-form" onSubmit={handlePasswordChange}>
           <div className="settings-form-group">
             <label>Current Password</label>
-            <input
-              type="password"
-              className="settings-input"
-              value={pwForm.current}
-              onChange={e => setPwForm(f => ({ ...f, current: e.target.value }))}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                className="settings-input"
+                value={pwForm.current}
+                onChange={e => setPwForm(f => ({ ...f, current: e.target.value }))}
+                style={{ width: '100%', paddingRight: '40px' }}
+              />
+              <button 
+                type="button" 
+                onClick={() => setShowPassword(!showPassword)}
+                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--wt-text-muted)', display: 'flex', alignItems: 'center', padding: 0 }}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
           </div>
           <div className="settings-form-group">
             <label>New Password</label>
-            <input
-              type="password"
-              className="settings-input"
-              value={pwForm.next}
-              onChange={e => setPwForm(f => ({ ...f, next: e.target.value }))}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                className="settings-input"
+                value={pwForm.next}
+                onChange={e => setPwForm(f => ({ ...f, next: e.target.value }))}
+                style={{ width: '100%', paddingRight: '40px' }}
+              />
+              <button 
+                type="button" 
+                onClick={() => setShowPassword(!showPassword)}
+                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--wt-text-muted)', display: 'flex', alignItems: 'center', padding: 0 }}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
           </div>
           <div className="settings-form-group">
             <label>Confirm New Password</label>
-            <input
-              type="password"
-              className="settings-input"
-              value={pwForm.confirm}
-              onChange={e => setPwForm(f => ({ ...f, confirm: e.target.value }))}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                className="settings-input"
+                value={pwForm.confirm}
+                onChange={e => setPwForm(f => ({ ...f, confirm: e.target.value }))}
+                style={{ width: '100%', paddingRight: '40px' }}
+              />
+              <button 
+                type="button" 
+                onClick={() => setShowPassword(!showPassword)}
+                style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--wt-text-muted)', display: 'flex', alignItems: 'center', padding: 0 }}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
           </div>
           
           <button type="submit" className="settings-submit" disabled={isChangingPw}>

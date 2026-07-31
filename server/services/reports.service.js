@@ -1,4 +1,5 @@
 import XLSX from 'xlsx';
+import PDFDocument from 'pdfkit-table';
 import { listRows } from './legacyStore.service.js';
 
 const closedTerms = ['closed', 'approved', 'cancelled', 'completed', 'done', 'resolved', 'paid'];
@@ -102,45 +103,44 @@ function matchesFmsFilters(task = {}, filters = {}) {
   ].some((value) => normalizedContains(value, search));
 }
 
-function buildSimplePdf(title, headers, sourceRows) {
-  const lines = [String(title || 'Report'), `Generated: ${referenceNow().toLocaleString('en-IN')}`, '', headers.join(' | ')];
-  for (const row of sourceRows.slice(0, 150)) {
-    const raw = headers.map((header) => String(row[header] ?? '').replace(/\s+/g, ' ').trim()).join(' | ');
-    for (let i = 0; i < raw.length; i += 105) lines.push(raw.slice(i, i + 105));
-  }
-  if (sourceRows.length > 150) lines.push('', `Showing first 150 of ${sourceRows.length} rows.`);
-  const pageHeight = 792;
-  const pageWidth = 612;
-  const marginX = 36;
-  const startY = 748;
-  const lineHeight = 12;
-  const content = ['BT', '/F1 9 Tf', `${marginX} ${startY} Td`];
-  lines.slice(0, 58).forEach((line, index) => {
-    if (index) content.push(`0 -${lineHeight} Td`);
-    content.push(`(${pdfEscape(line)}) Tj`);
+async function buildTabularPdf(title, headers, sourceRows) {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
+      const buffers = [];
+      
+      doc.on('data', buffers.push.bind(buffers));
+      doc.on('end', () => {
+        resolve(Buffer.concat(buffers));
+      });
+      doc.on('error', reject);
+
+      doc.fontSize(16).text(String(title || 'Report'), { align: 'center' });
+      doc.fontSize(10).text(`Generated: ${referenceNow().toLocaleString('en-IN')}`, { align: 'center' });
+      doc.moveDown();
+
+      // Ensure headers aren't too large if there are too many columns
+      // PDFKit-Table will automatically resize columns but huge amounts of columns might clip
+      const safeHeaders = headers.slice(0, 15); // limit columns if necessary to avoid breaking bounds
+      const tableRows = sourceRows.map(row => safeHeaders.map(h => String(row[h] ?? '')));
+
+      const tableData = {
+        headers: safeHeaders,
+        rows: tableRows
+      };
+
+      doc.table(tableData, {
+        prepareHeader: () => doc.font('Helvetica-Bold').fontSize(8),
+        prepareRow: (row, indexColumn, indexRow, rectRow, rectCell) => {
+          doc.font('Helvetica').fontSize(8);
+        },
+      });
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
   });
-  content.push('ET');
-  const stream = content.join('\n');
-  const objects = [
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>`,
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>',
-    `<< /Length ${Buffer.byteLength(stream, 'latin1')} >>\nstream\n${stream}\nendstream`
-  ];
-  let body = '%PDF-1.4\n';
-  const offsets = [0];
-  objects.forEach((obj, index) => {
-    offsets.push(Buffer.byteLength(body, 'latin1'));
-    body += `${index + 1} 0 obj\n${obj}\nendobj\n`;
-  });
-  const xrefOffset = Buffer.byteLength(body, 'latin1');
-  body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  offsets.slice(1).forEach((offset) => {
-    body += `${String(offset).padStart(10, '0')} 00000 n \n`;
-  });
-  body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
-  return Buffer.from(body, 'latin1');
 }
 
 function asTicketRow(row = {}, clients = []) {
@@ -355,7 +355,7 @@ export async function exportReportForWeb(format = 'csv', sheetName = 'Report', e
   }
 
   if (normalizedFormat === 'pdf') {
-    const buffer = buildSimplePdf(String(sheetName || 'Report'), headers, source);
+    const buffer = await buildTabularPdf(String(sheetName || 'Report'), headers, source);
     return ok({
       mimeType: 'application/pdf',
       fileName: `${fileBase}.pdf`,

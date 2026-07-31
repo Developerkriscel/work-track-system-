@@ -45,9 +45,20 @@ function isClosedStatus(status = '') {
 
 function isClientOriginTicket(row = {}) {
   const remarks = first(row, ['Remarks', 'remarks'], '');
-  const normalized = safe(remarks).toLowerCase();
-  return normalized.includes('created from client portal')
-    || normalized.includes('created from mern client portal');
+  const source = safe(first(row, ['Source', 'source', 'Ticket Source', 'ticketSource']));
+  const origin = safe(first(row, ['Origin', 'origin']));
+  const clientTicketFlag = safe(first(row, ['Client Ticket', 'clientTicket', 'Is Client Ticket', 'isClientTicket']));
+  const normalizedRemarks = safe(remarks).toLowerCase();
+  const normalizedSource = source.toLowerCase();
+  const normalizedOrigin = origin.toLowerCase();
+  const normalizedClientTicketFlag = clientTicketFlag.toLowerCase();
+  return normalizedOrigin === 'client'
+    || normalizedClientTicketFlag === 'yes'
+    || normalizedClientTicketFlag === 'true'
+    || normalizedSource.includes('client portal')
+    || normalizedSource === 'client'
+    || normalizedRemarks.includes('created from client portal')
+    || normalizedRemarks.includes('created from mern client portal');
 }
 
 function asTicketRow(row = {}, clients = []) {
@@ -199,7 +210,7 @@ export async function createBulkTicketsWithDetails(ticketList = [], clientInfo =
     const attachmentUrls = [];
     for (const attachment of item.attachments || []) {
       if (attachment?.base64) {
-        attachmentUrls.push(saveBase64File(attachment, 'client_ticket_attachments'));
+        attachmentUrls.push(await saveBase64File(attachment, 'client_ticket_attachments'));
       }
     }
     const id = `TICKET_${Date.now()}_${index + 1}`;
@@ -217,6 +228,10 @@ export async function createBulkTicketsWithDetails(ticketList = [], clientInfo =
       Timestamp: nowIso(),
       'Plan Date': item.completionDate || '',
       Attachments: attachmentUrls.join(',\n'),
+      Source: 'Client Portal',
+      'Ticket Source': 'Client Portal',
+      Origin: 'Client',
+      'Client Ticket': 'Yes',
       Remarks: 'Created from client portal.'
     };
     await upsertRow('Ticket', 'Ticket ID', id, row);
@@ -387,7 +402,7 @@ export async function submitClientResponse(ticketId, remarks, attachment, client
   const existingTicket = ticketRows.find((item) => eq(first(item, ['Ticket ID', 'ID', 'ticketId']), ticketId) && eq(first(item, ['Client_Id', 'Client ID', 'clientId']), clientId));
   if (!existingTicket) return fail('Permission denied or Ticket not found.');
   const savedAttachment =
-    attachment?.base64 ? saveBase64File(attachment, 'client_ticket_responses') : safe(attachment);
+    attachment?.base64 ? await saveBase64File(attachment, 'client_ticket_responses') : safe(attachment);
   const sender = clientInfo?.['Client Name'] || clientInfo?.ClientName || 'Client';
   const timestamp = nowIso();
 
