@@ -1,5 +1,5 @@
 const R2_HOST_PATTERN = /(^|\.)r2\.cloudflarestorage\.com$/i;
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 function safe(value = '') {
   return String(value ?? '').trim();

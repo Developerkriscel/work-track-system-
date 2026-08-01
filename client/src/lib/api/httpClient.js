@@ -1,4 +1,9 @@
-const DEFAULT_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const configuredBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
+function toRequestUrl(path = '') {
+  const normalizedPath = String(path || '').startsWith('/') ? String(path || '') : `/${path || ''}`;
+  return `${configuredBaseUrl}${normalizedPath}`;
+}
 
 export async function httpClient(path, options = {}) {
   const employeeSession = typeof window !== 'undefined'
@@ -16,7 +21,7 @@ export async function httpClient(path, options = {}) {
     token = '';
   }
 
-  const response = await fetch(`${DEFAULT_BASE_URL}${path}`, {
+  const response = await fetch(toRequestUrl(path), {
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',

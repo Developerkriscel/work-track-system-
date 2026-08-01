@@ -169,7 +169,7 @@ app.get(['/mern', '/mern/*'], (_req, res, next) => {
     <main>
       <h1>MERN frontend is not built yet</h1>
       <p>The new React app lives under <code>client/src</code>.</p>
-      <p>Build it with <code>npm run client:build</code>, then reopen <code>/mern</code>.</p>
+      <p>Build it with <code>npm run build</code>, then reopen <code>/mern</code>.</p>
       <p>The current exact WorkTrack UI remains available on the main routes.</p>
     </main>
   </body>
@@ -247,7 +247,7 @@ app.get(/^\/(?!api\/|uploads\/).*/, (_req, res) => {
     <main>
       <h1>WorkTrack frontend is not built</h1>
       <p>The production runtime now expects the React app from <code>client/src</code>.</p>
-      <p>Build it with <code>npm run client:build</code> and reopen <code>/login</code>.</p>
+      <p>Build it with <code>npm run build</code> and reopen <code>/login</code>.</p>
     </main>
   </body>
 </html>`);
