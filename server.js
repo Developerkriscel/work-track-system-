@@ -184,6 +184,8 @@ app.get('/favicon.ico', (_req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/files', filesRoutes);
+
 // All application APIs require a signed MERN session. Login and session refresh
 // routes are mounted above this guard and perform their own checks.
 app.use('/api', (req, res, next) => {
@@ -208,7 +210,6 @@ app.use('/api/forms-portal', requireAuth({ kind: 'employee' }), formsPortalRoute
 app.use('/api/management-dashboard', requireAuth({ kind: 'employee', roles: ['Manager', 'Admin', 'HR', 'Super Admin'] }), managementDashboardRoutes);
 app.use('/api/my-approval-status', requireAuth({ kind: 'employee' }), myApprovalStatusRoutes);
 app.use('/api/notifications', requireAuth(), notificationsRoutes);
-app.use('/api/files', requireAuth(), filesRoutes);
 app.use(
   '/api/reports',
   requireAuth({ kind: 'employee', roles: ['Manager', 'Admin', 'HR', 'Super Admin'] }),

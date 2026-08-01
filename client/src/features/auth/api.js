@@ -50,3 +50,26 @@ export async function updateEmployeeProfile(employeeId, { avatarBase64, email, p
     })
   });
 }
+
+export async function changeClientPassword(clientId, currentPassword, nextPassword) {
+  return httpClient('/api/auth/client/change-password', {
+    method: 'POST',
+    body: JSON.stringify({
+      clientId,
+      currentPassword,
+      nextPassword
+    })
+  });
+}
+
+export async function updateClientProfile(clientId, { avatarBase64, email, phone }) {
+  return httpClient('/api/auth/client/update-profile', {
+    method: 'POST',
+    body: JSON.stringify({
+      clientId,
+      avatarBase64,
+      email,
+      phone
+    })
+  });
+}

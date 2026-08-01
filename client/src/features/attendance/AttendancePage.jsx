@@ -412,7 +412,7 @@ export function AttendancePage() {
         <>
           {attendanceError ? <div className="dashboard-banner dashboard-banner--error"><span>{attendanceError}</span><button type="button" className="dashboard-banner__close" onClick={clearAttendanceError}>OK</button></div> : null}
           <article className="migration-panel migration-panel--full" style={{ boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', borderRadius: '16px', padding: '24px', border: '1px solid #e2e8f0', background: '#ffffff' }}>
-            <div className="migration-panel__row" style={{ alignItems: 'flex-end', marginBottom: '24px' }}>
+            <div className="migration-panel__row attendance-log-header">
               <div>
                 <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>Attendance Log</h2>
                 <StatusPill tone={attendanceLoading ? 'neutral' : 'info'}>

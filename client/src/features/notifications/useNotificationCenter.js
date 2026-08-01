@@ -8,7 +8,6 @@ export function useNotificationCenter({ mode = 'employee', subjectId = '' } = {}
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const lastCheckRef = useRef(mode === 'employee' ? 0 : new Date(0).toISOString());
 
   const load = useCallback(async () => {
     if (!subjectId) {
@@ -21,11 +20,10 @@ export function useNotificationCenter({ mode = 'employee', subjectId = '' } = {}
 
     try {
       const result = mode === 'client'
-        ? await fetchClientNotifications(subjectId, lastCheckRef.current)
-        : await fetchEmployeeNotifications(subjectId, lastCheckRef.current);
+        ? await fetchClientNotifications(subjectId)
+        : await fetchEmployeeNotifications(subjectId);
       const nextItems = result.notifications || result.updates || [];
       setItems(nextItems);
-      lastCheckRef.current = result.serverTime || Date.now();
     } catch (loadError) {
       setError(loadError.message || 'Unable to load notifications.');
     } finally {
@@ -34,7 +32,6 @@ export function useNotificationCenter({ mode = 'employee', subjectId = '' } = {}
   }, [mode, subjectId]);
 
   useEffect(() => {
-    lastCheckRef.current = mode === 'client' ? new Date(0).toISOString() : 0;
     void load();
   }, [load, mode]);
 

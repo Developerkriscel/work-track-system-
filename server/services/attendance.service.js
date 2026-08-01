@@ -125,13 +125,31 @@ function getPolicyNumber(value, fallback = 0) {
 }
 
 function normalizeLocationPolicy(row = {}) {
+  let locations = [];
+  try {
+    const rawLocations = first(row, ['Locations', 'locations']);
+    if (Array.isArray(rawLocations)) {
+      locations = rawLocations;
+    } else if (typeof rawLocations === 'string') {
+      locations = JSON.parse(rawLocations || '[]');
+    }
+  } catch {
+    locations = [];
+  }
+  
+  if (!locations.length && first(row, ['Latitude', 'Lattitude', 'Office Latitude', 'latitude'])) {
+    locations.push({
+      officeName: first(row, ['Office Name', 'Office', 'Location Name', 'Location', 'officeName'], ''),
+      latitude: first(row, ['Latitude', 'Lattitude', 'Office Latitude', 'latitude'], ''),
+      longitude: first(row, ['Longitude', 'Office Longitude', 'longitude'], ''),
+      radiusMeters: getPolicyNumber(first(row, ['Radius (Meters)', 'Radius', 'Allowed Radius', 'radiusMeters'], 200), 200) || 200
+    });
+  }
+
   return {
     policyId: first(row, ['PolicyID', 'ID', 'policyId', 'AttendancePolicyID'], ATTENDANCE_POLICY_ID),
-    officeName: first(row, ['Office Name', 'Office', 'Location Name', 'Location', 'officeName'], ''),
-    latitude: first(row, ['Latitude', 'Lattitude', 'Office Latitude', 'latitude'], ''),
-    longitude: first(row, ['Longitude', 'Office Longitude', 'longitude'], ''),
-    radiusMeters: getPolicyNumber(first(row, ['Radius (Meters)', 'Radius', 'Allowed Radius', 'radiusMeters'], 200), 200) || 200,
     enabled: !/^(false|0|no|off)$/i.test(safe(first(row, ['Enabled', 'Active', 'Status', 'enabled'], 'true'))),
+    locations,
     updatedBy: first(row, ['Updated By', 'UpdatedBy', 'updatedBy'], ''),
     updatedAt: first(row, ['Updated At', 'UpdatedAt', 'updatedAt'], '')
   };
@@ -144,18 +162,10 @@ function locationPolicyRecord(policy = {}) {
     AttendancePolicyID: normalized.policyId,
     ID: normalized.policyId,
     policyId: normalized.policyId,
-    'Office Name': normalized.officeName,
-    officeName: normalized.officeName,
-    Latitude: normalized.latitude,
-    Lattitude: normalized.latitude,
-    latitude: normalized.latitude,
-    Longitude: normalized.longitude,
-    longitude: normalized.longitude,
-    'Radius (Meters)': normalized.radiusMeters,
-    Radius: normalized.radiusMeters,
-    radiusMeters: normalized.radiusMeters,
     Enabled: normalized.enabled ? 'true' : 'false',
     enabled: normalized.enabled,
+    Locations: JSON.stringify(normalized.locations || []),
+    locations: JSON.stringify(normalized.locations || []),
     'Updated By': normalized.updatedBy,
     updatedBy: normalized.updatedBy,
     'Updated At': normalized.updatedAt,
@@ -165,7 +175,7 @@ function locationPolicyRecord(policy = {}) {
 
 async function getAttendanceLocationPolicy() {
   const rows = await listRows('AttendancePolicy');
-  const row = rows.find((item) => eq(first(item, ['PolicyID', 'ID', 'policyId', 'AttendancePolicyID']), ATTENDANCE_POLICY_ID)) || rows[0];
+  const row = [...rows].reverse().find((item) => eq(first(item, ['PolicyID', 'ID', 'policyId', 'AttendancePolicyID']), ATTENDANCE_POLICY_ID)) || rows[rows.length - 1];
   if (!row) {
     return normalizeLocationPolicy(locationPolicyRecord({
       PolicyID: ATTENDANCE_POLICY_ID,
@@ -178,14 +188,10 @@ async function getAttendanceLocationPolicy() {
 
 async function saveAttendanceLocationPolicy(policy = {}, editorId = '') {
   const next = locationPolicyRecord({
-    PolicyID: ATTENDANCE_POLICY_ID,
-    'Office Name': safe(policy.officeName || policy.office || policy.locationName || ''),
-    Latitude: safe(policy.latitude || policy.lat || ''),
-    Longitude: safe(policy.longitude || policy.lng || ''),
-    'Radius (Meters)': getPolicyNumber(policy.radiusMeters || policy.radius || 200, 200) || 200,
-    Enabled: policy.enabled === false ? 'false' : 'true',
-    'Updated By': safe(editorId),
-    'Updated At': nowIso()
+    ...policy,
+    policyId: ATTENDANCE_POLICY_ID,
+    updatedBy: safe(editorId),
+    updatedAt: nowIso()
   });
   await upsertRow('AttendancePolicy', 'PolicyID', ATTENDANCE_POLICY_ID, next);
   return normalizeLocationPolicy(next);
@@ -227,42 +233,54 @@ async function canPunchAtLocation(employeeId, latitude, longitude, dateValue = t
     return { allowed: true, policy, wfhApproved, mode: wfhApproved ? 'WFH' : 'Open' };
   }
 
-  const hasPolicyCoords = safe(policy.latitude) && safe(policy.longitude);
-  if (!hasPolicyCoords) {
+  const locations = policy.locations || [];
+  if (!locations.length) {
     return { allowed: true, policy, wfhApproved: false, mode: 'Open' };
   }
 
-  const distanceMeters = haversineDistanceMeters(policy.latitude, policy.longitude, latitude, longitude);
-  if (!Number.isFinite(distanceMeters)) {
+  let minDistance = Infinity;
+  let closestLocation = null;
+
+  for (const loc of locations) {
+    if (!safe(loc.latitude) || !safe(loc.longitude)) continue;
+    const distance = haversineDistanceMeters(loc.latitude, loc.longitude, latitude, longitude);
+    if (!Number.isFinite(distance)) continue;
+    if (distance < minDistance) {
+      minDistance = distance;
+      closestLocation = loc;
+    }
+  }
+
+  if (!closestLocation || !Number.isFinite(minDistance)) {
     return {
       allowed: false,
       policy,
       wfhApproved: false,
       mode: 'Office',
-      message: 'Attendance location check failed. Invalid GPS coordinates received.'
+      message: 'Attendance location check failed. Invalid GPS coordinates received or no valid locations defined.'
     };
   }
 
-  const radiusMeters = Math.max(25, getPolicyNumber(policy.radiusMeters, 200) || 200);
-  if (distanceMeters <= radiusMeters) {
+  const radiusMeters = Math.max(25, getPolicyNumber(closestLocation.radiusMeters, 200) || 200);
+  if (minDistance <= radiusMeters) {
     return {
       allowed: true,
       policy,
+      location: closestLocation,
+      distanceMeters: minDistance,
       wfhApproved: false,
-      mode: 'Office',
-      distanceMeters,
-      radiusMeters
+      mode: 'Office'
     };
   }
 
   return {
     allowed: false,
     policy,
+    closestLocation,
+    distanceMeters: minDistance,
     wfhApproved: false,
     mode: 'Office',
-    distanceMeters,
-    radiusMeters,
-    message: `Aap allowed office location se bahar hain (${Math.round(distanceMeters)}m away). Work from Home approval ke bina attendance nahi lag sakti.`
+    message: `You are out of the attendance zone. Closest office is ${Math.round(minDistance)}m away (max allowed is ${radiusMeters}m).`
   };
 }
 

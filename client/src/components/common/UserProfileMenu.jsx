@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { changeEmployeePassword } from '@/features/auth/api';
+import { toPreviewUrl } from '@/lib/fileLinks';
 
 /* ── tiny icons ── */
 function ChevronDown({ open }) {
@@ -123,7 +124,8 @@ export function UserProfileMenu({
   const name = user?.['Employee Name'] || user?.Name || 'Employee';
   const role = user?.Role || 'User';
   const email = user?.Email || user?.email || '';
-  const avatar = user?.Avatar || user?.Photo || null;
+  const rawAvatar = user?.Avatar || user?.Photo || null;
+  const avatar = rawAvatar ? toPreviewUrl(rawAvatar) : null;
 
   /* close on outside click */
   useEffect(() => {

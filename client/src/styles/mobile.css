@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    WORKTRACK -- COMPREHENSIVE MOBILE RESPONSIVE STYLESHEET
    Breakpoints:
      <= 1100px  -> tablet (sidebar to top bar)
@@ -9,17 +9,49 @@
 html,body{max-width:100vw;overflow-x:hidden}
 
 @media(max-width:1100px){
-  .app-shell{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr);height:100dvh;overflow:hidden}
-  .sidebar{height:auto;position:sticky;top:0;z-index:100;padding:10px 12px;overflow-x:auto;overflow-y:hidden;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:8px;box-shadow:0 2px 16px rgba(0,0,0,.18)}
-  .sidebar__brand{padding:0 8px 0 0;border-bottom:none;border-right:1px solid rgba(255,255,255,.12);margin-bottom:0;margin-right:4px;flex-shrink:0}
-  .sidebar__brand-title{display:none}
-  .sidebar__logo{width:38px;height:38px;border-radius:8px}
-  .sidebar__user{display:none}
-  .sidebar__nav{display:flex;flex-direction:row;gap:4px;flex-wrap:nowrap;overflow-x:auto;margin:0;-ms-overflow-style:none;scrollbar-width:none}
-  .sidebar__nav::-webkit-scrollbar{display:none}
-  .sidebar__link{flex-shrink:0;min-height:36px;padding:6px 12px;font-size:13px;white-space:nowrap;border-radius:10px}
-  .sidebar__link:hover{transform:none}
-  .sidebar__link-icon{width:18px;height:18px}
+  .app-shell { grid-template-columns: 1fr; grid-template-rows: auto minmax(0,1fr); height: 100dvh; overflow: hidden; }
+  
+  .sidebar { 
+    height: 100dvh; 
+    position: fixed; 
+    top: 0; 
+    left: 0;
+    z-index: 999; 
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 4px 0 16px rgba(0,0,0,0.18);
+    width: 280px;
+  }
+  
+  .sidebar--mobile-open {
+    transform: translateX(0);
+  }
+
+  .topbar__mobile-btn {
+    display: inline-flex !important;
+    background: transparent;
+    color: #4b5567;
+  }
+  .topbar__mobile-btn:hover {
+    background: #eef4ff;
+    color: #3463eb;
+  }
+  .sidebar__close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    color: #f7f9ff;
+    border: none;
+    cursor: pointer;
+  }
+  .sidebar__close-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+  }
   .shell-main{overflow-y:auto;overflow-x:hidden;height:100%}
   .shell-main__inner{zoom:1}
   .dashboard-kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -34,9 +66,14 @@ html,body{max-width:100vw;overflow-x:hidden}
   .page-card__title{font-size:28px}
   .page-card__title--dashboard{font-size:26px}
   .topbar{padding:0 12px;height:52px}
-  .topbar__title{font-size:16px}
+  .topbar__title{font-size:16px; margin-left: 4px;}
   .upm-pill__info{display:none}
-  .upm-pill{padding:4px}
+  .upm-pill{padding:4px; border: none; background: transparent; box-shadow: none;}
+  .upm-action-btn{width:34px;height:34px;}
+  .upm-action-btn__icon{width:18px;height:18px;}
+  .upm-badge{top:2px;right:2px;transform:scale(0.85);transform-origin:top right;}
+  .upm-avatar{width:32px;height:32px;}
+  .upm-actions{gap:2px;margin-right:2px;}
   .dashboard-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .dashboard-kpi-card{padding:14px 10px 12px}
   .dashboard-kpi-card__value{font-size:24px}
@@ -47,8 +84,11 @@ html,body{max-width:100vw;overflow-x:hidden}
   .dashboard-mini-card__value{font-size:26px}
   .dashboard-chart-grid{grid-template-columns:1fr;gap:12px}
   .migration-grid,.migration-two-column{grid-template-columns:1fr}
+  .ticket-filter-actions{width:100%}
+  .ticket-filter-actions .inline-action{flex:1 1 calc(50% - 5px);justify-content:center;text-align:center}
   .migration-panel{padding:16px}
   .migration-panel__row{flex-direction:column;align-items:flex-start;gap:8px}
+  .attendance-log-header{align-items:flex-start !important}
   .dashboard-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
   .dashboard-table{min-width:550px}
   .ticket-table{min-width:900px;width:900px;table-layout:auto}
@@ -61,8 +101,9 @@ html,body{max-width:100vw;overflow-x:hidden}
   .attendance-camera{min-height:200px}
   .attendance-captured-photo{width:100%}
   .attendance-section-head{flex-direction:column;align-items:flex-start}
-  .attendance-action-row{flex-direction:column}
-  .attendance-cta{width:100%;justify-content:center}
+  .attendance-page .page-card__header .dashboard-controls { flex-direction: column-reverse; align-items: flex-start; gap: 16px; }
+  .attendance-action-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%}
+  .attendance-cta{width:100%;justify-content:center;min-height:38px !important;font-size:12.5px !important;padding:4px !important;text-align:center;line-height:1.2}
   .attendance-tabs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;padding-bottom:2px}
   .attendance-tabs::-webkit-scrollbar{display:none}
   .attendance-tab{flex-shrink:0;padding:8px 14px 12px;font-size:12.5px}
@@ -108,8 +149,10 @@ html,body{max-width:100vw;overflow-x:hidden}
   .reports-toolbar{flex-direction:column;align-items:stretch}
   .reports-toolbar__actions{flex-wrap:wrap}
   .batch-assignment-row{grid-template-columns:1fr}
-  .dashboard-controls{flex-direction:column}
-  .dashboard-control{min-width:0;width:100%}
+  .dashboard-controls{flex-direction:row; justify-content: space-between; align-items: flex-end; width: 100%;}
+  .dashboard-control{min-width:0;width:auto;}
+  .dashboard-control select { font-size: 14px; width: max-content; min-width: 150px; }
+  .dashboard-control select option { font-size: 14px; padding: 4px; }
   .react-data-table__toolbar,.react-data-table__footer{flex-direction:column;align-items:stretch}
   .react-data-table__search input{width:100%;min-width:0}
   .login-screen{padding:16px}
@@ -122,18 +165,38 @@ html,body{max-width:100vw;overflow-x:hidden}
   .view-mode-tab{flex-shrink:0;padding:8px 14px}
   .fms-tabs-row{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
   .fms-tabs-row::-webkit-scrollbar{display:none}
-  .notification-panel{width:calc(100vw - 16px);border-radius:16px}
+  .notification-panel{width:calc(100vw - 32px) !important;border-radius:16px;left:auto !important;right:0 !important;}
   button,a,select,input[type='checkbox'],input[type='radio']{min-height:40px}
   .ticket-id-chip,.status-pill,.ticket-action-state,.emp-source-badge,.client-ticket-priority,.fms-tab-count,.upm-badge,.notification-card__type{min-height:unset}
   .ticket-action-btn,.attendance-cta{min-height:40px}
   .file-info{display:block;margin-top:4px;font-size:11px;color:#64748b;line-height:1.4;word-break:break-all}
+  
+  /* Additional Comprehensive Mobile Overrides */
+  .admin-table-wrap, .settings-table-wrap, .attendance-table-wrap, .react-data-table-wrap, .fms-table-wrap, .approval-table-wrap, .client-ticket-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
+  .admin-table, .attendance-table, .fms-table, .settings-table, .approval-table, .client-ticket-table, .react-data-table { min-width: 800px; }
+  
+  /* Dashboard table responsive cards */
+  .dashboard-table, .dashboard-table thead, .dashboard-table tbody, .dashboard-table th, .dashboard-table td, .dashboard-table tr { display: block; }
+  .dashboard-table thead tr { display: none; }
+  .dashboard-table tr { border: 1px solid rgba(214, 226, 242, 0.8); border-radius: 12px; margin-bottom: 12px; padding: 12px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+  .dashboard-table td { border: none; border-bottom: 1px dashed rgba(214, 226, 242, 0.5); padding: 12px 0 !important; display: flex; justify-content: space-between; align-items: center; text-align: right; }
+  .dashboard-table td:last-child { border-bottom: none; padding-bottom: 0; }
+  .dashboard-table td::before { content: attr(data-label); font-weight: 600; color: #64748b; text-align: left; margin-right: 12px; }
+  .dashboard-table-wrap { border: none; background: transparent; overflow: visible; padding: 0; box-shadow: none; }
+  .dashboard-table-wrap .dashboard-table { min-width: 0 !important; width: 100%; border: none; background: transparent; box-shadow: none; }
+  
+  .settings-info-grid { grid-template-columns: 1fr; }
+  .settings-avatar-section { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .settings-card { padding: 20px; }
+  .settings-form { max-width: 100%; }
+  
+  .client-invoice-list, .client-project-list { grid-template-columns: 1fr; }
+  
+  .app-modal__body form { max-width: 100%; }
+  .modal-form-grid { grid-template-columns: 1fr; }
 }
 
 @media(max-width:480px){
-  .sidebar{padding:8px 10px;gap:4px}
-  .sidebar__logo{width:32px;height:32px}
-  .sidebar__link{padding:5px 10px;font-size:12px;gap:8px}
-  .sidebar__link-icon{width:16px;height:16px}
   .content-area{padding:8px 8px 20px}
   .page-card{padding:12px;border-radius:12px}
   .page-card__title{font-size:22px}
@@ -142,17 +205,19 @@ html,body{max-width:100vw;overflow-x:hidden}
   .icon-button{width:36px;height:36px}
   .icon-button__icon{width:17px;height:17px}
   .dashboard-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-  .dashboard-kpi-card{padding:12px 8px}
+  .dashboard-kpi-card{padding:12px 8px;display:flex !important;flex-direction:column !important;align-items:center !important;text-align:center !important;}
   .dashboard-kpi-card__value{font-size:20px}
   .dashboard-kpi-card__icon{width:32px;height:32px;margin-bottom:8px;border-radius:10px}
   .dashboard-kpi-card__icon-svg{width:16px;height:16px}
   .client-dashboard-kpi-grid{grid-template-columns:1fr}
   .ticket-filter-grid{grid-template-columns:1fr}
+  .ticket-filter-actions{width:100%}
+  .ticket-filter-actions .inline-action{flex:1 1 calc(50% - 5px);justify-content:center;text-align:center}
   .approval-filter-grid{grid-template-columns:1fr}
-  .approvals-kpi-grid,.admin-kpi-grid{grid-template-columns:1fr}
+  .approvals-kpi-grid,.admin-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .emp-editor__grid{grid-template-columns:1fr}
   .ticket-form-actions,.approval-action-stack,.attendance-punch-actions{flex-direction:column}
-  .emp-master-page__actions .attendance-cta{flex:1 0 calc(50% - 6px);font-size:13px;min-height:42px}
+  .emp-master-page__actions .attendance-cta{flex:1 0 calc(50% - 6px);font-size:13px;min-height:42px;width:auto !important;}
   .emp-editor-modal,.app-modal{max-height:95dvh;border-radius:20px 20px 0 0}
   .emp-editor{padding:10px 10px 16px}
   .app-modal__header{padding:14px 14px 10px}
@@ -161,12 +226,22 @@ html,body{max-width:100vw;overflow-x:hidden}
   .login-card__title{font-size:22px}
   .login-card__logo{width:64px;height:64px;border-radius:18px}
   .forms-user-picker__grid{grid-template-columns:1fr}
-  .dashboard-summary{flex-direction:column}
-  .dashboard-donut{width:110px;height:110px}
+  .dashboard-summary {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .dashboard-summary__stats {
+    width: 100%;
+  }
+  .dashboard-donut {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 10px auto;
+  }
   .spark-bars{min-height:150px}
   .spark-bars__bar-wrap{height:120px}
   .batch-assignment-row{grid-template-columns:1fr}
-  .notification-panel{width:100vw;right:0;left:0;border-radius:12px 12px 0 0}
+  /* removed notification-panel broken rule */
 }
 
 .emp-master-tabs,.approval-tabs,.attendance-tabs,.fms-tabs-row,.view-mode-tabs,.sidebar__nav{-webkit-overflow-scrolling:touch}
@@ -175,4 +250,11 @@ html,body{max-width:100vw;overflow-x:hidden}
   .sidebar,.topbar{display:none}
   .app-shell{grid-template-columns:1fr}
   .shell-main{overflow:visible}
+}
+
+@media(max-width:375px){
+  .content-area{padding:8px 8px 16px}
+  .page-card{padding:12px;border-radius:12px}
+  .dashboard-kpi-card{padding:10px 8px}
+  .dashboard-kpi-card__value{font-size:18px}
 }

@@ -17,11 +17,11 @@ function DashboardTaskTable({ tasks = [] }) {
           {tasks.length ? (
             tasks.map((task, index) => (
               <tr key={`${task.ID || task['Ticket ID'] || task.empId || 'task'}-${index}`}>
-                <td>{task.Date || task['Plan Date'] || '-'}</td>
-                <td>{task.ID || task['Ticket ID'] || task['Task ID'] || '-'}</td>
-                <td>{task.Type || task.TaskType || task.Module || '-'}</td>
-                <td>{task.Description || task['Task Description'] || task.Task || '-'}</td>
-                <td>
+                <td data-label="Plan Date">{task.Date || task['Plan Date'] || '-'}</td>
+                <td data-label="ID">{task.ID || task['Ticket ID'] || task['Task ID'] || '-'}</td>
+                <td data-label="Type">{task.Type || task.TaskType || task.Module || '-'}</td>
+                <td data-label="Description">{task.Description || task['Task Description'] || task.Task || '-'}</td>
+                <td data-label="Status">
                   <StatusPill tone="info">{task.Status || 'Open'}</StatusPill>
                 </td>
               </tr>

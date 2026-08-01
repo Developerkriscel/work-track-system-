@@ -124,6 +124,12 @@ export function getFileUrl(objectKey = '') {
   const key = safe(objectKey).replace(/^\/+/, '');
   if (!key) return '';
   assertR2Configured();
+
+  if (process.env.R2_PUBLIC_URL) {
+    const publicUrl = safe(process.env.R2_PUBLIC_URL).replace(/\/+$/, '');
+    return `${publicUrl}/${key}`;
+  }
+
   const endpoint = safe(process.env.R2_ENDPOINT).replace(/\/+$/, '');
   return `${endpoint}/${bucketName()}/${key}`;
 }
@@ -136,6 +142,18 @@ export function getStoredFileKey(fileUrl = '') {
   try {
     const parsed = new URL(value);
     const pathname = parsed.pathname.replace(/^\/+/, '');
+
+    if (process.env.R2_PUBLIC_URL) {
+      try {
+        const publicUrl = new URL(process.env.R2_PUBLIC_URL);
+        if (parsed.hostname === publicUrl.hostname) {
+          return decodeObjectKey(pathname);
+        }
+      } catch (e) {
+        // Ignore invalid R2_PUBLIC_URL
+      }
+    }
+
     const bucket = bucketName();
     if (pathname.toLowerCase().startsWith(`${bucket.toLowerCase()}/`)) {
       return decodeObjectKey(pathname.slice(bucket.length + 1));

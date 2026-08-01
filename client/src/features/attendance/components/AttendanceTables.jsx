@@ -71,19 +71,19 @@ export function AttendanceHistoryTable({ rows }) {
           {rows.length ? (
             rows.map((row) => (
               <tr key={row.date} style={{ borderBottom: '1px solid #f1f5f9', transition: 'all 0.2s ease' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                <td style={{ padding: '16px' }}>
+                <td data-label="Date" style={{ padding: '16px' }}>
                   <div className="attendance-date-card" style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '8px', textAlign: 'center', width: '60px', background: '#ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
                     <span style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase' }}>{dateParts(row.date).weekday}</span>
                     <strong style={{ display: 'block', fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: '2px 0' }}>{dateParts(row.date).day}</strong>
                     <small style={{ fontSize: '11px', fontWeight: '600', color: '#94a3b8', textTransform: 'uppercase' }}>{dateParts(row.date).month}</small>
                   </div>
                 </td>
-                <td style={{ padding: '16px', color: '#1e293b' }}><AttendanceEvent row={row} action="in" /></td>
-                <td style={{ padding: '16px', color: '#1e293b' }}><AttendanceEvent row={row} action="out" /></td>
-                <td style={{ padding: '16px' }}>
+                <td data-label="Punch In" style={{ padding: '16px', color: '#1e293b' }}><AttendanceEvent row={row} action="in" /></td>
+                <td data-label="Punch Out" style={{ padding: '16px', color: '#1e293b' }}><AttendanceEvent row={row} action="out" /></td>
+                <td data-label="Status" style={{ padding: '16px' }}>
                   <StatusPill tone={toneForAttendanceStatus(row.status)}>{row.status}</StatusPill>
                 </td>
-                <td style={{ padding: '16px', fontWeight: '600', color: '#64748b' }}>{row.duration}</td>
+                <td data-label="Duration" style={{ padding: '16px', fontWeight: '600', color: '#64748b' }}>{row.duration}</td>
               </tr>
             ))
           ) : (
@@ -446,24 +446,24 @@ export function TeamAttendanceTable({ rows = [], onEdit }) {
           {rows.length ? (
             rows.map((row) => (
               <tr key={row.id}>
-                <td>
+                <td data-label="Employee">
                   <div className="attendance-team-user">
                     <strong>{row.employeeName || row.employeeId}</strong>
                     <span>{[row.employeeId, row.role, row.department].filter(Boolean).join(' | ')}</span>
                   </div>
                 </td>
-                <td>
+                <td data-label="Date">
                   <div className="attendance-date-card">
                     <span>{dateParts(row.date).weekday}</span>
                     <strong>{dateParts(row.date).day}</strong>
                     <small>{dateParts(row.date).month}</small>
                   </div>
                 </td>
-                <td><AttendanceEvent row={row} action="in" /></td>
-                <td><AttendanceEvent row={row} action="out" /></td>
-                <td><StatusPill tone={toneForAttendanceStatus(row.status)}>{row.status}</StatusPill></td>
-                <td>{row.duration || '-'}</td>
-                <td>
+                <td data-label="Punch In"><AttendanceEvent row={row} action="in" /></td>
+                <td data-label="Punch Out"><AttendanceEvent row={row} action="out" /></td>
+                <td data-label="Status"><StatusPill tone={toneForAttendanceStatus(row.status)}>{row.status}</StatusPill></td>
+                <td data-label="Duration">{row.duration || '-'}</td>
+                <td data-label="Action">
                   <button type="button" className="attendance-cta attendance-cta--blue attendance-team-table__edit" onClick={() => onEdit(row)}>
                     Edit Times
                   </button>

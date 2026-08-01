@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 function timeAgo(value) {
@@ -26,12 +27,12 @@ const TYPE_COLORS = {
 
 // Map notification type → app route
 const TYPE_ROUTES = {
-  Leave:      '/leaves',
-  FMS:        '/fms',
-  Intimation: '/intimations',
+  Leave:      '/attendance',
+  FMS:        '/fms-tracker',
+  Intimation: '/attendance',
   Expense:    '/expenses',
   Approval:   '/approvals',
-  Ticket:     '/tickets',
+  Ticket:     '/ticket-system',
   Attendance: '/attendance',
   Todo:       '/todo',
 };
@@ -53,8 +54,33 @@ function ArrowIcon() {
   );
 }
 
-export function NotificationPanel({ title = 'Notifications', items = [], loading = false, error = '', onRefresh }) {
+export function NotificationPanel({ title = 'Notifications', items = [], loading = false, error = '', onRefresh, userRole = '', isClientPanel = false }) {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('All');
+
+  const tabs = useMemo(() => {
+    if (isClientPanel) return ['All', 'Tickets', 'Other'];
+    const baseTabs = ['All', 'Tickets', 'Attendance', 'FMS'];
+    const role = String(userRole).toLowerCase();
+    if (['admin', 'super admin', 'hr', 'manager', 'lead'].some(r => role.includes(r))) {
+      baseTabs.push('Approvals');
+    }
+    baseTabs.push('Other');
+    return baseTabs;
+  }, [isClientPanel, userRole]);
+
+  const filteredItems = useMemo(() => {
+    if (activeTab === 'All') return items;
+    return items.filter(item => {
+      const type = item.type || '';
+      if (activeTab === 'Tickets') return type === 'Ticket';
+      if (activeTab === 'Attendance') return type === 'Attendance' || type === 'Leave' || type === 'Intimation';
+      if (activeTab === 'FMS') return type === 'FMS';
+      if (activeTab === 'Approvals') return type === 'Approval' || String(item.Status || '').toLowerCase().includes('approval');
+      if (activeTab === 'Other') return !['Ticket', 'Attendance', 'Leave', 'Intimation', 'FMS', 'Approval'].includes(type) && !String(item.Status || '').toLowerCase().includes('approval');
+      return true;
+    });
+  }, [items, activeTab]);
 
   return (
     <div className="notification-panel">
@@ -71,6 +97,18 @@ export function NotificationPanel({ title = 'Notifications', items = [], loading
           Refresh
         </button>
       </div>
+      <div className="notification-panel__tabs">
+        {tabs.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            className={`notification-panel__tab ${activeTab === tab ? 'notification-panel__tab--active' : ''}`}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
 
       <div className="notification-panel__body">
         {loading ? (
@@ -80,15 +118,15 @@ export function NotificationPanel({ title = 'Notifications', items = [], loading
           </div>
         ) : null}
         {!loading && error ? <div className="notification-panel__error">{error}</div> : null}
-        {!loading && !error && !items.length ? (
+        {!loading && !error && !filteredItems.length ? (
           <div className="notification-panel__empty">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
-            <span>You're all caught up!</span>
+            <span>{items.length ? "No notifications in this category." : "You're all caught up!"}</span>
           </div>
         ) : null}
 
         {!loading && !error
-          ? items.map((item, index) => {
+          ? filteredItems.map((item, index) => {
               const typeStyle = getTypeStyle(item.type);
               const route = getRoute(item.type);
               const isClickable = Boolean(route);

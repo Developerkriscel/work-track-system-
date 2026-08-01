@@ -94,7 +94,8 @@ export function normalizeClient(row = {}) {
     CustomerID: first(row, ['CustomerID', 'Client_Id', 'Client ID', 'clientId'], clientId),
     'Client Name': clientName,
     CustomerName: first(row, ['CustomerName', 'Client Name', 'Name', 'clientName'], clientName),
-    Status: status
+    Status: status,
+    Avatar: first(row, ['Avatar', 'Photo', 'photo', 'avatar'], '')
   };
   delete normalized.Password;
   delete normalized.password;
@@ -214,4 +215,50 @@ export async function updateEmployeeProfileFromMongo(employeeId, { avatarBase64,
 
   const updated = await upsertRow('User', 'Employee ID', employeeId, { ...user, ...updateData });
   return normalizeEmployee(updated);
+}
+
+export async function changeClientPasswordFromMongo(clientId, currentPassword, nextPassword) {
+  assertMongoReady();
+  const clients = await listMongoRows('Client');
+  const client = clients.find((item) => {
+    const candidateId = first(item, ['Client_Id', 'Client ID', 'CustomerID', 'clientId']);
+    return eq(candidateId, clientId);
+  });
+  if (!client || !isActive(client)) return null;
+
+  const storedPassword = first(client, ['Password', 'password']);
+  if (!(await passwordMatches(currentPassword, storedPassword))) return null;
+
+  const hashedPassword = await hashPassword(nextPassword);
+  const updated = await upsertRow('Client', 'Client_Id', clientId, hashedCredentialRow(client, hashedPassword));
+  return normalizeClient(updated);
+}
+
+export async function updateClientProfileFromMongo(clientId, { email, phone, avatarBase64 }) {
+  assertMongoReady();
+  const clients = await listMongoRows('Client');
+  const client = clients.find((item) => {
+    const candidateId = first(item, ['Client_Id', 'Client ID', 'CustomerID', 'clientId']);
+    return eq(candidateId, clientId);
+  });
+  if (!client || !isActive(client)) return null;
+
+  const updateData = {};
+  if (avatarBase64) {
+    updateData.Avatar = await saveBase64File(
+      { base64: avatarBase64, fileName: `client_${clientId}_avatar.jpg` },
+      'user_avatars'
+    );
+  }
+  if (email !== undefined) {
+    updateData.Email = email;
+    updateData['Email ID'] = email;
+  }
+  if (phone !== undefined) {
+    updateData['Phone No'] = phone;
+    updateData['Mobile Number'] = phone;
+  }
+
+  const updated = await upsertRow('Client', 'Client_Id', clientId, { ...client, ...updateData });
+  return normalizeClient(updated);
 }

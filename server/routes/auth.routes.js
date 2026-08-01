@@ -7,7 +7,9 @@ import {
   employeeToken,
   getClientSessionFromMongo,
   getEmployeeSessionFromMongo,
-  updateEmployeeProfileFromMongo
+  updateEmployeeProfileFromMongo,
+  changeClientPasswordFromMongo,
+  updateClientProfileFromMongo
 } from '../services/auth.service.js';
 import { assertIdentity, requireAuth } from '../middleware/auth.middleware.js';
 
@@ -95,5 +97,44 @@ router.post('/client/session', requireAuth({ kind: 'client' }), async (req, res)
     return res.status(503).json({ success: false, message: error.message });
   }
 });
+
+
+router.post('/client/change-password', requireAuth({ kind: 'client' }), async (req, res) => {
+  try {
+    const { clientId, currentPassword, nextPassword } = req.body;
+    if (!clientId || !currentPassword || !nextPassword) {
+      return res.status(400).json({ success: false, message: 'Client ID, current password, and new password are required.' });
+    }
+    if (!assertIdentity(req, 'client', clientId)) {
+      return res.status(403).json({ success: false, message: 'You can only change your own password.' });
+    }
+
+    const client = await changeClientPasswordFromMongo(clientId, currentPassword, nextPassword);
+    if (!client) return res.status(401).json({ success: false, message: 'Current password is incorrect.' });
+    return res.json({ success: true, client, message: 'Password changed successfully.' });
+  } catch (error) {
+    return res.status(503).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/client/update-profile', requireAuth({ kind: 'client' }), async (req, res) => {
+  try {
+    const { clientId, email, phone, avatarBase64 } = req.body;
+    if (!clientId) {
+      return res.status(400).json({ success: false, message: 'Client ID is required.' });
+    }
+    if (!assertIdentity(req, 'client', clientId)) {
+      return res.status(403).json({ success: false, message: 'You can only update your own profile.' });
+    }
+
+    const client = await updateClientProfileFromMongo(clientId, { email, phone, avatarBase64 });
+    if (!client) return res.status(404).json({ success: false, message: 'Client not found.' });
+    
+    return res.json({ success: true, client, message: 'Profile updated successfully.' });
+  } catch (error) {
+    return res.status(503).json({ success: false, message: error.message });
+  }
+});
+
 
 export default router;

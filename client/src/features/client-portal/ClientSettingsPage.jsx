@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { useAuth } from '@/features/auth/AuthProvider';
-import { changeEmployeePassword, updateEmployeeProfile } from '@/features/auth/api';
+import { useClientAuth } from '@/features/auth/ClientAuthProvider';
+import { changeClientPassword, updateClientProfile } from '@/features/auth/api';
 import { toPreviewUrl } from '@/lib/fileLinks';
-import './settings.css';
+import '../settings/settings.css';
 
 function getInitials(name) {
-  if (!name) return 'U';
+  if (!name) return 'C';
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0][0].toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
@@ -14,7 +14,7 @@ function getInitials(name) {
 function UploadIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <path d="M21 15v4a2 2 0 0 1-2-2H5a2 2 0 0 1-2-2v-4"/>
       <polyline points="17 8 12 3 7 8"/>
       <line x1="12" y1="3" x2="12" y2="15"/>
     </svg>
@@ -49,39 +49,38 @@ function EyeOffIcon() {
   );
 }
 
-export function SettingsPage() {
-  const { user, signOut, refreshSession } = useAuth();
+export function ClientSettingsPage() {
+  const { client, refreshSession, signOut } = useClientAuth();
   const fileInputRef = useRef(null);
   
+  const clientId = client?.Client_Id || client?.['Client ID'];
+  const clientName = client?.['Client Name'] || client?.CustomerName || 'Client';
+  const avatarUrl = client?.Avatar || client?.Photo || '';
+
+  const initialEmail = client?.Email || client?.['Email ID'] || '';
+  const initialPhone = client?.['Mobile Number'] || client?.['Phone No'] || '';
+
+  const [email, setEmail] = useState(initialEmail);
+  const [phone, setPhone] = useState(initialPhone);
+  
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const [profileMessage, setProfileMessage] = useState({ type: '', text: '' });
+
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [uploadSuccess, setUploadSuccess] = useState('');
+  const [avatarVersion, setAvatarVersion] = useState(0);
+
+  const avatarSrc = avatarUrl
+    ? `${toPreviewUrl(avatarUrl)}${toPreviewUrl(avatarUrl).includes('?') ? '&' : '?'}v=${avatarVersion}`
+    : null;
 
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState('');
   const [isChangingPw, setIsChangingPw] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
-  const name = user?.['Employee Name'] || user?.Name || 'Employee';
-  const avatarUrl = user?.Avatar || user?.Photo || null;
-  const employeeId = user?.['Employee ID'] || user?.employeeId;
-  const role = user?.Role || 'User';
-  const department = user?.Department || 'N/A';
-
-  const initialEmail = user?.Email || user?.email || '';
-  const initialPhone = user?.['Mobile Number'] || user?.['Phone No'] || '';
-
-  const [email, setEmail] = useState(initialEmail);
-  const [phone, setPhone] = useState(initialPhone);
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
-  const [profileMessage, setProfileMessage] = useState({ type: '', text: '' });
-  const [avatarVersion, setAvatarVersion] = useState(0);
-
-  const avatarSrc = avatarUrl
-    ? `${toPreviewUrl(avatarUrl)}${toPreviewUrl(avatarUrl).includes('?') ? '&' : '?'}v=${avatarVersion}`
-    : null;
 
   useEffect(() => {
     setEmail(initialEmail);
@@ -90,9 +89,8 @@ export function SettingsPage() {
     setUploadError('');
     setUploadSuccess('');
     setIsEditingProfile(false);
-  }, [employeeId, initialEmail, initialPhone]);
+  }, [clientId, initialEmail, initialPhone]);
 
-  // Avatar Upload Logic
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -119,11 +117,10 @@ export function SettingsPage() {
         reader.readAsDataURL(file);
       });
 
-      await updateEmployeeProfile(employeeId, { avatarBase64: base64 });
+      await updateClientProfile(clientId, { avatarBase64: base64 });
       setUploadSuccess('Profile picture updated successfully!');
       
-      // Refresh user session to get the new avatar
-      await refreshSession?.(employeeId);
+      await refreshSession?.();
       setAvatarVersion(version => version + 1);
       
     } catch (err) {
@@ -134,24 +131,31 @@ export function SettingsPage() {
     }
   };
 
-  const handleProfileUpdate = async (e) => {
+  const handleUpdateProfile = async (e) => {
     e.preventDefault();
-    setIsUpdatingProfile(true);
     setProfileMessage({ type: '', text: '' });
-
+    if (!email.includes('@')) {
+      return setProfileMessage({ type: 'error', text: 'Please enter a valid email address.' });
+    }
+    
+    setIsUpdatingProfile(true);
     try {
-      await updateEmployeeProfile(employeeId, { email, phone });
-      setProfileMessage({ type: 'success', text: 'Contact details updated successfully!' });
-      setIsEditingProfile(false);
-      await refreshSession?.();
-    } catch (error) {
-      setProfileMessage({ type: 'error', text: error.message || 'Failed to update contact details.' });
+      const response = await updateClientProfile(clientId, { email, phone });
+      if (response.success) {
+        setProfileMessage({ type: 'success', text: 'Contact details updated successfully!' });
+        await refreshSession();
+        setIsEditingProfile(false);
+      } else {
+        setProfileMessage({ type: 'error', text: response.message || 'Failed to update contact details.' });
+      }
+    } catch (err) {
+      setProfileMessage({ type: 'error', text: 'Network error while updating contact details.' });
     } finally {
       setIsUpdatingProfile(false);
     }
   };
 
-  const handlePasswordChange = async (e) => {
+  const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     setPwError('');
     setPwSuccess('');
@@ -162,11 +166,15 @@ export function SettingsPage() {
 
     setIsChangingPw(true);
     try {
-      await changeEmployeePassword(employeeId, pwForm.current, pwForm.next);
-      setPwSuccess('Password changed successfully.');
-      setPwForm({ current: '', next: '', confirm: '' });
-    } catch (error) {
-      setPwError(error.message || 'Unable to change password.');
+      const response = await changeClientPassword(clientId, pwForm.current, pwForm.next);
+      if (response.success) {
+        setPwSuccess('Password changed successfully.');
+        setPwForm({ current: '', next: '', confirm: '' });
+      } else {
+        setPwError(response.message || 'Failed to change password.');
+      }
+    } catch (err) {
+      setPwError('Network error while changing password.');
     } finally {
       setIsChangingPw(false);
     }
@@ -182,9 +190,9 @@ export function SettingsPage() {
         <div className="settings-avatar-section">
           <div className="settings-avatar-preview">
             {avatarSrc ? (
-              <img src={avatarSrc} alt={name} />
+              <img src={avatarSrc} alt={clientName} />
             ) : (
-              <span className="settings-avatar-initials">{getInitials(name)}</span>
+              <span className="settings-avatar-initials">{getInitials(clientName)}</span>
             )}
           </div>
           <div className="settings-avatar-actions">
@@ -209,23 +217,15 @@ export function SettingsPage() {
           </div>
         </div>
 
-        <form onSubmit={handleProfileUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <form onSubmit={handleUpdateProfile} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div className="settings-info-grid">
             <div className="settings-info-item">
-              <span className="settings-info-label">Full Name</span>
-              <span className="settings-info-value">{name}</span>
+              <span className="settings-info-label">Client Name</span>
+              <span className="settings-info-value">{clientName}</span>
             </div>
             <div className="settings-info-item">
-              <span className="settings-info-label">Employee ID</span>
-              <span className="settings-info-value">{employeeId}</span>
-            </div>
-            <div className="settings-info-item">
-              <span className="settings-info-label">Role</span>
-              <span className="settings-info-value">{role}</span>
-            </div>
-            <div className="settings-info-item">
-              <span className="settings-info-label">Department</span>
-              <span className="settings-info-value">{department}</span>
+              <span className="settings-info-label">Client ID</span>
+              <span className="settings-info-value">{clientId}</span>
             </div>
             
             <div className="settings-form-group" style={{ background: 'var(--wt-surface-muted)', padding: '16px 20px', borderRadius: 'var(--wt-radius-button)', border: '1px solid var(--wt-border)', justifyContent: 'center' }}>
@@ -260,7 +260,7 @@ export function SettingsPage() {
               )}
             </div>
           </div>
-          
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             {isEditingProfile ? (
               <>
@@ -311,8 +311,8 @@ export function SettingsPage() {
           <h2>Security</h2>
           <p>Update your password</p>
         </div>
-
-        <form className="settings-form" onSubmit={handlePasswordChange}>
+        
+        <form className="settings-form" onSubmit={handlePasswordSubmit}>
           <div className="settings-form-group">
             <label>Current Password</label>
             <div style={{ position: 'relative' }}>
@@ -323,8 +323,8 @@ export function SettingsPage() {
                 onChange={e => setPwForm(f => ({ ...f, current: e.target.value }))}
                 style={{ width: '100%', paddingRight: '40px' }}
               />
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--wt-text-muted)', display: 'flex', alignItems: 'center', padding: 0 }}
                 aria-label={showPassword ? "Hide password" : "Show password"}
@@ -333,6 +333,7 @@ export function SettingsPage() {
               </button>
             </div>
           </div>
+
           <div className="settings-form-group">
             <label>New Password</label>
             <div style={{ position: 'relative' }}>
@@ -343,8 +344,8 @@ export function SettingsPage() {
                 onChange={e => setPwForm(f => ({ ...f, next: e.target.value }))}
                 style={{ width: '100%', paddingRight: '40px' }}
               />
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--wt-text-muted)', display: 'flex', alignItems: 'center', padding: 0 }}
                 aria-label={showPassword ? "Hide password" : "Show password"}
@@ -353,6 +354,7 @@ export function SettingsPage() {
               </button>
             </div>
           </div>
+
           <div className="settings-form-group">
             <label>Confirm New Password</label>
             <div style={{ position: 'relative' }}>
@@ -363,8 +365,8 @@ export function SettingsPage() {
                 onChange={e => setPwForm(f => ({ ...f, confirm: e.target.value }))}
                 style={{ width: '100%', paddingRight: '40px' }}
               />
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--wt-text-muted)', display: 'flex', alignItems: 'center', padding: 0 }}
                 aria-label={showPassword ? "Hide password" : "Show password"}
@@ -373,11 +375,11 @@ export function SettingsPage() {
               </button>
             </div>
           </div>
-          
+
           <button type="submit" className="settings-submit" disabled={isChangingPw}>
             {isChangingPw ? 'Updating...' : 'Change Password'}
           </button>
-          
+
           {pwError && <div className="settings-message settings-message--error">{pwError}</div>}
           {pwSuccess && <div className="settings-message settings-message--success">{pwSuccess}</div>}
         </form>

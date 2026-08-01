@@ -2,12 +2,14 @@ import {
   BarChart3,
   LayoutDashboard,
   Receipt,
-  Tickets
+  Tickets,
+  Settings as SettingsIcon
 } from '@/components/common/icons';
 import { ClientDashboardPage } from '@/features/client-portal/ClientDashboardPage';
 import { ClientInvoicesPage } from '@/features/client-portal/ClientInvoicesPage';
 import { ClientReportsPage } from '@/features/client-portal/ClientReportsPage';
 import { ClientTicketsPage } from '@/features/client-portal/ClientTicketsPage';
+import { ClientSettingsPage } from '@/features/client-portal/ClientSettingsPage';
 
 export const clientRoutes = [
   {
@@ -37,5 +39,12 @@ export const clientRoutes = [
     title: 'Reports',
     icon: BarChart3,
     element: <ClientReportsPage />
+  },
+  {
+    path: '/client/settings',
+    key: 'clientSettings',
+    title: 'Settings',
+    icon: SettingsIcon,
+    element: <ClientSettingsPage />
   }
 ];
