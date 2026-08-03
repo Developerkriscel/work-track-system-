@@ -170,8 +170,6 @@ export function AttendancePage() {
     canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;
     const ctx = canvas.getContext('2d');
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     setPhotoBase64(canvas.toDataURL('image/jpeg', 0.9));
     if (streamRef.current) {
