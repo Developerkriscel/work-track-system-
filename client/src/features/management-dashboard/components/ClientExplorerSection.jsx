@@ -39,10 +39,10 @@ export function ClientExplorerSection({ clients, selectedClientId, onClientChang
               <tbody>
                 {explorer.tasks.length ? explorer.tasks.slice(0, 10).map((row) => (
                   <tr key={row.ID}>
-                    <td><span className="ticket-id-chip">{row.ID || '-'}</span></td>
-                    <td>{row.User || '-'}</td>
-                    <td className="approval-table__copy">{row.Description || '-'}</td>
-                    <td><StatusPill tone={managementStatusTone(row.Status)}>{row.Status || '-'}</StatusPill></td>
+                    <td data-label="ID"><span className="ticket-id-chip">{row.ID || '-'}</span></td>
+                    <td data-label="User">{row.User || '-'}</td>
+                    <td data-label="Description" className="approval-table__copy">{row.Description || '-'}</td>
+                    <td data-label="Status"><StatusPill tone={managementStatusTone(row.Status)}>{row.Status || '-'}</StatusPill></td>
                   </tr>
                 )) : (
                   <tr>
@@ -71,9 +71,9 @@ export function ClientExplorerSection({ clients, selectedClientId, onClientChang
               <tbody>
                 {explorer.bandwidth.length ? explorer.bandwidth.map((row) => (
                   <tr key={row.owner}>
-                    <td>{row.owner}</td>
-                    <td>{row.count}</td>
-                    <td>{row.tat} mins</td>
+                    <td data-label="Owner">{row.owner}</td>
+                    <td data-label="Task Count">{row.count}</td>
+                    <td data-label="Total TAT">{row.tat} mins</td>
                   </tr>
                 )) : (
                   <tr>
@@ -103,9 +103,9 @@ export function ClientExplorerSection({ clients, selectedClientId, onClientChang
             <tbody>
               {explorer.invoices.length ? explorer.invoices.map((row) => (
                 <tr key={row.InvoiceID || row._id}>
-                  <td><span className="ticket-id-chip">{row.InvoiceID || row._id || '-'}</span></td>
-                  <td><StatusPill tone={managementStatusTone(row.Status)}>{row.Status || '-'}</StatusPill></td>
-                  <td>{formatManagementCurrency(row.Outstanding)}</td>
+                  <td data-label="Invoice ID"><span className="ticket-id-chip">{row.InvoiceID || row._id || '-'}</span></td>
+                  <td data-label="Status"><StatusPill tone={managementStatusTone(row.Status)}>{row.Status || '-'}</StatusPill></td>
+                  <td data-label="Outstanding">{formatManagementCurrency(row.Outstanding)}</td>
                 </tr>
               )) : (
                 <tr>

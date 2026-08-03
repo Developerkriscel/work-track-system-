@@ -58,7 +58,7 @@ export function ExpenseApprovalsTable({
       </div>
 
       <div className="dashboard-table-wrap">
-        <table className="dashboard-table approval-table">
+        <table className="dashboard-table approval-table expenses-team-table">
           <thead>
             <tr>
               <th>Expense ID</th>
@@ -77,21 +77,21 @@ export function ExpenseApprovalsTable({
             {expenses.length ? (
               expenses.map((expense) => (
                 <tr key={expense.ExpenseID || expense['Expense ID'] || expense._id}>
-                  <td>{expense.ExpenseID || expense['Expense ID'] || '-'}</td>
-                  <td>
+                  <td data-label="Expense ID">{expense.ExpenseID || expense['Expense ID'] || '-'}</td>
+                  <td data-label="Employee">
                     <div className="approval-table__identity">
                       <strong>{expense['Employee Name'] || '-'}</strong>
                       <span>{expense['Employee ID'] || '-'}</span>
                     </div>
                   </td>
-                  <td>{formatExpenseDate(expense.Date)}</td>
-                  <td>{expense.Type || '-'}</td>
-                  <td>{expense.Amount || '-'}</td>
-                  <td>
+                  <td data-label="Date">{formatExpenseDate(expense.Date)}</td>
+                  <td data-label="Type">{expense.Type || '-'}</td>
+                  <td data-label="Amount">{expense.Amount || '-'}</td>
+                  <td data-label="Status">
                     <StatusPill tone={expenseStatusTone(expense.Status)}>{expense.Status || 'Pending'}</StatusPill>
                   </td>
-                  <td className="approval-table__copy">{expense.Description || '-'}</td>
-                  <td>
+                  <td data-label="Description" className="approval-table__copy">{expense.Description || '-'}</td>
+                  <td data-label="Receipt">
                     {expense['Receipt URL'] ? (
                       <a
                         className="forms-open-link attendance-cta attendance-cta--purple"
@@ -113,8 +113,8 @@ export function ExpenseApprovalsTable({
                       <span className="status-pill status-pill--neutral">No Receipt</span>
                     )}
                   </td>
-                  <td className="approval-table__copy">{expense['Admin Remarks'] || '-'}</td>
-                  <td>
+                  <td data-label="Remarks" className="approval-table__copy">{expense['Admin Remarks'] || '-'}</td>
+                  <td data-label="Action">
                     <div className="approval-table__actions">
                       {expense._canApprove ? (
                         <>

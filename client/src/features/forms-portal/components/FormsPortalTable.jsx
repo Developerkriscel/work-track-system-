@@ -35,17 +35,17 @@ export function FormsPortalTable({
                 const summary = visibleUsersSummary(form);
                 return (
                   <tr key={form['Form ID'] || form['Sheet name']}>
-                    <td>
+                    <td data-label="Department">
                       <span className="ticket-id-chip">{form.Department || 'General'}</span>
                     </td>
-                    <td>
+                    <td data-label="Category / Sheet Name">
                       <div className="approval-user-cell">
                         <strong>{form['Sheet name'] || '-'}</strong>
                         <span>{form['Form ID'] || form.ID || '-'}</span>
                       </div>
                     </td>
-                    <td className="approval-table__copy">{form.For || '-'}</td>
-                    <td>
+                    <td data-label="For / Purpose" className="approval-table__copy">{form.For || '-'}</td>
+                    <td data-label="Form Action">
                       <div className="forms-action-stack">
                         <a
                           href={form['Form link'] || '#'}
@@ -56,16 +56,12 @@ export function FormsPortalTable({
                           Open Form
                         </a>
                         <StatusPill tone={summary.tone}>{summary.label}</StatusPill>
-                        {isAdmin ? (
-                          <button type="button" className="ticket-action-btn ticket-action-btn--schedule" onClick={() => onOpenEdit(form)}>
-                            Manage Access
-                          </button>
-                        ) : null}
+
                       </div>
                     </td>
                     {isAdmin ? (
-                      <td>
-                        <div className="approval-action-stack">
+                      <td data-label="Action">
+                        <div className="approval-action-stack form-portal-action-stack">
                           <button type="button" className="ticket-action-btn ticket-action-btn--done" onClick={() => onOpenEdit(form)}>
                             Edit
                           </button>

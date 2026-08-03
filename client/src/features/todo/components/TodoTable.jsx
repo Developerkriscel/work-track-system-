@@ -33,7 +33,7 @@ export function TodoTable({ rows = [], submitting, onToggle, onEdit, onDelete })
             {rows.length ? (
               rows.map((row) => (
                 <tr key={row['Task ID'] || row.TodoID} className={isCompleted(row) ? 'todo-row todo-row--completed' : 'todo-row'}>
-                  <td className="todo-table__check-col">
+                  <td className="todo-table__check-col" data-label="Mark Done">
                     <label className="todo-checkbox" title={isCompleted(row) ? 'Mark pending' : 'Mark completed'}>
                       <input
                         type="checkbox"
@@ -44,15 +44,15 @@ export function TodoTable({ rows = [], submitting, onToggle, onEdit, onDelete })
                       <span className="todo-checkbox__box" aria-hidden="true" />
                     </label>
                   </td>
-                  <td><span className="ticket-id-chip">{row['Task ID'] || row.TodoID || '-'}</span></td>
-                  <td className="approval-table__copy todo-table__task-cell">
+                  <td data-label="Task ID"><span className="ticket-id-chip">{row['Task ID'] || row.TodoID || '-'}</span></td>
+                  <td data-label="Task" className="approval-table__copy todo-table__task-cell">
                     <span className="todo-table__task-text">{row.Task || row.Description || '-'}</span>
                   </td>
-                  <td>{row.Priority || '-'}</td>
-                  <td>{formatTodoDate(row['Due Date'] || row.Date)}</td>
-                  <td>{row.TAT || '-'}</td>
-                  <td><StatusPill tone={todoStatusTone(row.Status)}>{row.Status || 'Pending'}</StatusPill></td>
-                  <td>
+                  <td data-label="Priority">{row.Priority || '-'}</td>
+                  <td data-label="Due Date">{formatTodoDate(row['Due Date'] || row.Date)}</td>
+                  <td data-label="TAT">{row.TAT || '-'}</td>
+                  <td data-label="Status"><StatusPill tone={todoStatusTone(row.Status)}>{row.Status || 'Pending'}</StatusPill></td>
+                  <td data-label="Action">
                     <div className="ticket-actions">
                       <button type="button" className="attendance-cta attendance-cta--gray" disabled={submitting} onClick={() => onEdit(row)}>
                         Edit

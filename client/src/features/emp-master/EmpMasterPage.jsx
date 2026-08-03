@@ -677,11 +677,12 @@ export function EmpMasterPage() {
           <p className="page-card__eyebrow">People Operations</p>
           <h1 className="page-card__title">Employee Master Data</h1>
         </div>
-        <div className="emp-master-page__actions">
-          <button type="button" className="icon-button" title="Refresh" onClick={() => load(category)}>
-            <RefreshCw className="icon-button__icon" />
+        <div className="dashboard-controls mobile-header-controls">
+          <button type="button" className="attendance-cta attendance-cta--gray mobile-full-btn" onClick={() => load(category)}>
+            <RefreshCw className="icon-button__icon" style={{ marginRight: '8px' }} />
+            Refresh
           </button>
-          <button type="button" className="attendance-cta attendance-cta--purple" onClick={() => add('EMP')}>
+          <button type="button" className="attendance-cta attendance-cta--purple mobile-full-btn" onClick={() => add('EMP')}>
             Add Employee
           </button>
         </div>
@@ -755,13 +756,13 @@ export function EmpMasterPage() {
                     const docs = extractDocumentItems(row);
                     return (
                       <tr key={`doc-${id}`}>
-                        <td><span className="ticket-id-chip">{id}</span></td>
-                        <td>
+                        <td data-label="Employee ID"><span className="ticket-id-chip">{id}</span></td>
+                        <td data-label="Employee Name">
                           <div>{name}</div>
                           <small className="emp-source-badge">{row.Category || 'EMP Master'}</small>
                         </td>
-                        <td>
-                          <div className="emp-master-documents">
+                        <td data-label="Documents">
+                          <div className="emp-docs-container" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-start' }}>
                             {docs.map((doc) => (
                               <button
                                 key={`${id}-${doc.label}-${doc.url}`}
@@ -820,21 +821,21 @@ export function EmpMasterPage() {
                     const editable = canEditEmpMasterRow(currentRole, row);
                     return (
                       <tr key={`${rowCategory}-${id}`}>
-                        <td><span className="ticket-id-chip">{id}</span></td>
-                        <td>
+                        <td data-label="Employee ID"><span className="ticket-id-chip">{id}</span></td>
+                        <td data-label="Employee Name">
                           <div>{first(row, ['Name', 'Employee Name'], '-')}</div>
                           {category === 'Inactive' && row._sourceSheet ? (
                             <small className="emp-source-badge">{row._sourceSheet === 'EMP' ? 'Employee' : row._sourceSheet}</small>
                           ) : null}
                         </td>
-                        <td>{first(row, ['Role', 'Designation'], '-')}</td>
-                        <td>{first(row, ['Manager ID', 'Manager'], '-')}</td>
-                        <td>{first(row, ['Task Approver', 'Approver'], '-')}</td>
-                        <td>{row.Department || '-'}</td>
-                        <td><StatusPill tone={statusTone(row.Status)}>{row.Status || 'Active'}</StatusPill></td>
-                        <td>{first(row, ['Phone No', 'Mobile Number'], '-')}</td>
-                        <td>{first(row, ['Date of Joining', 'Joining Date'], '-')}</td>
-                        <td>
+                        <td data-label="Role">{first(row, ['Role', 'Designation'], '-')}</td>
+                        <td data-label="Manager ID">{first(row, ['Manager ID', 'Manager'], '-')}</td>
+                        <td data-label="Task Approver">{first(row, ['Task Approver', 'Approver'], '-')}</td>
+                        <td data-label="Department">{row.Department || '-'}</td>
+                        <td data-label="Status"><StatusPill tone={statusTone(row.Status)}>{row.Status || 'Active'}</StatusPill></td>
+                        <td data-label="Mobile Number">{first(row, ['Phone No', 'Mobile Number'], '-')}</td>
+                        <td data-label="Joining Date">{first(row, ['Date of Joining', 'Joining Date'], '-')}</td>
+                        <td data-label="Action">
                           <div className="emp-master-actions">
                             <button type="button" className="attendance-cta attendance-cta--gray" onClick={() => openView(row)}>
                               View

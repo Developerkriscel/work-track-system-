@@ -56,7 +56,7 @@ export function TicketApprovalTable({ rows, approvers, submitting, onRequestActi
           {rows.length ? (
             rows.map((row) => (
               <tr key={row['Ticket ID']}>
-                <td>
+                <td data-label="Ticket & User">
                   <div className="approval-user-cell">
                     <span className="ticket-id-chip">{row['Ticket ID']}</span>
                     <strong>{row['Employee Name'] || row['Employee ID'] || '-'}</strong>
@@ -65,7 +65,7 @@ export function TicketApprovalTable({ rows, approvers, submitting, onRequestActi
                     </span>
                   </div>
                 </td>
-                <td>
+                <td data-label="Task Details">
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                     <span style={{ fontSize: '0.8em', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--color-primary)' }}>
                       <strong>{row['Task Category'] || row.Category || 'General'}</strong>
@@ -75,14 +75,14 @@ export function TicketApprovalTable({ rows, approvers, submitting, onRequestActi
                     </span>
                   </div>
                 </td>
-                <td>
+                <td data-label="Schedule">
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.9em' }}>
                     <span><strong>{formatApprovalDate(row['Plan Date'])}</strong></span>
                     <span style={{ color: 'var(--text-secondary)' }}>{row['Start Time'] || '-'} to {row['End Time'] || '-'}</span>
                     <span style={{ color: 'var(--text-secondary)' }}>TAT: {row.TAT || row.When || '-'}</span>
                   </div>
                 </td>
-                <td>
+                <td data-label="Status & Remarks">
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     <div>
                       <StatusPill tone={toneForApprovalStatus(row.Status)}>{row.Status || 'Pending Approval'}</StatusPill>
@@ -94,7 +94,7 @@ export function TicketApprovalTable({ rows, approvers, submitting, onRequestActi
                     )}
                   </div>
                 </td>
-                <td>
+                <td data-label="Action">
                   <TicketActions
                     row={row}
                     approvers={approvers}

@@ -102,16 +102,16 @@ export function TicketReportSection({
               {tickets.length ? (
                 tickets.map((item) => (
                   <tr key={item['Ticket ID'] || item._id}>
-                    <td><span className="ticket-id-chip">{item['Ticket ID'] || '-'}</span></td>
-                    <td>{item.Name || item['Client Name'] || item.Client || '-'}</td>
-                    <td>{item['Employee Name'] || item.User || '-'}</td>
-                    <td className="approval-table__copy">{item['Task Description'] || item.Description || '-'}</td>
-                    <td>{item.Priority || '-'}</td>
-                    <td>
+                    <td data-label="Ticket ID"><span className="ticket-id-chip">{item['Ticket ID'] || '-'}</span></td>
+                    <td data-label="Client">{item.Name || item['Client Name'] || item.Client || '-'}</td>
+                    <td data-label="Employee">{item['Employee Name'] || item.User || '-'}</td>
+                    <td data-label="Description" className="approval-table__copy">{item['Task Description'] || item.Description || '-'}</td>
+                    <td data-label="Priority">{item.Priority || '-'}</td>
+                    <td data-label="Status">
                       <StatusPill tone={toneForReportStatus(item.Status)}>{item.Status || '-'}</StatusPill>
                     </td>
-                    <td>{formatReportDate(item['Plan Date'])}</td>
-                    <td>{item['Total Duration'] || item.Duration || '-'}</td>
+                    <td data-label="Plan Date">{formatReportDate(item['Plan Date'])}</td>
+                    <td data-label="Duration">{item['Total Duration'] || item.Duration || '-'}</td>
                   </tr>
                 ))
               ) : (

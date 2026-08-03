@@ -34,21 +34,21 @@ export function ClientsPortalTable({
             {clients.length ? (
               clients.map((client) => (
                 <tr key={client.Client_Id}>
-                  <td>
+                  <td data-label="Client ID">
                     <button type="button" className="ticket-id-chip ticket-id-chip--button" onClick={() => onOpenDetails(client)}>
                       {client.Client_Id}
                     </button>
                   </td>
-                  <td>{client['Client Name'] || '-'}</td>
-                  <td>{client['Mobile Number'] || '-'}</td>
-                  <td className="approval-table__copy">{client['Client Email ID'] || '-'}</td>
-                  <td>
+                  <td data-label="Client Name">{client['Client Name'] || '-'}</td>
+                  <td data-label="Mobile Number">{client['Mobile Number'] || '-'}</td>
+                  <td data-label="Client Email ID" className="approval-table__copy">{client['Client Email ID'] || '-'}</td>
+                  <td data-label="Status">
                     <StatusPill tone={clientStatusTone(client.Status)}>{client.Status || 'Active'}</StatusPill>
                   </td>
-                  <td className="approval-table__copy">{client.Services || '-'}</td>
-                  <td>
+                  <td data-label="Services" className="approval-table__copy">{client.Services || '-'}</td>
+                  <td data-label="Action">
                     {isAdmin ? (
-                      <div className="approval-action-stack">
+                      <div className="approval-action-stack client-action-stack">
                         <button type="button" className="ticket-action-btn ticket-action-btn--done" onClick={() => onOpenEditor(client)}>
                           Edit
                         </button>

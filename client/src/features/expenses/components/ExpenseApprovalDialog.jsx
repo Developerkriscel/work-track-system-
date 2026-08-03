@@ -17,13 +17,7 @@ export function ExpenseApprovalDialog({ action, busy, onClose, onSubmit }) {
       width="560px"
     >
       <form className="ticket-form-grid" onSubmit={handleSubmit}>
-        <div className="dashboard-banner">
-          <span>
-            {isReject
-              ? 'Add a clear rejection remark so the employee knows what to fix.'
-              : 'Add approval remarks before processing this expense claim.'}
-          </span>
-        </div>
+
 
         <label className="dashboard-control forms-editor__full">
           <span>Remarks</span>

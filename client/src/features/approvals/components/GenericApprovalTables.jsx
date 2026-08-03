@@ -47,19 +47,19 @@ export function LeaveApprovalTable({ rows, submitting, onRequestAction }) {
           {rows.length ? (
             rows.map((row) => (
               <tr key={row['Leave ID'] || row.LeaveID || row.leaveId}>
-                <td>
+                <td data-label="Employee">
                   <div className="approval-user-cell">
                     <strong>{row['Employee Name'] || row.employeeName || '-'}</strong>
                     <span>{row['Employee ID'] || row.employeeId || '-'}</span>
                   </div>
                 </td>
-                <td>{row['Leave Type'] || row.leaveType || row.type || '-'}</td>
-                <td>{row['Day Type'] || row.dayType || '-'}</td>
-                <td>{formatApprovalDate(row['Start Date'] || row.startDate)}</td>
-                <td>{formatApprovalDate(row['End Date'] || row.endDate)}</td>
-                <td className="approval-table__copy">{row.Reason || row.reason || '-'}</td>
-                <td><StatusPill tone={toneForApprovalStatus(row.Status || row.status)}>{row.Status || row.status || 'Pending'}</StatusPill></td>
-                <td>
+                <td data-label="Type">{row['Leave Type'] || row.leaveType || row.type || '-'}</td>
+                <td data-label="Day Type">{row['Day Type'] || row.dayType || '-'}</td>
+                <td data-label="Start Date">{formatApprovalDate(row['Start Date'] || row.startDate)}</td>
+                <td data-label="End Date">{formatApprovalDate(row['End Date'] || row.endDate)}</td>
+                <td data-label="Reason" className="approval-table__copy">{row.Reason || row.reason || '-'}</td>
+                <td data-label="Status"><StatusPill tone={toneForApprovalStatus(row.Status || row.status)}>{row.Status || row.status || 'Pending'}</StatusPill></td>
+                <td data-label="Action">
                   <GenericActions
                     row={row}
                     type="Leave"
@@ -99,17 +99,17 @@ export function IntimationApprovalTable({ rows, submitting, onRequestAction }) {
           {rows.length ? (
             rows.map((row) => (
               <tr key={row['Intimation ID'] || row.IntimationID || row.intimationId}>
-                <td>
+                <td data-label="Employee">
                   <div className="approval-user-cell">
                     <strong>{row['Employee Name'] || row.employeeName || '-'}</strong>
                     <span>{row['Employee ID'] || row.employeeId || '-'}</span>
                   </div>
                 </td>
-                <td>{row['Intimation Type'] || row.Type || row.type || '-'}</td>
-                <td>{formatApprovalDate(row['Intimation Date'] || row.Date || row.date)}</td>
-                <td className="approval-table__copy">{row.Reason || row.reason || '-'}</td>
-                <td><StatusPill tone={toneForApprovalStatus(row.Status || row.status)}>{row.Status || row.status || 'Submitted'}</StatusPill></td>
-                <td>
+                <td data-label="Type">{row['Intimation Type'] || row.Type || row.type || '-'}</td>
+                <td data-label="Date">{formatApprovalDate(row['Intimation Date'] || row.Date || row.date)}</td>
+                <td data-label="Reason" className="approval-table__copy">{row.Reason || row.reason || '-'}</td>
+                <td data-label="Status"><StatusPill tone={toneForApprovalStatus(row.Status || row.status)}>{row.Status || row.status || 'Submitted'}</StatusPill></td>
+                <td data-label="Action">
                   <GenericActions
                     row={row}
                     type="Intimation"
@@ -150,18 +150,18 @@ export function AttendanceApprovalTable({ rows, submitting, onRequestAction }) {
           {rows.length ? (
             rows.map((row) => (
               <tr key={row.AttendanceID || row['AttendanceID']}>
-                <td>
+                <td data-label="Employee">
                   <div className="approval-user-cell">
                     <strong>{row['Employee Name'] || '-'}</strong>
                     <span>{row['Employee ID'] || '-'}</span>
                   </div>
                 </td>
-                <td>{formatApprovalDate(row.Date || row.DateStr)}</td>
-                <td>{row.PunchIn || row['Punch In'] || '-'}</td>
-                <td>{row.PunchOut || row['Punch Out'] || '-'}</td>
-                <td>{row.Duration || '-'}</td>
-                <td><StatusPill tone={toneForApprovalStatus(row.Status)}>{row.Status || 'Pending'}</StatusPill></td>
-                <td>
+                <td data-label="Date">{formatApprovalDate(row.Date || row.DateStr)}</td>
+                <td data-label="Punch In">{row.PunchIn || row['Punch In'] || '-'}</td>
+                <td data-label="Punch Out">{row.PunchOut || row['Punch Out'] || '-'}</td>
+                <td data-label="Duration">{row.Duration || '-'}</td>
+                <td data-label="Status"><StatusPill tone={toneForApprovalStatus(row.Status)}>{row.Status || 'Pending'}</StatusPill></td>
+                <td data-label="Action">
                   <GenericActions
                     row={row}
                     type="Attendance"

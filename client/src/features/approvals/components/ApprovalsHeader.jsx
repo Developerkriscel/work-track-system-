@@ -8,9 +8,9 @@ export function ApprovalsHeader({ employeeLabel, onRefresh }) {
         <h1 className="page-card__title">Pending Approvals</h1>
       </div>
 
-      <div className="dashboard-controls">
+      <div className="dashboard-controls mobile-header-controls">
         <div className="page-card__status">{employeeLabel}</div>
-        <button type="button" className="attendance-cta attendance-cta--blue approvals-refresh-btn" onClick={onRefresh}>
+        <button type="button" className="attendance-cta attendance-cta--blue mobile-full-btn approvals-refresh-btn" onClick={onRefresh}>
           <RefreshCw className="approvals-refresh-btn__icon" />
           Refresh
         </button>

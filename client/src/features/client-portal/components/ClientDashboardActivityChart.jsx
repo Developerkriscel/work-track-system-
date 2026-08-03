@@ -13,7 +13,8 @@ export function ClientDashboardActivityChart({ data = { labels: [], data: [] } }
         <div className="spark-bars">
           {labels.map((label, index) => {
             const value = Number(values[index] || 0);
-            const height = Math.max(12, (value / maxValue) * 180);
+            const heightPercent = maxValue > 0 ? (value / maxValue) * 100 : 0;
+            const height = `max(12px, ${heightPercent}%)`;
             return (
               <div key={`${label}-${index}`} className="spark-bars__item">
                 <div className="spark-bars__bar-wrap">

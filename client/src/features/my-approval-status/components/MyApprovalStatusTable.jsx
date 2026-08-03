@@ -37,18 +37,18 @@ export function MyApprovalStatusTable({ rows, loading }) {
             ) : rows.length ? (
               rows.map((row) => (
                 <tr key={row.id}>
-                  <td>
+                  <td data-label="Type">
                     <span className={`my-approval-status__type-chip my-approval-status__type-chip--${String(row.Type || '').toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'default'}`}>
                       {row.Type || '-'}
                     </span>
                   </td>
-                  <td className="my-approval-status__subtype">{row.SubType || '-'}</td>
-                  <td className="my-approval-status__date">{row.Date || '-'}</td>
-                  <td className="my-approval-status__reason">{row.Reason || '-'}</td>
-                  <td>
+                  <td data-label="Category / SubType" className="my-approval-status__subtype">{row.SubType || '-'}</td>
+                  <td data-label="Date(s)" className="my-approval-status__date">{row.Date || '-'}</td>
+                  <td data-label="Details / Reason" className="my-approval-status__reason">{row.Reason || '-'}</td>
+                  <td data-label="Status">
                     <StatusPill tone={toneForRow(row)}>{row.Status || '-'}</StatusPill>
                   </td>
-                  <td>
+                  <td data-label="Admin Remarks">
                     {row.Remarks && row.Remarks !== '-' ? (
                       <div className="my-approval-status__remarks">{row.Remarks}</div>
                     ) : (

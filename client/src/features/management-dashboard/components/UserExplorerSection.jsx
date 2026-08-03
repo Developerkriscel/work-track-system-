@@ -21,10 +21,10 @@ function UserTaskTable({ title, rows = [] }) {
           <tbody>
             {rows.length ? rows.slice(0, 8).map((row) => (
               <tr key={`${title}-${row.ID || row.AttendanceID || row.Date}`}>
-                <td><span className="ticket-id-chip">{row.ID || row.AttendanceID || '-'}</span></td>
-                <td className="approval-table__copy">{row.Description || row.Task || row.Action || '-'}</td>
-                <td>{formatManagementDate(row.Date)}</td>
-                <td><StatusPill tone={managementStatusTone(row.Status)}>{row.Status || '-'}</StatusPill></td>
+                <td data-label="ID"><span className="ticket-id-chip">{row.ID || row.AttendanceID || '-'}</span></td>
+                <td data-label="Description" className="approval-table__copy">{row.Description || row.Task || row.Action || '-'}</td>
+                <td data-label="Date">{formatManagementDate(row.Date)}</td>
+                <td data-label="Status"><StatusPill tone={managementStatusTone(row.Status)}>{row.Status || '-'}</StatusPill></td>
               </tr>
             )) : (
               <tr>

@@ -9,10 +9,12 @@ export function clientCurrency(value) {
 export function ticketStatusTone(status) {
   const value = String(status || '').toLowerCase();
   if (value.includes('auto-approved')) return 'info';
-  if (value.includes('closed')) return 'success';
+  if (value.includes('approved')) return 'success';
+  if (value.includes('closed') || value.includes('completed')) return 'success';
+  if (value.includes('reject') || value.includes('cancel')) return 'danger';
   if (value.includes('pending client response')) return 'warning';
   if (value.includes('approval')) return 'warning';
-  if (value.includes('progress')) return 'info';
+  if (value.includes('progress') || value === 'open') return 'info';
   return 'neutral';
 }
 

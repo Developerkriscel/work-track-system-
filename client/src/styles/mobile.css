@@ -61,9 +61,9 @@ html,body{max-width:100vw;overflow-x:hidden}
 
 @media(max-width:768px){
   .content-area{padding:10px 10px 24px}
-  .page-card{padding:16px;border-radius:16px}
-  .page-card__header{flex-direction:column;gap:12px;align-items:flex-start}
-  .page-card__title{font-size:28px}
+  .page-card{padding:16px;border-radius:16px;max-width:100vw;overflow-x:hidden;box-sizing:border-box !important;}
+  .page-card__header{flex-direction:column;gap:12px;align-items:stretch;width:100%;box-sizing:border-box;}
+  .page-card__title{font-size:28px;max-width:100%;overflow-wrap:break-word;}
   .page-card__title--dashboard{font-size:26px}
   .topbar{padding:0 12px;height:52px}
   .topbar__title{font-size:16px; margin-left: 4px;}
@@ -103,16 +103,16 @@ html,body{max-width:100vw;overflow-x:hidden}
   .attendance-section-head{flex-direction:column;align-items:flex-start}
   .attendance-page .page-card__header .dashboard-controls { flex-direction: column-reverse; align-items: flex-start; gap: 16px; }
   .attendance-action-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%}
-  .attendance-cta{width:100%;justify-content:center;min-height:38px !important;font-size:12.5px !important;padding:4px !important;text-align:center;line-height:1.2}
+  .attendance-cta{display:flex;align-items:center;width:100%;justify-content:center;min-height:38px !important;font-size:12.5px !important;padding:4px !important;text-align:center;line-height:1.2}
   .attendance-tabs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;padding-bottom:2px}
   .attendance-tabs::-webkit-scrollbar{display:none}
   .attendance-tab{flex-shrink:0;padding:8px 14px 12px;font-size:12.5px}
   .attendance-team-toolbar{grid-template-columns:1fr}
   .attendance-team-modal__grid{grid-template-columns:1fr}
   .attendance-time-picker{grid-template-columns:1fr 1fr 1fr}
-  .emp-master-page__header{flex-direction:column;align-items:flex-start}
-  .emp-master-page__actions{width:100%;justify-content:flex-start;flex-wrap:wrap}
-  .emp-master-tabs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;gap:8px;padding-bottom:4px}
+  .emp-master-page__header{flex-direction:column;align-items:stretch;width:100%;box-sizing:border-box;}
+  .emp-master-view-tabs{overflow-x:auto;flex-wrap:nowrap;width:100%;min-width:0;scrollbar-width:none}
+  .emp-master-view-tabs::-webkit-scrollbar{display:none}
   .emp-master-tabs::-webkit-scrollbar{display:none}
   .approval-tab-btn{flex-shrink:0;min-height:38px;padding:0 14px;font-size:13px}
   .emp-master-search{max-width:100%}
@@ -152,14 +152,16 @@ html,body{max-width:100vw;overflow-x:hidden}
   .dashboard-controls{flex-direction:row; justify-content: space-between; align-items: flex-end; width: 100%;}
   .dashboard-control{min-width:0;width:auto;}
   .dashboard-control select { font-size: 14px; width: max-content; min-width: 150px; }
+  .dashboard-control input, .dashboard-control textarea { width: 100%; min-width: 0; box-sizing: border-box; }
   .dashboard-control select option { font-size: 14px; padding: 4px; }
   .react-data-table__toolbar,.react-data-table__footer{flex-direction:column;align-items:stretch}
   .react-data-table__search input{width:100%;min-width:0}
   .login-screen{padding:16px}
-  .login-card{padding:24px 20px;border-radius:24px}
-  .login-card__title{font-size:26px}
-  .login-card__logo{width:80px;height:80px}
-  .login-card__brand{gap:12px;margin-bottom:18px}
+  .login-card{padding:32px 24px;border-radius:28px;}
+  .login-card__title{font-size:24px; margin-top:8px;}
+  .login-card__logo{width:76px;height:76px;border-radius:20px;padding:6px;box-shadow:0 8px 16px rgba(36,57,98,0.1);margin:0 auto;}
+  .login-card__brand{gap:0;margin-bottom:24px;align-items:center;text-align:center;}
+  .login-card__eyebrow{display:none;}
   .view-mode-tabs{overflow-x:auto;flex-wrap:nowrap;width:100%;scrollbar-width:none}
   .view-mode-tabs::-webkit-scrollbar{display:none}
   .view-mode-tab{flex-shrink:0;padding:8px 14px}
@@ -173,15 +175,78 @@ html,body{max-width:100vw;overflow-x:hidden}
   
   /* Additional Comprehensive Mobile Overrides */
   .admin-table-wrap, .settings-table-wrap, .attendance-table-wrap, .react-data-table-wrap, .fms-table-wrap, .approval-table-wrap, .client-ticket-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; width: 100%; }
-  .admin-table, .attendance-table, .fms-table, .settings-table, .approval-table, .client-ticket-table, .react-data-table { min-width: 800px; }
+  .admin-table, .attendance-table, .fms-table, .settings-table, .approval-table, .client-ticket-table { min-width: 800px; }
+  div.react-data-table { min-width: 0 !important; width: 100%; box-sizing: border-box; }
   
   /* Dashboard table responsive cards */
   .dashboard-table, .dashboard-table thead, .dashboard-table tbody, .dashboard-table th, .dashboard-table td, .dashboard-table tr { display: block; }
   .dashboard-table thead tr { display: none; }
-  .dashboard-table tr { border: 1px solid rgba(214, 226, 242, 0.8); border-radius: 12px; margin-bottom: 12px; padding: 12px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-  .dashboard-table td { border: none; border-bottom: 1px dashed rgba(214, 226, 242, 0.5); padding: 12px 0 !important; display: flex; justify-content: space-between; align-items: center; text-align: right; }
-  .dashboard-table td:last-child { border-bottom: none; padding-bottom: 0; }
-  .dashboard-table td::before { content: attr(data-label); font-weight: 600; color: #64748b; text-align: left; margin-right: 12px; }
+  .dashboard-table tr { border: 1px solid rgba(214, 226, 242, 0.8); border-radius: 10px; margin-bottom: 10px; padding: 10px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+  .dashboard-table td { border: none; border-bottom: 1px solid rgba(240, 244, 248, 0.8); padding: 5px 0 !important; display: flex; justify-content: space-between; align-items: center; text-align: right; width: 100% !important; box-sizing: border-box; font-size: 12px; }
+  .dashboard-table td:last-child { border-bottom: none; padding-bottom: 0; align-items: flex-start; }
+  
+  /* Make Action column a footer for all tables */
+  .dashboard-table td[data-label="Action"],
+  .ticket-table td:last-child { flex-direction: column; align-items: stretch; border-top: 1px solid rgba(240, 244, 248, 0.8); margin-top: 6px; padding-top: 12px !important; }
+  .dashboard-table td[data-label="Action"]::before,
+  .ticket-table td:last-child::before { display: none; }
+  
+  .emp-master-actions { flex-direction: row !important; width: 100%; gap: 8px; }
+  .emp-master-actions .attendance-cta, .emp-master-actions .cursor-not-allowed { flex: 1; min-width: 0 !important; width: auto !important; padding: 0 4px !important; font-size: 11px !important; }
+  /* Fix long text wrapping for specific columns */
+  .dashboard-table td[data-label="Task Details"],
+  .dashboard-table td[data-label="Status & Remarks"],
+  .dashboard-table td[data-label="Reason"],
+  .dashboard-table td[data-label="Details / Reason"],
+  .dashboard-table td[data-label="Admin Remarks"],
+  .dashboard-table td[data-label="Form Action"],
+  .dashboard-table td[data-label="For / Purpose"],
+  .dashboard-table td[data-label="Task"],
+  .dashboard-table td[data-label="Client Name"],
+  .dashboard-table td[data-label="Client Email ID"],
+  .dashboard-table td[data-label="Services"],
+  .dashboard-table td[data-label="Description"],
+  .dashboard-table td[data-label="FMS Name"],
+  .dashboard-table td[data-label="Task Name"],
+  .dashboard-table td[data-label="Documents"] { flex-direction: column; align-items: flex-start; text-align: left; gap: 8px; }
+  .dashboard-table td[data-label="Task Details"]::before,
+  .dashboard-table td[data-label="Status & Remarks"]::before,
+  .dashboard-table td[data-label="Reason"]::before,
+  .dashboard-table td[data-label="Details / Reason"]::before,
+  .dashboard-table td[data-label="Admin Remarks"]::before,
+  .dashboard-table td[data-label="Form Action"]::before,
+  .dashboard-table td[data-label="For / Purpose"]::before,
+  .dashboard-table td[data-label="Task"]::before,
+  .dashboard-table td[data-label="Employee ID"]::before,
+  .dashboard-table td[data-label="Employee Name"]::before,
+  .dashboard-table td[data-label="Manager ID"]::before,
+  .dashboard-table td[data-label="Task Approver"]::before,
+  .dashboard-table td[data-label="Department"]::before,
+  .dashboard-table td[data-label="Role"]::before,
+  .dashboard-table td[data-label="Mobile Number"]::before,
+  .dashboard-table td[data-label="Joining Date"]::before,
+  .dashboard-table td[data-label="Documents"]::before,
+  .dashboard-table td[data-label="Client Name"]::before,
+  .dashboard-table td[data-label="Client Email ID"]::before,
+  .dashboard-table td[data-label="Services"]::before,
+  .dashboard-table td[data-label="Description"]::before,
+  .dashboard-table td[data-label="FMS Name"]::before,
+  .dashboard-table td[data-label="Task Name"]::before { margin-bottom: 4px; }
+  .approval-table__copy, .my-approval-status__remarks { max-width: 100% !important; text-align: left; }
+  
+  .forms-action-stack { width: 100%; display: flex; flex-direction: row; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+  .forms-action-stack .attendance-cta,
+  .forms-action-stack .ticket-action-btn { flex: 1 1 calc(50% - 4px); text-align: center; justify-content: center; padding: 8px !important; min-height: 34px !important; font-size: 12px !important; width: auto !important; box-sizing: border-box; margin: 0; }
+  .forms-action-stack .status-pill { flex: 1 1 100%; padding: 4px !important; min-height: 24px !important; margin: 0; }
+  
+  .dashboard-table td::before { content: attr(data-label); font-weight: 600; color: #64748b; text-align: left; margin-right: 12px; flex-shrink: 0; font-size: 12px; }
+  .dashboard-table .status-pill,
+  .dashboard-table .ticket-action-state,
+  .dashboard-table .ticket-id-chip { width: auto !important; min-width: unset !important; text-align: center; font-size: 11px; padding: 2px 6px; min-height: 24px; display: inline-flex; justify-content: center; align-items: center; }
+  
+  .dashboard-table .ticket-actions,
+  .dashboard-table .approval-action-stack { width: 100% !important; min-width: unset !important; flex-direction: row !important; flex-wrap: wrap; justify-content: center; gap: 8px; }
+  .dashboard-table .ticket-action-btn { width: auto !important; min-width: unset !important; padding: 8px 12px; font-size: 11px; min-height: 32px; flex: 1 1 auto; text-align: center; }
   .dashboard-table-wrap { border: none; background: transparent; overflow: visible; padding: 0; box-shadow: none; }
   .dashboard-table-wrap .dashboard-table { min-width: 0 !important; width: 100%; border: none; background: transparent; box-shadow: none; }
   
@@ -192,7 +257,7 @@ html,body{max-width:100vw;overflow-x:hidden}
   
   .client-invoice-list, .client-project-list { grid-template-columns: 1fr; }
   
-  .app-modal__body form { max-width: 100%; }
+  .app-modal__body form { max-width: 100%; padding-bottom: 16px; }
   .modal-form-grid { grid-template-columns: 1fr; }
 }
 
@@ -204,20 +269,27 @@ html,body{max-width:100vw;overflow-x:hidden}
   .topbar__title{font-size:14px}
   .icon-button{width:36px;height:36px}
   .icon-button__icon{width:17px;height:17px}
-  .dashboard-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-  .dashboard-kpi-card{padding:12px 8px;display:flex !important;flex-direction:column !important;align-items:center !important;text-align:center !important;}
-  .dashboard-kpi-card__value{font-size:20px}
-  .dashboard-kpi-card__icon{width:32px;height:32px;margin-bottom:8px;border-radius:10px}
-  .dashboard-kpi-card__icon-svg{width:16px;height:16px}
-  .client-dashboard-kpi-grid{grid-template-columns:1fr}
-  .ticket-filter-grid{grid-template-columns:1fr}
-  .ticket-filter-actions{width:100%}
-  .ticket-filter-actions .inline-action{flex:1 1 calc(50% - 5px);justify-content:center;text-align:center}
-  .approval-filter-grid{grid-template-columns:1fr}
+  .dashboard-kpi-grid, .admin-kpi-grid, .approvals-kpi-grid, .client-dashboard-kpi-grid {grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .dashboard-kpi-card, .client-dashboard-kpi-card {padding:12px 8px;display:flex !important;flex-direction:column !important;align-items:center !important;text-align:center !important;}
+  .dashboard-kpi-card__value, .client-dashboard-kpi-card__value {font-size:20px}
+  .dashboard-kpi-card__icon, .client-dashboard-kpi-card__icon {width:32px;height:32px;margin-bottom:8px;border-radius:10px}
+  .dashboard-kpi-card__icon-svg, .client-dashboard-kpi-card__icon-svg {width:16px;height:16px}
+  
+
+  .ticket-filter-grid{grid-template-columns:1fr 1fr; gap: 8px;}
+  .ticket-filter-actions{width:100%; gap: 6px; margin-top: -4px;}
+  .ticket-filter-actions .inline-action{flex:1 1 calc(50% - 3px); justify-content:center; text-align:center; padding: 6px 10px; font-size: 12px; min-height: 32px;}
+  .approval-filter-grid{grid-template-columns:1fr 1fr; gap: 8px;}
+  .approval-filter-grid__wide{grid-column: 1 / -1;}
+  .approval-filter-actions{margin-top: 4px; width: 100%;}
+  .approval-filter-actions .attendance-cta{width: 100%; padding: 8px;}
   .approvals-kpi-grid,.admin-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .emp-editor__grid{grid-template-columns:1fr}
   .ticket-form-actions,.approval-action-stack,.attendance-punch-actions{flex-direction:column}
-  .emp-master-page__actions .attendance-cta{flex:1 0 calc(50% - 6px);font-size:13px;min-height:42px;width:auto !important;}
+  .emp-editor__grid{grid-template-columns:1fr}
+  .ticket-form-actions,.approval-action-stack,.attendance-punch-actions{flex-direction:column}
+  .client-portal-nav { display: none; }
+  .emp-master-table { min-width: 0 !important; }
   .emp-editor-modal,.app-modal{max-height:95dvh;border-radius:20px 20px 0 0}
   .emp-editor{padding:10px 10px 16px}
   .app-modal__header{padding:14px 14px 10px}
@@ -242,6 +314,20 @@ html,body{max-width:100vw;overflow-x:hidden}
   .spark-bars__bar-wrap{height:120px}
   .batch-assignment-row{grid-template-columns:1fr}
   /* removed notification-panel broken rule */
+
+  .mobile-header-controls {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    margin-top: 12px;
+    box-sizing: border-box;
+    gap: 12px;
+  }
+  .mobile-full-btn { width: 100%; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .approvals-refresh-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 .emp-master-tabs,.approval-tabs,.attendance-tabs,.fms-tabs-row,.view-mode-tabs,.sidebar__nav{-webkit-overflow-scrolling:touch}

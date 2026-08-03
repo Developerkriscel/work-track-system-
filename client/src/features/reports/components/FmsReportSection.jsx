@@ -68,12 +68,12 @@ export function FmsReportSection({
               {fms.length ? (
                 fms.map((item, index) => (
                   <tr key={item.ID || item['Task ID'] || `${item['Task Name'] || 'fms'}-${index}`}>
-                    <td>{item['FMS Name'] || item.Name || '-'}</td>
-                    <td className="approval-table__copy">{item['Task Name'] || item['Task Description'] || item.Description || '-'}</td>
-                    <td>{item.Who || item['Assigned To'] || '-'}</td>
-                    <td>{formatReportDate(item['Plan Date'])}</td>
-                    <td>{formatReportDate(item['Actual Date'])}</td>
-                    <td>
+                    <td data-label="FMS Name">{item['FMS Name'] || item.Name || '-'}</td>
+                    <td data-label="Task Name" className="approval-table__copy">{item['Task Name'] || item['Task Description'] || item.Description || '-'}</td>
+                    <td data-label="Assigned To">{item.Who || item['Assigned To'] || '-'}</td>
+                    <td data-label="Plan Date">{formatReportDate(item['Plan Date'])}</td>
+                    <td data-label="Actual Date">{formatReportDate(item['Actual Date'])}</td>
+                    <td data-label="Status">
                       <StatusPill tone={toneForReportStatus(item.Status)}>{item.Status || '-'}</StatusPill>
                     </td>
                   </tr>

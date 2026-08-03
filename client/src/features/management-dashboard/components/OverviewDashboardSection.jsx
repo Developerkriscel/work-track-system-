@@ -34,10 +34,10 @@ function SimpleTaskTable({ title, rows = [] }) {
           <tbody>
             {rows.length ? rows.slice(0, 8).map((row) => (
               <tr key={`${title}-${row.ID}`}>
-                <td><span className="ticket-id-chip">{row.ID || '-'}</span></td>
-                <td>{row.User || '-'}</td>
-                <td>{row.Client || '-'}</td>
-                <td><StatusPill tone={managementStatusTone(row.Status)}>{row.Status || '-'}</StatusPill></td>
+                <td data-label="ID"><span className="ticket-id-chip">{row.ID || '-'}</span></td>
+                <td data-label="User">{row.User || '-'}</td>
+                <td data-label="Client">{row.Client || '-'}</td>
+                <td data-label="Status"><StatusPill tone={managementStatusTone(row.Status)}>{row.Status || '-'}</StatusPill></td>
               </tr>
             )) : (
               <tr>
@@ -88,10 +88,10 @@ export function OverviewDashboardSection({ kpis, tickets, fms, todo, users, clie
             <tbody>
               {todo.length ? todo.slice(0, 10).map((row) => (
                 <tr key={row.ID}>
-                  <td><span className="ticket-id-chip">{row.ID || '-'}</span></td>
-                  <td>{row.User || '-'}</td>
-                  <td className="approval-table__copy">{row.Description || '-'}</td>
-                  <td><StatusPill tone={managementStatusTone(row.Status)}>{row.Status || '-'}</StatusPill></td>
+                  <td data-label="ID"><span className="ticket-id-chip">{row.ID || '-'}</span></td>
+                  <td data-label="User">{row.User || '-'}</td>
+                  <td data-label="Description" className="approval-table__copy">{row.Description || '-'}</td>
+                  <td data-label="Status"><StatusPill tone={managementStatusTone(row.Status)}>{row.Status || '-'}</StatusPill></td>
                 </tr>
               )) : (
                 <tr>

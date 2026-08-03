@@ -522,7 +522,7 @@ legend {
 }
 
 /* ============================================================
-   KPI CARDS — PREMIUM
+   KPI CARDS â€” PREMIUM
    ============================================================ */
 .dashboard-kpi-grid {
   display: grid;
@@ -632,7 +632,7 @@ legend {
 }
 
 /* ============================================================
-   MINI STATS — Idle Gap / Productive Time
+   MINI STATS â€” Idle Gap / Productive Time
    ============================================================ */
 .dashboard-mini-grid {
   display: grid;
@@ -2150,7 +2150,7 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
 }
 
 .ticket-filter-dropdown summary::after {
-  content: '▾';
+  content: 'â–¾';
   color: #71809c;
   font-size: 15px;
 }
@@ -2759,8 +2759,11 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
 .emp-master-actions .attendance-cta,
 .emp-master-actions .cursor-not-allowed {
   width: max-content;
-  min-width: 92px;
+  min-width: 80px;
   justify-content: center;
+  min-height: 32px;
+  padding: 0 16px;
+  font-size: 11.5px;
 }
 
 .emp-master-table--documents {
@@ -3991,11 +3994,12 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
   }
 
   .login-card__brand {
-    align-items: flex-start;
+    align-items: center;
+    text-align: center;
   }
 
   .login-card__title {
-    font-size: 28px;
+    font-size: 26px;
   }
 }
 
@@ -4015,3 +4019,54 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
   transform: translateY(-2px);
 }
 
+
+/* FMS Header Custom Layout */
+.fms-header-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.fms-header-title-wrapper .page-card__title {
+  margin-bottom: 0;
+}
+.fms-header-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+.fms-header-status-mobile { display: none !important; }
+.fms-header-status-desktop { display: flex !important; }
+
+/* Client and Form Portal module specific action button size increase */
+.client-action-stack,
+.form-portal-action-stack {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.client-action-stack .ticket-action-btn,
+.form-portal-action-stack .ticket-action-btn {
+  min-height: 38px;
+  padding: 0 24px;
+  font-size: 13px;
+}
+
+/* Compact layout for My Team Expenses table to prevent horizontal scroll on desktop */
+.expenses-team-table th,
+.expenses-team-table td {
+  padding: 10px 8px;
+  font-size: 13px;
+}
+.expenses-team-table .approval-action-stack {
+  gap: 4px;
+}
+.expenses-team-table .ticket-action-btn {
+  padding: 0 12px;
+  min-height: 32px;
+  font-size: 11.5px;
+}
+.expenses-team-table .status-pill {
+  padding: 4px 8px;
+  font-size: 11.5px;
+}

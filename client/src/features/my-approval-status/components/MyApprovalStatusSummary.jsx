@@ -2,12 +2,9 @@ import { StatusPill } from '@/components/common/StatusPill';
 
 function SummaryCard({ label, value, tone }) {
   return (
-    <article className="dashboard-kpi-card">
-      <p className="dashboard-kpi-card__label">{label}</p>
+    <article className="dashboard-kpi-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+      <p className="dashboard-kpi-card__label" style={{ textAlign: 'center', marginBottom: '8px' }}>{label}</p>
       <p className="dashboard-kpi-card__value">{value}</p>
-      <div className="my-approval-status__summary-pill">
-        <StatusPill tone={tone}>{label}</StatusPill>
-      </div>
     </article>
   );
 }

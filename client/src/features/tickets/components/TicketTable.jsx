@@ -79,24 +79,24 @@ export function TicketTable({
           {tickets.length ? (
             pageTickets.map((ticket, index) => (
               <tr key={ticket['Ticket ID'] || index} className={`react-data-table__row ${ticketStatus(ticket.Status) === 'In Progress' ? 'ticket-row--in-progress' : ''}`}>
-                <td>
+                <td data-label="Ticket ID">
                   <button type="button" className="ticket-id-chip ticket-id-chip--button" onClick={() => onDetails(ticket)}>{ticket['Ticket ID']}</button>
                 </td>
-                <td>{ticket.Name || '-'}</td>
-                <td>{ticket['Task Description'] || '-'}</td>
-                <td>
+                <td data-label="Client Name">{ticket.Name || '-'}</td>
+                <td data-label="Description">{ticket['Task Description'] || '-'}</td>
+                <td data-label="Priority">
                   <StatusPill tone={toneForTicketPriority(ticket.Priority)}>{ticket.Priority || 'Normal'}</StatusPill>
                 </td>
-                <td>{ticket.TAT || '-'}</td>
-                <td>{ticket['Start Time'] || '-'}</td>
-                <td>{ticket['End Time'] || '-'}</td>
-                <td>{ticket['Total Duration'] || ticket.Duration || '-'}</td>
-                <td>{ticket['Employee Name'] || ticket['Employee ID'] || '-'}</td>
-                <td>
+                <td data-label="TAT">{ticket.TAT || '-'}</td>
+                <td data-label="Start">{ticket['Start Time'] || '-'}</td>
+                <td data-label="End">{ticket['End Time'] || '-'}</td>
+                <td data-label="Duration">{ticket['Total Duration'] || ticket.Duration || '-'}</td>
+                <td data-label="Assigned To">{ticket['Employee Name'] || ticket['Employee ID'] || '-'}</td>
+                <td data-label="Status">
                   <StatusPill tone={toneForTicketStatus(ticket.Status)}>{ticket.Status || 'Open'}</StatusPill>
                 </td>
-                <td>{formatPlanDate(ticket['Plan Date'])}</td>
-                <td>
+                <td data-label="Plan Date">{formatPlanDate(ticket['Plan Date'])}</td>
+                <td data-label="Actions">
                   <div className="ticket-actions">
                     {!isTerminalTicket(ticket.Status) &&
                     !isWaitingTicket(ticket.Status) &&

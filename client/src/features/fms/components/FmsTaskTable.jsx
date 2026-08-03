@@ -28,21 +28,21 @@ export function FmsTaskTable({ tasks, submitting, onComplete }) {
           {tasks.length ? (
             tasks.map((task) => (
               <tr key={task.rowId || task.ID || task['Task ID']}>
-                <td>{task.empId || task['Employee ID'] || '-'}</td>
-                <td>{task.what || '-'}</td>
-                <td>{task.when || task.TAT || '-'}</td>
-                <td>{task.how || '-'}</td>
-                <td>{task.who || task['Employee Name'] || '-'}</td>
-                <td>{task.fmsName || task['Client Name'] || task.Client || '-'}</td>
-                <td>{task.taskName || task['Task Description'] || task.Description || '-'}</td>
-                <td>{task.stepNo || '-'}</td>
-                <td>{formatFmsPlanDate(task.planDate || task['Plan Date'] || task.Date)}</td>
-                <td>
+                <td data-label="Emp ID">{task.empId || task['Employee ID'] || '-'}</td>
+                <td data-label="What">{task.what || '-'}</td>
+                <td data-label="When">{task.when || task.TAT || '-'}</td>
+                <td data-label="How">{task.how || '-'}</td>
+                <td data-label="Who">{task.who || task['Employee Name'] || '-'}</td>
+                <td data-label="FMS Name">{task.fmsName || task['Client Name'] || task.Client || '-'}</td>
+                <td data-label="Task Name">{task.taskName || task['Task Description'] || task.Description || '-'}</td>
+                <td data-label="Step">{task.stepNo || '-'}</td>
+                <td data-label="Plan Date">{formatFmsPlanDate(task.planDate || task['Plan Date'] || task.Date)}</td>
+                <td data-label="Status">
                   <StatusPill tone={fmsStatusTone(task)}>
                     {getFmsTaskStatusLabel(task)}
                   </StatusPill>
                 </td>
-                <td>
+                <td data-label="Action">
                   {task._completed ? (
                     <StatusPill tone="success">Done</StatusPill>
                   ) : !task._isMyTask ? (

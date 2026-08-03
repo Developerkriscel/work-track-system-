@@ -73,11 +73,11 @@ export function ClientReportTable({ details, formatDate, loading, reportTypeTone
         {visibleRows.length ? (
           visibleRows.map((row) => (
             <tr key={`${row.TaskType}-${row.ID}`}>
-              <td><span className="ticket-id-chip">{row.ID || '-'}</span></td>
-              <td><StatusPill tone={reportTypeTone(row.TaskType)}>{row.TaskType || '-'}</StatusPill></td>
-              <td className="approval-table__copy">{row.Description || '-'}</td>
-              <td>{row.Status || '-'}</td>
-              <td>{formatDate(row.Date)}</td>
+              <td data-label="ID"><span className="ticket-id-chip">{row.ID || '-'}</span></td>
+              <td data-label="Type"><StatusPill tone={reportTypeTone(row.TaskType)}>{row.TaskType || '-'}</StatusPill></td>
+              <td data-label="Description" className="approval-table__copy">{row.Description || '-'}</td>
+              <td data-label="Status">{row.Status || '-'}</td>
+              <td data-label="Date">{formatDate(row.Date)}</td>
             </tr>
           ))
         ) : (

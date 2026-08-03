@@ -35,14 +35,14 @@ export function ExpensesHistoryTable({ expenses = [], title = 'My Recent Expense
             {rows.length ? (
               rows.map((expense) => (
                 <tr key={expense.ExpenseID || expense._id}>
-                  <td>{formatExpenseDate(expense.Date)}</td>
-                  <td>{expense.Type || '-'}</td>
-                  <td>{expense.Amount || '-'}</td>
-                  <td>
+                  <td data-label="Date">{formatExpenseDate(expense.Date)}</td>
+                  <td data-label="Type">{expense.Type || '-'}</td>
+                  <td data-label="Amount">{expense.Amount || '-'}</td>
+                  <td data-label="Status">
                     <StatusPill tone={expenseStatusTone(expense.Status)}>{expense.Status || 'Pending'}</StatusPill>
                   </td>
-                  <td className="approval-table__copy">{expense.Description || '-'}</td>
-                  <td>
+                  <td data-label="Description" className="approval-table__copy">{expense.Description || '-'}</td>
+                  <td data-label="Receipt">
                     {expense['Receipt URL'] ? (
                       <a
                         className="forms-open-link attendance-cta attendance-cta--purple"

@@ -8,11 +8,11 @@ export function TodoHeader({ currentUser, employeeId, onRefresh }) {
         <h1 className="page-card__title">To-Do Manager</h1>
       </div>
 
-      <div className="dashboard-controls">
+      <div className="dashboard-controls mobile-header-controls">
         <div className="page-card__status">
           {(currentUser?.['Employee Name'] || currentUser?.Name || 'Employee')} {employeeId ? `| ${employeeId}` : ''}
         </div>
-        <button type="button" className="attendance-cta attendance-cta--blue approvals-refresh-btn" onClick={onRefresh}>
+        <button type="button" className="attendance-cta attendance-cta--blue mobile-full-btn" onClick={onRefresh}>
           <RefreshCw className="approvals-refresh-btn__icon" />
           Refresh
         </button>

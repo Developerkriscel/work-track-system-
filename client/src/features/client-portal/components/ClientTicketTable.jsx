@@ -134,27 +134,27 @@ export function ClientTicketTable({
 
               return (
                 <tr key={ticketId} className={rowClassName}>
-                  <td>
+                  <td data-label="ID">
                     <button type="button" className="ticket-id-chip ticket-id-chip--button" onClick={() => onOpenDetails(row)}>
                       {ticketId}
                     </button>
                   </td>
-                  <td className="approval-table__copy" title={row.Description || row['Task Description'] || '-'}>
+                  <td data-label="Description" className="approval-table__copy" title={row.Description || row['Task Description'] || '-'}>
                     {shortDescription(row.Description || row['Task Description'])}
                   </td>
-                  <td className="approval-table__copy client-ticket-table__update" title={latestUpdate(row)}>
+                  <td data-label="Latest Update" className="approval-table__copy client-ticket-table__update" title={latestUpdate(row)}>
                     <span className="client-ticket-table__update-text">{latestUpdatePreview(row)}</span>
                   </td>
-                  <td><StatusPill tone={statusTone(statusLabel(row))}>{statusLabel(row)}</StatusPill></td>
+                  <td data-label="Status"><StatusPill tone={statusTone(statusLabel(row))}>{statusLabel(row)}</StatusPill></td>
                   {activeTab === 'response' ? null : (
-                    <td>
+                    <td data-label="Priority">
                       <span className={`client-ticket-priority client-ticket-priority--${ticketPriorityTone(row.Priority)}`}>
                         {row.Priority || '-'}
                       </span>
                     </td>
                   )}
-                  <td>{formatDate(row.Date || row['Plan Date'] || row.Timestamp)}</td>
-                  <td>
+                  <td data-label="Date">{formatDate(row.Date || row['Plan Date'] || row.Timestamp)}</td>
+                  <td data-label="Action">
                     <div className="ticket-actions client-ticket-table__actions">
                       {canRespond ? (
                         <button
