@@ -101,6 +101,7 @@ html,body{max-width:100vw;overflow-x:hidden}
   .attendance-camera{min-height:200px}
   .attendance-captured-photo{width:100%}
   .attendance-section-head{flex-direction:column;align-items:flex-start}
+  .attendance-page .page-card__header { align-items: stretch; }
   .attendance-page .page-card__header .dashboard-controls { flex-direction: column-reverse; align-items: flex-start; gap: 16px; }
   .attendance-action-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%}
   .attendance-cta{display:flex;align-items:center;width:100%;justify-content:center;min-height:38px !important;font-size:12.5px !important;padding:4px !important;text-align:center;line-height:1.2}
@@ -125,7 +126,21 @@ html,body{max-width:100vw;overflow-x:hidden}
   .app-modal{width:100%;max-height:92dvh;border-radius:24px 24px 0 0}
   .app-modal__header{padding:16px 16px 12px}
   .app-modal__body{padding:16px;max-height:calc(92dvh - 110px)}
-  .ticket-filter-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .ticket-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .dashboard-control{min-width:0;width:100%}
+  .dashboard-control input:not([type="checkbox"]), .dashboard-control select, .dashboard-control textarea {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .ticket-filter-dropdown__menu {
+    width: max-content;
+    max-width: 90vw;
+  }
   .ticket-form-grid{grid-template-columns:1fr}
   .approval-tabs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
   .approval-tabs::-webkit-scrollbar{display:none}
@@ -276,7 +291,7 @@ html,body{max-width:100vw;overflow-x:hidden}
   .dashboard-kpi-card__icon-svg, .client-dashboard-kpi-card__icon-svg {width:16px;height:16px}
   
 
-  .ticket-filter-grid{grid-template-columns:1fr 1fr; gap: 8px;}
+  .ticket-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap: 8px;}
   .ticket-filter-actions{width:100%; gap: 6px; margin-top: -4px;}
   .ticket-filter-actions .inline-action{flex:1 1 calc(50% - 3px); justify-content:center; text-align:center; padding: 6px 10px; font-size: 12px; min-height: 32px;}
   .approval-filter-grid{grid-template-columns:1fr 1fr; gap: 8px;}
@@ -327,6 +342,25 @@ html,body{max-width:100vw;overflow-x:hidden}
   .approvals-refresh-btn {
     width: 100%;
     justify-content: center;
+  }
+
+  /* Fix for Attendance Edit Punch Time modal on mobile */
+  .attendance-time-split-row {
+    grid-template-columns: 1fr 6px 1fr 1.2fr auto;
+    gap: 4px;
+  }
+  .attendance-time-split-row__clear {
+    padding-inline: 8px;
+    font-size: 12px;
+    min-width: unset;
+  }
+  .attendance-time-split-row__period {
+    padding: 0 4px;
+    font-size: 12px;
+  }
+  .attendance-time-split-row__part {
+    padding: 0;
+    font-size: 12px;
   }
 }
 
