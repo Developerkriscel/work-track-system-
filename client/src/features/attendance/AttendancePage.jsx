@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { AppModal } from '@/components/modals';
+import { AppModal, ConfirmDialog } from '@/components/modals';
 import { StatusPill } from '@/components/common/StatusPill';
+import { CustomSelect } from '@/components/common/CustomSelect';
 import { AttendanceActionRow } from '@/features/attendance/components/AttendanceActionRow';
 import { AttendanceEntryPanel } from '@/features/attendance/components/AttendanceEntryPanel';
 import { AttendanceHeader } from '@/features/attendance/components/AttendanceHeader';
@@ -10,9 +11,11 @@ import {
   TeamAttendanceEditDialog,
   TeamAttendanceTable
 } from '@/features/attendance/components/AttendanceTables';
+import { AttendanceCalendar } from '@/features/attendance/components/AttendanceCalendar';
 import { AttendanceLocationPolicyCard } from '@/features/attendance/components';
+import { fetchAttendanceForUser } from '@/features/attendance/api';
 import { formatElapsed, todayYmd } from '@/features/attendance/services/attendancePresentation';
-import { useAttendanceData } from '@/features/attendance/useAttendanceData';
+import { useAttendanceData, toYmd, groupAttendanceRows } from '@/features/attendance/useAttendanceData';
 
 export function AttendancePage() {
   const today = todayYmd();
@@ -38,6 +41,7 @@ export function AttendancePage() {
     clearAttendanceError,
     clearTeamAttendanceError,
     teamAttendanceRows,
+    teamAttendanceUsers,
     locationPolicy,
     locationPolicyLoading,
     locationPolicySaving,
@@ -52,6 +56,7 @@ export function AttendancePage() {
 
   const [activeTab, setActiveTab] = useState('punch');
   const [activeView, setActiveView] = useState('self');
+  const [showCalendar, setShowCalendar] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showLocationPolicy, setShowLocationPolicy] = useState(false);
   const [timer, setTimer] = useState('00:00:00');
@@ -61,7 +66,11 @@ export function AttendancePage() {
   const [photoBase64, setPhotoBase64] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraCycle, setCameraCycle] = useState(0);
+  const [showEarlyOutWarning, setShowEarlyOutWarning] = useState(false);
   const [teamSearch, setTeamSearch] = useState('');
+  const [teamCalendarUser, setTeamCalendarUser] = useState('');
+  const [teamCalendarRows, setTeamCalendarRows] = useState([]);
+  const [teamCalendarLoading, setTeamCalendarLoading] = useState(false);
   const [teamEditor, setTeamEditor] = useState(null);
   const [teamEditorForm, setTeamEditorForm] = useState({ punchInTime: '', punchOutTime: '' });
   const [leaveForm, setLeaveForm] = useState({
@@ -81,6 +90,41 @@ export function AttendancePage() {
   const canvasRef = useRef(null);
 
   const clearMessage = () => setMessage(null);
+
+  useEffect(() => {
+    if (!teamCalendarUser) {
+      setTeamCalendarRows([]);
+      return undefined;
+    }
+
+    let active = true;
+    async function loadTeamCalendar() {
+      setTeamCalendarLoading(true);
+      try {
+        const date = new Date(teamFilterDate ? `${teamFilterDate}T00:00:00` : Date.now());
+        const y = date.getFullYear();
+        const m = date.getMonth();
+        const start = new Date(y, m, 1);
+        const end = new Date(y, m + 1, 0);
+        
+        const startStr = toYmd(start);
+        const endStr = toYmd(end);
+        
+        const payload = await fetchAttendanceForUser(teamCalendarUser, startStr, endStr);
+        if (active && payload?.data) {
+          const rawRows = payload.data || [];
+          const bounds = { startDate: startStr, endDate: endStr };
+          const processed = groupAttendanceRows(rawRows, bounds);
+          setTeamCalendarRows(processed);
+        }
+      } catch (err) {
+        // ignore
+      }
+      if (active) setTeamCalendarLoading(false);
+    }
+    loadTeamCalendar();
+    return () => { active = false; };
+  }, [teamCalendarUser, teamFilterDate]);
 
   useEffect(() => {
     if (!session.isPunchedIn) {
@@ -210,6 +254,20 @@ export function AttendancePage() {
       setMessage({ tone: 'danger', text: 'Capture a live photo before punching attendance.' });
       return;
     }
+    
+    if (action === 'Punch Out' && session?.startedAt) {
+      const punchInTime = new Date(session.startedAt).getTime();
+      const diffMins = (Date.now() - punchInTime) / 60000;
+      if (diffMins < 8 * 60) {
+        setShowEarlyOutWarning(true);
+        return;
+      }
+    }
+    
+    await executePunch(action);
+  };
+
+  const executePunch = async (action) => {
     setMessage(null);
     setPunchAction({ action, stage: 'location' });
     try {
@@ -375,6 +433,20 @@ export function AttendancePage() {
         </AppModal>
       ) : null}
 
+      {showEarlyOutWarning && (
+        <ConfirmDialog
+          title="Early Punch Out"
+          message="You are punching out before completing 8 hours. This will be marked as a Half Day. Do you want to proceed?"
+          confirmLabel="Yes, Punch Out"
+          cancelLabel="Cancel"
+          onConfirm={() => {
+            setShowEarlyOutWarning(false);
+            executePunch('Punch Out');
+          }}
+          onCancel={() => setShowEarlyOutWarning(false)}
+        />
+      )}
+
       <AttendanceEntryPanel
         activeTab={activeTab}
         showForm={showForm}
@@ -420,7 +492,33 @@ export function AttendancePage() {
                 </StatusPill>
               </div>
               
-              <div className="dashboard-controls" style={{ gap: '12px' }}>
+              <div className="dashboard-controls" style={{ gap: '12px', alignItems: 'flex-end' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setShowCalendar(!showCalendar)}
+                  style={{ 
+                    padding: '8px 12px', 
+                    borderRadius: '8px', 
+                    border: '1px solid #cbd5e1', 
+                    backgroundColor: showCalendar ? '#eff6ff' : '#ffffff', 
+                    color: showCalendar ? '#3b82f6' : '#64748b',
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '8px', 
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    transition: 'all 0.2s'
+                  }}
+                  title="Toggle Calendar"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                  </svg>
+                  {showCalendar ? 'Hide Calendar' : 'Show Calendar'}
+                </button>
                 <label className="dashboard-control">
                   <span style={{ fontSize: '12px', fontWeight: '600', color: '#64748b', textTransform: 'uppercase' }}>Date Range</span>
                   <select 
@@ -463,6 +561,12 @@ export function AttendancePage() {
             </div>
 
             <AttendanceHistoryTable rows={attendanceRows || []} />
+
+            {showCalendar && (
+              <div style={{ marginTop: '24px' }}>
+                <AttendanceCalendar rows={attendanceRows || []} />
+              </div>
+            )}
           </article>
         </>
       ) : (
@@ -492,7 +596,28 @@ export function AttendancePage() {
                   onChange={(event) => setTeamFilterDate(event.target.value || today)}
                 />
               </label>
+              <label className="dashboard-control attendance-team-toolbar__search">
+                <span>View Employee Calendar</span>
+                <CustomSelect
+                  value={teamCalendarUser}
+                  onChange={setTeamCalendarUser}
+                  defaultLabel="-- Select Employee --"
+                  options={(teamAttendanceUsers || []).map((u) => ({
+                    value: u.id,
+                    label: `${u.name} (${u.id})`
+                  }))}
+                />
+              </label>
             </div>
+            {teamCalendarUser && (
+              <div style={{ marginBottom: '24px' }}>
+                {teamCalendarLoading ? (
+                  <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', fontWeight: '500' }}>Loading Calendar...</div>
+                ) : (
+                  <AttendanceCalendar rows={teamCalendarRows} />
+                )}
+              </div>
+            )}
             <TeamAttendanceTable rows={visibleTeamRows} onEdit={openTeamEditor} />
           </article>
         </>

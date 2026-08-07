@@ -59,12 +59,12 @@ export function MyApprovalStatusFilters({ activeTab, counts, filters, onTabChang
               placeholder="Search by subtype, status, reason, remarks..."
             />
           </label>
-        </div>
 
-        <div className="approval-filter-actions">
-          <button type="button" className="attendance-cta attendance-cta--gray" onClick={onReset}>
-            Reset
-          </button>
+          <div className="approval-filter-actions">
+            <button type="button" className="attendance-cta attendance-cta--gray" onClick={onReset}>
+              Reset
+            </button>
+          </div>
         </div>
       </div>
     </>

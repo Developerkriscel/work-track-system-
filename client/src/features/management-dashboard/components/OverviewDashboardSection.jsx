@@ -1,6 +1,7 @@
 import { StatusPill } from '@/components/common/StatusPill';
 import { formatManagementCurrency, managementStatusTone } from '@/features/management-dashboard/services/managementDashboardPresentation';
 import { BarChart3, Users, Clock3, Receipt, CircleCheckBig, ListChecks, ShieldUser, BadgeCheck } from '@/components/common/icons';
+import { DashboardCharts } from './DashboardCharts';
 
 function SummaryCard({ label, value, icon: Icon, color = 'blue' }) {
   return (
@@ -8,8 +9,10 @@ function SummaryCard({ label, value, icon: Icon, color = 'blue' }) {
       <div className={`dashboard-kpi-card__icon dashboard-kpi-card__icon--${color}`}>
         {Icon && <Icon className="dashboard-kpi-card__icon-svg" />}
       </div>
-      <p className="dashboard-kpi-card__label">{label}</p>
-      <p className="dashboard-kpi-card__value">{value}</p>
+      <div className="dashboard-kpi-card-content">
+        <p className="dashboard-kpi-card__label">{label}</p>
+        <p className="dashboard-kpi-card__value">{value}</p>
+      </div>
     </article>
   );
 }
@@ -32,8 +35,8 @@ function SimpleTaskTable({ title, rows = [] }) {
             </tr>
           </thead>
           <tbody>
-            {rows.length ? rows.slice(0, 8).map((row) => (
-              <tr key={`${title}-${row.ID}`}>
+            {rows.length ? rows.slice(0, 8).map((row, index) => (
+              <tr key={`${title}-${row.ID || row.rowId || index}`}>
                 <td data-label="ID"><span className="ticket-id-chip">{row.ID || '-'}</span></td>
                 <td data-label="User">{row.User || '-'}</td>
                 <td data-label="Client">{row.Client || '-'}</td>
@@ -54,7 +57,7 @@ function SimpleTaskTable({ title, rows = [] }) {
 export function OverviewDashboardSection({ kpis, tickets, fms, todo, users, clients }) {
   return (
     <>
-      <div className="dashboard-kpi-grid approvals-kpi-grid">
+      <div className="dashboard-kpi-grid reports-kpi-grid">
         <SummaryCard icon={BarChart3} color="purple" label="Attendance %" value={`${kpis.attendancePct || 0}%`} />
         <SummaryCard icon={Users} color="blue" label="Attendance Count" value={kpis.attendanceCount || '0'} />
         <SummaryCard icon={Clock3} color="orange" label="Planned Time" value={kpis.plannedTime || '0h 0m'} />
@@ -64,6 +67,8 @@ export function OverviewDashboardSection({ kpis, tickets, fms, todo, users, clie
         <SummaryCard icon={ShieldUser} color="orange" label="Active Users" value={users.length} />
         <SummaryCard icon={BadgeCheck} color="green" label="Active Clients" value={clients.length} />
       </div>
+
+      <DashboardCharts tickets={tickets} fms={fms} todo={todo} />
 
       <div className="migration-grid">
         <SimpleTaskTable title="Tickets" rows={tickets} />
@@ -86,8 +91,8 @@ export function OverviewDashboardSection({ kpis, tickets, fms, todo, users, clie
               </tr>
             </thead>
             <tbody>
-              {todo.length ? todo.slice(0, 10).map((row) => (
-                <tr key={row.ID}>
+              {todo.length ? todo.slice(0, 10).map((row, index) => (
+                <tr key={`todo-${row.ID || row.rowId || index}`}>
                   <td data-label="ID"><span className="ticket-id-chip">{row.ID || '-'}</span></td>
                   <td data-label="User">{row.User || '-'}</td>
                   <td data-label="Description" className="approval-table__copy">{row.Description || '-'}</td>

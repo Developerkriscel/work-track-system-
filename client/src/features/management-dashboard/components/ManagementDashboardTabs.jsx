@@ -8,12 +8,12 @@ export function ManagementDashboardTabs({ activeTab, onTabChange, children = nul
 
   return (
     <div className="migration-panel__row" style={{ margin: '8px 0 24px', borderBottom: 'none', paddingBottom: 0 }}>
-      <div className="inner-dashboard-tabs">
+      <div className="reports-sub-tabs">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
-            className={`inner-dashboard-tab-btn${activeTab === tab.id ? ' inner-dashboard-tab-btn--active' : ''}`}
+            className={`reports-sub-tab-btn${activeTab === tab.id ? ' reports-sub-tab-btn--active' : ''}`}
             onClick={() => onTabChange(tab.id)}
           >
             {tab.label}

@@ -347,6 +347,7 @@ export async function upsertRow(modelName, key, value, updateData) {
     ? {
         $or: [
           { legacyId: rawValue },
+          ...(rawValue.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: rawValue }] : []),
           ...idKeys.map((candidateKey) => ({ [`data.${candidateKey}`]: rawValue }))
         ]
       }

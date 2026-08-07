@@ -2,9 +2,11 @@ import { StatusPill } from '@/components/common/StatusPill';
 
 function SummaryCard({ label, value, tone }) {
   return (
-    <article className="dashboard-kpi-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-      <p className="dashboard-kpi-card__label" style={{ textAlign: 'center', marginBottom: '8px' }}>{label}</p>
-      <p className="dashboard-kpi-card__value">{value}</p>
+    <article className="dashboard-kpi-card">
+      <div className="dashboard-kpi-card-content">
+        <p className="dashboard-kpi-card__label">{label}</p>
+        <p className="dashboard-kpi-card__value">{value}</p>
+      </div>
     </article>
   );
 }

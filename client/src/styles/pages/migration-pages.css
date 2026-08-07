@@ -538,6 +538,9 @@ legend {
   border-radius: 20px;
   box-shadow: 0 10px 30px -10px rgba(31, 38, 135, 0.1), inset 0 1px 0 rgba(255,255,255,0.8);
   padding: 24px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
   position: relative;
   overflow: hidden;
@@ -598,7 +601,41 @@ legend {
   align-items: center;
   justify-content: center;
   margin: 0 auto 16px;
+  flex-shrink: 0;
   box-shadow: 0 8px 16px -4px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.4);
+}
+
+.dashboard-kpi-card-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+}
+
+/* Compact layout for modules using approvals-kpi-grid */
+.approvals-kpi-grid .dashboard-kpi-card {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  text-align: left;
+}
+
+.approvals-kpi-grid .dashboard-kpi-card__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.approvals-kpi-grid .dashboard-kpi-card__label {
+  margin: 0 0 4px 0;
+}
+
+.approvals-kpi-grid .dashboard-kpi-card__value {
+  font-size: 24px;
 }
 
 .dashboard-kpi-card__icon--blue   { background: linear-gradient(135deg, #60a5fa, #2563eb); color: #fff; }
@@ -620,12 +657,13 @@ legend {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.05em;
-  margin-bottom: 12px;
+  margin: 0 0 12px 0;
 }
 
 .dashboard-kpi-card__value {
   font-size: 32px;
   line-height: 1;
+  margin: 0;
   font-weight: 800;
   color: #1e293b;
   letter-spacing: -0.02em;
@@ -1560,7 +1598,7 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
 
 .attendance-team-toolbar {
   display: grid;
-  grid-template-columns: minmax(280px, 1.25fr) minmax(240px, 0.7fr);
+  grid-template-columns: 1fr 0.7fr 1fr;
   gap: 16px;
   align-items: end;
   margin-bottom: 18px;
@@ -2611,12 +2649,14 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
-  min-width: 128px;
+  min-width: 90px;
 }
 
 .expense-approval-action {
   width: 100%;
   justify-content: center;
+  padding: 6px 12px;
+  font-size: 13px;
 }
 
 .approval-table td:last-child,
@@ -2844,8 +2884,9 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
 .app-modal.emp-editor-modal {
   display: flex;
   flex-direction: column;
-  width: min(1300px, calc(100vw - 48px));
+  width: min(1200px, calc(100vw - 48px));
   max-height: min(96vh, 980px);
+  zoom: 0.85;
 }
 
 .emp-editor {
@@ -4084,3 +4125,44 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
   padding: 4px 8px;
   font-size: 11.5px;
 }
+
+/* Client Panel Compression Overrides */
+.app-shell--client .content-area { padding-top: 8px; padding-bottom: 8px; }
+.app-shell--client .page-card { padding: 12px 20px; border-radius: 16px; }
+.app-shell--client .page-card__title--dashboard, .app-shell--client .page-card__header h1 { font-size: 28px !important; margin: 0; line-height: 1; }
+.app-shell--client .page-card__header { padding-bottom: 8px; margin-bottom: 12px; align-items: center; border-bottom: 1px solid rgba(213,225,241,0.5); }
+.app-shell--client .dashboard-kpi-grid, .app-shell--client .client-dashboard-kpi-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+.app-shell--client .dashboard-kpi-card, .app-shell--client .client-dashboard-kpi-card { padding: 8px 12px; border-radius: 12px; flex-direction: column; justify-content: center; gap: 4px; }
+.app-shell--client .client-dashboard-kpi-card__icon, .app-shell--client .dashboard-kpi-card__icon { width: 36px; height: 36px; border-radius: 10px; margin-bottom: 0; box-shadow: none; }
+.app-shell--client .client-dashboard-kpi-card__icon svg, .app-shell--client .dashboard-kpi-card__icon svg { width: 18px; height: 18px; }
+.app-shell--client .client-dashboard-kpi-card__value, .app-shell--client .dashboard-kpi-card__value { font-size: 20px; line-height: 1; margin: 0; }
+.app-shell--client .client-dashboard-kpi-card__label, .app-shell--client .dashboard-kpi-card__label { font-size: 11px; margin: 0; }
+.app-shell--client .client-dashboard-kpi-card__body { align-items: center; gap: 2px; }
+.app-shell--client .client-dashboard-kpi-card__icon--orange { background: linear-gradient(135deg, #fb923c, #ea580c); color: #fff; }
+.app-shell--client .migration-panel--full { margin-top: 0; padding: 12px 16px; border-radius: 12px; }
+.app-shell--client .client-ticket-workspace__header h2 { font-size: 18px; margin: 0; }
+.app-shell--client .client-ticket-workspace__header, .app-shell--client .client-ticket-workspace__toolbar { margin-bottom: 8px; align-items: center; }
+.app-shell--client .approval-tabs { padding: 4px; gap: 8px; }
+.app-shell--client .approval-tab-btn { padding: 6px 14px; font-size: 13px; }
+.app-shell--client .client-ticket-mode-tabs .attendance-cta { padding: 6px 16px; min-height: 32px; font-size: 13px; }
+.app-shell--client .client-ticket-range { margin-top: 0; margin-bottom: 0; }
+.app-shell--client .dashboard-control span { font-size: 11px; margin-bottom: 2px; }
+.app-shell--client .dashboard-control select, .app-shell--client .dashboard-control input { min-height: 32px; padding: 0 10px; font-size: 13px; }
+
+
+
+/* Client Settings Compression Overrides */
+.app-shell--client .settings-page { padding: 12px 24px; gap: 16px; }
+.app-shell--client .settings-card { padding: 16px 20px; border-radius: 16px; }
+.app-shell--client .settings-header { padding-bottom: 8px; margin-bottom: 12px; }
+.app-shell--client .settings-header h2 { font-size: 18px; margin: 0; }
+.app-shell--client .settings-avatar-section { padding: 16px; margin-bottom: 16px; min-height: unset; border-radius: 12px; }
+.app-shell--client .settings-avatar-preview { width: 72px; height: 72px; border: none; padding: 0; box-shadow: none; background: transparent; }
+.app-shell--client .settings-avatar-preview img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.app-shell--client .settings-avatar-initials { width: 72px; height: 72px; font-size: 24px; border-radius: 50%; }
+.app-shell--client .settings-info-grid { gap: 12px; }
+.app-shell--client .settings-info-item, .app-shell--client .settings-form-group { padding: 12px 16px !important; border-radius: 10px !important; }
+.app-shell--client .settings-info-label { font-size: 11px; margin-bottom: 2px !important; }
+.app-shell--client .settings-info-value { font-size: 13px; }
+.app-shell--client .settings-actions { margin-top: 16px; }
+.app-shell--client .settings-actions button { min-height: 32px; padding: 0 16px; font-size: 13px; }

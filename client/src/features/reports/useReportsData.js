@@ -16,7 +16,7 @@ const rangeOptions = [
   { value: 'custom', label: 'Custom' }
 ];
 
-const initialTicketFilters = { priority: '', category: '', status: '', search: '' };
+const initialTicketFilters = { priority: '', user: '', status: '', search: '' };
 const initialFmsFilters = { status: '', search: '' };
 
 function toYmd(date) {
@@ -188,10 +188,10 @@ export function useReportsData() {
     [state.tickets]
   );
 
-  const ticketCategories = useMemo(
+  const ticketUsers = useMemo(
     () =>
       Array.from(
-        new Set(state.tickets.map((item) => item['Task Category'] || item.Category).filter(Boolean))
+        new Set(state.tickets.map((item) => item['Employee Name'] || item.User).filter(Boolean))
       ).sort((left, right) => left.localeCompare(right)),
     [state.tickets]
   );
@@ -216,8 +216,8 @@ export function useReportsData() {
     const search = String(ticketFilters.search || '').trim().toLowerCase();
     return state.tickets.filter((item) => {
       const matchesPriority = !ticketFilters.priority || item.Priority === ticketFilters.priority;
-      const category = item['Task Category'] || item.Category || '';
-      const matchesCategory = !ticketFilters.category || category === ticketFilters.category;
+      const user = item['Employee Name'] || item.User || '';
+      const matchesUser = !ticketFilters.user || user === ticketFilters.user;
       const matchesStatus = !ticketFilters.status || item.Status === ticketFilters.status;
       const matchesSearch = includesText(
         [
@@ -228,11 +228,11 @@ export function useReportsData() {
           item.Description,
           item.Priority,
           item.Status,
-          category
+          item['Task Category'] || item.Category || ''
         ],
         search
       );
-      return matchesPriority && matchesCategory && matchesStatus && matchesSearch;
+      return matchesPriority && matchesUser && matchesStatus && matchesSearch;
     });
   }, [state.tickets, ticketFilters]);
 
@@ -334,7 +334,7 @@ export function useReportsData() {
     tickets: filteredTickets,
     ticketStatuses,
     ticketPriorities,
-    ticketCategories,
+    ticketUsers,
     ticketFilters,
     setTicketFilters,
     resetTicketFilters,

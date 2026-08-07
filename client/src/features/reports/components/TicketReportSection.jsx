@@ -5,10 +5,17 @@ export function TicketReportSection({
   tickets,
   ticketStatuses,
   ticketPriorities,
-  ticketCategories,
+  ticketUsers,
   ticketFilters,
   onTicketFiltersChange,
-  onResetFilters
+  onResetFilters,
+  range,
+  onRangeChange,
+  rangeOptions,
+  customStart,
+  onCustomStartChange,
+  customEnd,
+  onCustomEndChange
 }) {
   return (
     <>
@@ -37,34 +44,43 @@ export function TicketReportSection({
           </label>
 
           <label className="dashboard-control">
-            <span>Category</span>
+            <span>User</span>
             <select
-              value={ticketFilters.category}
-              onChange={(event) => onTicketFiltersChange((current) => ({ ...current, category: event.target.value }))}
+              value={ticketFilters.user}
+              onChange={(event) => onTicketFiltersChange((current) => ({ ...current, user: event.target.value }))}
             >
-              <option value="">All Categories</option>
-              {ticketCategories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
+              <option value="">All Users</option>
+              {ticketUsers.map((user) => (
+                <option key={user} value={user}>
+                  {user}
                 </option>
               ))}
             </select>
           </label>
 
           <label className="dashboard-control">
-            <span>Status</span>
-            <select
-              value={ticketFilters.status}
-              onChange={(event) => onTicketFiltersChange((current) => ({ ...current, status: event.target.value }))}
-            >
-              <option value="">All Statuses</option>
-              {ticketStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {status}
+            <span>Date Range</span>
+            <select value={range} onChange={(event) => onRangeChange(event.target.value)}>
+              {rangeOptions?.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
           </label>
+
+          {range === 'custom' ? (
+            <>
+              <label className="dashboard-control">
+                <span>Start Date</span>
+                <input type="date" value={customStart} onChange={(event) => onCustomStartChange(event.target.value)} />
+              </label>
+              <label className="dashboard-control">
+                <span>End Date</span>
+                <input type="date" value={customEnd} onChange={(event) => onCustomEndChange(event.target.value)} />
+              </label>
+            </>
+          ) : null}
 
           <label className="dashboard-control">
             <span>Search</span>
@@ -84,8 +100,8 @@ export function TicketReportSection({
           <StatusPill tone="info">{tickets.length} rows</StatusPill>
         </div>
 
-        <div className="dashboard-table-wrap">
-          <table className="dashboard-table approval-table">
+        <div className="dashboard-table-wrap" style={{ marginTop: '16px' }}>
+          <table className="dashboard-table reports-premium-table">
             <thead>
               <tr>
                 <th>Ticket ID</th>

@@ -53,7 +53,7 @@ export function FmsReportSection({
         </div>
 
         <div className="dashboard-table-wrap">
-          <table className="dashboard-table approval-table">
+          <table className="dashboard-table reports-premium-table">
             <thead>
               <tr>
                 <th>FMS Name</th>

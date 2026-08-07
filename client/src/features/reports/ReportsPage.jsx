@@ -6,6 +6,7 @@ import { ReportsSummaryCards } from '@/features/reports/components/ReportsSummar
 import { ReportsToolbar } from '@/features/reports/components/ReportsToolbar';
 import { TicketReportSection } from '@/features/reports/components/TicketReportSection';
 import { useReportsData } from '@/features/reports/useReportsData';
+import './reports.css';
 
 export function ReportsPage() {
   const {
@@ -27,7 +28,7 @@ export function ReportsPage() {
     tickets,
     ticketStatuses,
     ticketPriorities,
-    ticketCategories,
+    ticketUsers,
     ticketFilters,
     setTicketFilters,
     resetTicketFilters,
@@ -123,21 +124,17 @@ export function ReportsPage() {
             tickets={tickets}
             ticketStatuses={ticketStatuses}
             ticketPriorities={ticketPriorities}
-            ticketCategories={ticketCategories}
+            ticketUsers={ticketUsers}
             ticketFilters={ticketFilters}
             onTicketFiltersChange={setTicketFilters}
             onResetFilters={resetTicketFilters}
-          />
-        </>
-      ) : activeTab === 'fms' ? (
-        <>
-          <ReportsSummaryCards items={fmsSummaryItems} />
-          <FmsReportSection
-            fms={fms}
-            fmsStatuses={fmsStatuses}
-            fmsFilters={fmsFilters}
-            onFmsFiltersChange={setFmsFilters}
-            onResetFilters={resetFmsFilters}
+            range={range}
+            onRangeChange={setRange}
+            rangeOptions={rangeOptions}
+            customStart={customStart}
+            onCustomStartChange={setCustomStart}
+            customEnd={customEnd}
+            onCustomEndChange={setCustomEnd}
           />
         </>
       ) : (

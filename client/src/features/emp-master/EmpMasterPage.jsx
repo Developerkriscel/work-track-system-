@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertDialog } from '@/components/modals/AlertDialog';
 import { RefreshCw } from '@/components/common/icons';
 import { StatusPill } from '@/components/common/StatusPill';
@@ -8,6 +9,8 @@ import { AdminSummaryCards } from '@/features/admin/components/AdminSummaryCards
 import { openProtectedFile, toPreviewUrl } from '@/lib/fileLinks';
 import { ConfirmDialog } from '@/features/tickets/components/ConfirmDialog';
 import { deleteEmpMasterRecord, fetchEmpMasterData, fetchNextEmpCode, saveEmpMasterRecord } from '@/features/emp-master/api';
+import { EmpHierarchyView } from '@/features/emp-master/components/EmpHierarchyView';
+import './emp-master.css';
 
 const categories = [
   ['Master', 'Master Data'],
@@ -15,7 +18,8 @@ const categories = [
   ['Freelancer', 'Freelancers'],
   ['Intern', 'Interns'],
   ['Inactive', 'Inactive Users'],
-  ['Documents', 'Documents']
+  ['Documents', 'Documents'],
+  ['Hierarchy', 'Hierarchy']
 ];
 
 const statuses = ['Active', 'Pending', 'Inactive', 'Resigned', 'Terminated'];
@@ -28,6 +32,7 @@ const emptyForm = () => ({
   Role: 'User',
   'Manager ID': '',
   'Task Approver': '',
+  'Assign Buddy': '',
   Status: 'Active',
   Password: '',
   'Company Code': 'KRIS',
@@ -323,7 +328,7 @@ function buildSummary(users = []) {
   };
 }
 
-function EmpEditor({ mode, category, initialRow, managerOptions, onClose, onSaved }) {
+function EmpEditor({ mode, category, initialRow, managerOptions, allUsers, onClose, onSaved }) {
   const [form, setForm] = useState(() => (initialRow ? toForm(initialRow, category, managerOptions) : { ...emptyForm(), Category: category }));
   const [files, setFiles] = useState({ offer: null, appointment: null, aadhaar: null, pan: null, bank: null, education: null, bunch: [] });
   const [loadingCode, setLoadingCode] = useState(!initialRow);
@@ -403,7 +408,15 @@ function EmpEditor({ mode, category, initialRow, managerOptions, onClose, onSave
     }))
   ];
 
-  return (
+  const buddySelectOptions = [
+    { value: '', label: 'None' },
+    ...allUsers.map((u) => ({
+      value: String(u.id || first(u, ['EMP Code', 'Employee ID']) || ''),
+      label: `${first(u, ['Name', 'Employee Name', 'name'])} (${u.id || first(u, ['EMP Code', 'Employee ID'])})`
+    })).filter(o => o.value)
+  ];
+
+  return createPortal(
     <div className="app-modal-backdrop" role="presentation">
       <section className="app-modal emp-editor-modal" role="dialog" aria-modal="true" aria-label="Employee master editor">
         <div className="app-modal__header">
@@ -430,6 +443,7 @@ function EmpEditor({ mode, category, initialRow, managerOptions, onClose, onSave
               <Field label="Role" name="Role" form={form} onChange={update} options={roleOptions} disabled={readOnly} />
               <Field label="Reporting Manager" name="Manager ID" form={form} onChange={update} options={managerSelectOptions} disabled={readOnly} />
               <Field label="Task Approver" name="Task Approver" form={form} onChange={update} options={approverSelectOptions} disabled={readOnly} />
+              <Field label="Assign Buddy" name="Assign Buddy" form={form} onChange={update} options={buddySelectOptions} disabled={readOnly} />
               <Field label="Status" name="Status" form={form} onChange={update} options={statuses} disabled={readOnly} />
               <Field label="Portal Password" name="Password" form={form} onChange={update} type="password" required={!initialRow} disabled={readOnly} />
             </div>
@@ -533,19 +547,20 @@ function EmpEditor({ mode, category, initialRow, managerOptions, onClose, onSave
 
           {error ? <p className="emp-editor__error">{error}</p> : null}
 
-          <div className="ticket-form-actions">
-            <button type="button" className="attendance-cta attendance-cta--gray" onClick={onClose}>
+          <div className="emp-editor-actions">
+            <button type="button" onClick={onClose}>
               {readOnly ? 'Close' : 'Cancel'}
             </button>
             {!readOnly ? (
-              <button type="submit" className="attendance-cta attendance-cta--blue" disabled={saving || loadingCode}>
+              <button type="submit" disabled={saving || loadingCode}>
                 {saving ? 'Saving...' : 'Save Data'}
               </button>
             ) : null}
           </div>
         </form>
       </section>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -570,8 +585,8 @@ export function EmpMasterPage() {
     setError('');
     try {
       const requestedCategories =
-        nextCategory === 'Documents'
-          ? categories.map(([value]) => value).filter((value) => value !== 'Documents')
+        nextCategory === 'Documents' || nextCategory === 'Hierarchy'
+          ? categories.map(([value]) => value).filter((value) => value !== 'Documents' && value !== 'Hierarchy')
           : [nextCategory];
       const categoryPayloads = await Promise.all(requestedCategories.map((value) => fetchEmpMasterData(value)));
       const [usersPayload, managersPayload] = await Promise.all([
@@ -580,7 +595,7 @@ export function EmpMasterPage() {
       ]);
 
       const payloadRows = categoryPayloads.flatMap((payload) => (Array.isArray(payload?.data) ? payload.data : []));
-      setRows(nextCategory === 'Documents' ? dedupeRowsByIdentity(payloadRows) : payloadRows);
+      setRows(nextCategory === 'Documents' || nextCategory === 'Hierarchy' ? dedupeRowsByIdentity(payloadRows) : payloadRows);
       setAllUsers(Array.isArray(usersPayload?.data) ? usersPayload.data : []);
       setManagerOptions(Array.isArray(managersPayload) ? managersPayload : []);
     } catch (reason) {
@@ -678,10 +693,6 @@ export function EmpMasterPage() {
           <h1 className="page-card__title">Employee Master Data</h1>
         </div>
         <div className="dashboard-controls mobile-header-controls">
-          <button type="button" className="attendance-cta attendance-cta--gray mobile-full-btn" onClick={() => load(category)}>
-            <RefreshCw className="icon-button__icon" style={{ marginRight: '8px' }} />
-            Refresh
-          </button>
           <button type="button" className="attendance-cta attendance-cta--purple mobile-full-btn" onClick={() => add('EMP')}>
             Add Employee
           </button>
@@ -706,11 +717,6 @@ export function EmpMasterPage() {
 
       <article className="migration-panel migration-panel--full">
         <div className="migration-panel__row">
-          <h2>{activeCategoryLabel}</h2>
-          <StatusPill tone="info">{`${visibleCount} records`}</StatusPill>
-        </div>
-
-        <div className="migration-panel__row">
           <div className="approval-tabs emp-master-view-tabs" role="tablist" aria-label="EMP master categories">
             {categories.map(([value, label]) => (
               <button
@@ -723,9 +729,10 @@ export function EmpMasterPage() {
               </button>
             ))}
           </div>
+          <StatusPill tone="info">{`${visibleCount} records`}</StatusPill>
         </div>
 
-        <label className="dashboard-control emp-master-search">
+        <label className="emp-master-search">
           <span>Search</span>
           <input
             value={search}
@@ -734,7 +741,9 @@ export function EmpMasterPage() {
           />
         </label>
 
-        {category === 'Documents' ? (
+        {category === 'Hierarchy' ? (
+          <EmpHierarchyView data={visibleRows} />
+        ) : category === 'Documents' ? (
           <div className="dashboard-table-wrap">
             <table className="dashboard-table emp-master-table emp-master-table--documents">
               <thead>
@@ -879,6 +888,7 @@ export function EmpMasterPage() {
           category={editor.category}
           initialRow={editor.row}
           managerOptions={managerOptions}
+          allUsers={allUsers}
           onClose={() => setEditor(null)}
           onSaved={saved}
         />

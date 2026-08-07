@@ -1,12 +1,14 @@
+import { AppModal } from '@/components/modals';
+
 function DraftRowCard({ row, onAdd, onChange, onRemove, removable }) {
   return (
-    <article className="client-ticket-draft">
-      <div className="migration-panel__row client-ticket-draft__row">
-        <h3>Ticket Draft</h3>
+    <article className="client-ticket-draft" style={{ padding: '12px', background: 'var(--wt-bg-subtle)' }}>
+      <div className="migration-panel__row client-ticket-draft__row" style={{ marginBottom: '8px' }}>
+        <h3 style={{ fontSize: '14px', margin: 0 }}>Ticket Details</h3>
         <div className="ticket-filter-actions">
-          <button type="button" className="inline-action" onClick={onAdd}>Add Another Ticket</button>
+          <button type="button" className="inline-action" onClick={onAdd} style={{ fontSize: '12px' }}>Add Another Ticket</button>
           {removable ? (
-            <button type="button" className="attendance-cta attendance-cta--red" onClick={onRemove}>
+            <button type="button" className="attendance-cta attendance-cta--red" onClick={onRemove} style={{ padding: '2px 8px', minHeight: '24px', fontSize: '12px' }}>
               Remove
             </button>
           ) : null}
@@ -37,6 +39,7 @@ function DraftRowCard({ row, onAdd, onChange, onRemove, removable }) {
         <label className="dashboard-control ticket-form-grid__full">
           <span>Description</span>
           <textarea
+            style={{ minHeight: '80px' }}
             value={row.description}
             onChange={(event) => onChange({ description: event.target.value })}
             placeholder="Please provide a detailed description..."
@@ -73,15 +76,8 @@ export function ClientTicketComposer({
   submitting
 }) {
   return (
-    <article className="migration-panel migration-panel--full">
-      <div className="migration-panel__row">
-        <div>
-          <h2>Create New Ticket(s)</h2>
-          <p>Add one or more client tickets and submit them together.</p>
-        </div>
-      </div>
-
-      <div className="client-ticket-draft-list">
+    <AppModal title="Create New Ticket(s)" onClose={onCancel} width="640px">
+      <div className="client-ticket-draft-list" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {draftRows.map((row) => (
           <DraftRowCard
             key={row.id}
@@ -94,14 +90,14 @@ export function ClientTicketComposer({
         ))}
       </div>
 
-      <div className="ticket-form-actions client-ticket-composer__actions">
+      <div className="ticket-form-actions client-ticket-composer__actions" style={{ marginTop: '16px', borderTop: '1px solid rgba(213,225,241,0.6)', paddingTop: '16px' }}>
         <button type="button" className="attendance-cta attendance-cta--gray" onClick={onCancel} disabled={submitting}>
-          Back To Tickets
+          Cancel
         </button>
         <button type="button" className="attendance-cta attendance-cta--purple" onClick={onSubmit} disabled={submitting}>
           {submitting ? 'Submitting...' : 'Submit All Tickets'}
         </button>
       </div>
-    </article>
+    </AppModal>
   );
 }

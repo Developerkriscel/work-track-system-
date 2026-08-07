@@ -68,12 +68,12 @@ function FilterBar({ tab, filters, userOptions, ticketCategories = [], onChange,
           <span>Search</span>
           <input value={filters.search} onChange={(event) => onChange({ search: event.target.value })} placeholder="Search by description, reason, remarks..." />
         </label>
-      </div>
-
-      <div className="approval-filter-actions">
-        <button type="button" className="attendance-cta attendance-cta--gray" onClick={onReset}>
-          Reset
-        </button>
+        
+        <div className="approval-filter-actions" style={{ marginBottom: '2px' }}>
+          <button type="button" className="attendance-cta attendance-cta--gray" onClick={onReset}>
+            Reset
+          </button>
+        </div>
       </div>
     </div>
   );

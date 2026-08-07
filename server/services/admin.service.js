@@ -73,8 +73,18 @@ async function listAdminUsers() {
     });
 }
 
-export async function getAllUsersForAdmin(_adminId = '') {
-  return ok({ data: await listAdminUsers() });
+export async function getAllUsersForAdmin(_adminId = '', adminRole = '') {
+  let users = await listAdminUsers();
+  
+  const role = String(adminRole || '').trim().toLowerCase();
+  
+  if (role === 'admin') {
+    users = users.filter(u => String(u.Role || '').trim().toLowerCase() !== 'super admin');
+  } else if (role === 'hr' || role === 'hr admin') {
+    users = users.filter(u => String(u.Role || '').trim().toLowerCase() !== 'super admin' && String(u.Role || '').trim().toLowerCase() !== 'admin');
+  }
+
+  return ok({ data: users });
 }
 
 export async function getAllManagersList() {
@@ -114,18 +124,30 @@ export async function getNextEmpCode(category = 'EMP') {
   return ok({ code: nextCode, nextCode });
 }
 
-export async function saveOrUpdateUser(userData = {}, _adminId = '') {
+export async function saveOrUpdateUser(userData = {}, _adminId = '', existingId = null) {
   const normalized = normalizeAdminUser(userData);
   const employeeId = normalized['Employee ID'] || `EMP_${Date.now()}`;
-  const existing = (await listRows('User')).find((user) => safe(first(user, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'userId'])).toLowerCase() === safe(employeeId).toLowerCase());
+  
+  const allUsers = await listRows('User');
+  let existing = null;
+  if (existingId) {
+    existing = allUsers.find((u) => String(u._id) === String(existingId));
+  }
+  if (!existing) {
+    existing = allUsers.find((user) => safe(first(user, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'userId'])).toLowerCase() === safe(employeeId).toLowerCase());
+  }
+
   if (!safe(normalized['Employee Name'])) return { success: false, message: 'Employee Name is required.' };
   if (!safe(normalized.Department)) return { success: false, message: 'Department is required.' };
+  
   if (safe(normalized.Password)) {
     if (!isHashed(normalized.Password)) normalized.Password = await bcrypt.hash(normalized.Password, 10);
   } else if (existing?.Password || existing?.password) {
     normalized.Password = existing.Password || existing.password;
   }
-  const row = await upsertRow('User', 'Employee ID', employeeId, {
+  
+  const matchValue = existing ? existing._id : employeeId;
+  const row = await upsertRow('User', 'Employee ID', matchValue, {
     ...normalized,
     'Employee ID': employeeId,
     Status: normalized.Status || 'Active'

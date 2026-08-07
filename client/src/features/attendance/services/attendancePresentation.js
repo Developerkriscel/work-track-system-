@@ -28,6 +28,9 @@ export function formatPunchTime(value) {
 }
 
 export function toneForAttendanceStatus(status) {
+  if (!status) return 'neutral';
+  if (/early departure/i.test(status)) return 'warning';
+  if (/late departure|on time departure/i.test(status)) return 'success';
   if (/present/i.test(status)) return 'success';
   if (/on time|early/i.test(status)) return 'success';
   if (/late/i.test(status)) return 'warning';

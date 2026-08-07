@@ -11,10 +11,6 @@ export function ClientSocialHeader({ clientId, clientName, onRefresh }) {
 
       <div className="dashboard-controls">
         <StatusPill tone="info">{clientName || clientId || 'Client Session'}</StatusPill>
-        <button type="button" className="attendance-cta attendance-cta--blue approvals-refresh-btn" onClick={onRefresh}>
-          <RefreshCw className="approvals-refresh-btn__icon" />
-          Refresh
-        </button>
       </div>
     </div>
   );

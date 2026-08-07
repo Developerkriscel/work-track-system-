@@ -232,6 +232,8 @@ export async function createBulkTicketsWithDetails(ticketList = [], clientInfo =
       'Ticket Source': 'Client Portal',
       Origin: 'Client',
       'Client Ticket': 'Yes',
+      HasUnreadAdminMessages: true,
+      'Last Action By': clientInfo['Client Name'] || clientInfo.ClientName || 'Client',
       Remarks: 'Created from client portal.'
     };
     await upsertRow('Ticket', 'Ticket ID', id, row);

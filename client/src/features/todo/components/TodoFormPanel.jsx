@@ -107,10 +107,10 @@ export function TodoFormPanel({
         ) : (
           <>
             <button type="button" className="attendance-cta attendance-cta--green" disabled={submitting} onClick={onBulkSubmit}>
-              Create Bulk Tasks
+              Create Tasks
             </button>
             <button type="button" className="attendance-cta attendance-cta--gray" onClick={onBulkReset}>
-              Reset Bulk List
+              Reset List
             </button>
           </>
         )}

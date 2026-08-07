@@ -9,10 +9,6 @@ export function MyApprovalStatusHeader({ employeeLabel, onRefresh }) {
       </div>
       <div className="attendance-action-row">
         {employeeLabel ? <span className="page-card__status">{employeeLabel}</span> : null}
-        <button type="button" className="attendance-cta attendance-cta--blue approvals-refresh-btn" onClick={onRefresh}>
-          <RefreshCw className="approvals-refresh-btn__icon" />
-          Refresh
-        </button>
       </div>
     </div>
   );

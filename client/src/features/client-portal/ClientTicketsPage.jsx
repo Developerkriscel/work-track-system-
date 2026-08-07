@@ -171,11 +171,11 @@ export function ClientTicketsPage() {
       <article className="migration-panel migration-panel--full">
         <div className="migration-panel__row client-ticket-workspace__header">
           <h2>Ticket Workspace</h2>
-          <ClientTicketModeTabs activeMode={activeMode} options={modeOptions} onChange={setActiveMode} />
+          <button type="button" className="attendance-cta attendance-cta--purple" onClick={() => setActiveMode('compose')} style={{ padding: '6px 16px', minHeight: '32px', fontSize: '13px' }}>
+            Submit New Ticket
+          </button>
         </div>
 
-        {activeMode === 'list' ? (
-          <>
             <div className="client-ticket-workspace__toolbar">
               <ClientTicketStatusTabs activeTab={activeTab} counts={tabCounts} options={tabOptions} onChange={setActiveTab} />
               <ClientTicketRangeFilter
@@ -207,19 +207,19 @@ export function ClientTicketsPage() {
               ticketPriorityTone={ticketPriorityTone}
               submitting={submitting}
             />
-          </>
-        ) : (
-          <ClientTicketComposer
-            draftRows={draftRows}
-            onAddRow={addDraftRow}
-            onChangeRow={updateDraftRow}
-            onRemoveRow={removeDraftRow}
-            onCancel={() => setActiveMode('list')}
-            onSubmit={submitTickets}
-            submitting={submitting}
-          />
-        )}
       </article>
+
+      {activeMode === 'compose' ? (
+        <ClientTicketComposer
+          draftRows={draftRows}
+          onAddRow={addDraftRow}
+          onChangeRow={updateDraftRow}
+          onRemoveRow={removeDraftRow}
+          onCancel={() => setActiveMode('list')}
+          onSubmit={submitTickets}
+          submitting={submitting}
+        />
+      ) : null}
 
       {detailsTicket ? (
         <ClientTicketDetailsDialog

@@ -77,6 +77,7 @@ function normalizeEmpMasterRow(input = {}, category = 'Master') {
     Role: first(input, ['Role', 'Designation', 'role', 'designation'], designation),
     'Manager ID': first(input, ['Manager ID', 'Manager', 'managerId']),
     'Task Approver': first(input, ['Task Approver', 'Approver', 'taskApprover']),
+    'Assign Buddy': first(input, ['Assign Buddy', 'Buddy', 'assignBuddy']),
     'Date of Joining': joiningDate,
     'Joining Date': joiningDate,
     'Phone No': mobile,
@@ -136,11 +137,11 @@ async function uploadFiles(row, filePayloads = {}) {
   return next;
 }
 
-async function syncToLoginUser(row, adminId, portalPassword = '') {
+async function syncToLoginUser(row, adminId, portalPassword = '', existingUser = null) {
   const loginId = safe(row['User ID']);
   if (!loginId) return null;
   const users = await listRows('User');
-  const existing = users.find((user) => safe(first(user, ['Employee ID', 'User ID', 'employeeId', 'userId'])).toLowerCase() === loginId.toLowerCase());
+  const existing = existingUser || users.find((user) => safe(first(user, ['Employee ID', 'User ID', 'employeeId', 'userId'])).toLowerCase() === loginId.toLowerCase());
   const syncPayload = {
     ...(existing || {}),
     'Employee ID': loginId,
@@ -155,15 +156,18 @@ async function syncToLoginUser(row, adminId, portalPassword = '') {
     Email: row['Official mail id if any'] || row.Email || row['Personal Email ID'] || first(existing, ['Email', 'email']) || ''
   };
   if (portalPassword) syncPayload.Password = portalPassword;
-  return saveOrUpdateUser(syncPayload, adminId);
+  
+  const userIdentifier = existing ? existing._id : null;
+  return saveOrUpdateUser(syncPayload, adminId, userIdentifier);
 }
 
-export async function getEmpMasterData(category = 'Master') {
+export async function getEmpMasterData(category = 'Master', adminRole = '') {
   const targetCategory = normalizeCategory(category);
   const records = await listRows('EmpMaster');
   const users = await listRows('User');
   const normalized = records.map((row) => normalizeEmpMasterRow(row, row.Category));
 
+  let finalData = [];
   if (targetCategory === 'Inactive') {
     const inactiveMasterRows = normalized
       .filter((row) => empCode(row) && inactiveStatuses.has(safe(row.Status).toLowerCase()))
@@ -175,13 +179,8 @@ export async function getEmpMasterData(category = 'Master') {
       .filter((row) => !inactiveMasterRows.some((existing) => safe(empCode(existing)).toLowerCase() === safe(empCode(row)).toLowerCase()))
       .map((row) => ({ ...row, _sourceSheet: 'User' }));
 
-    return ok({
-      category: targetCategory,
-      data: [...inactiveMasterRows, ...inactiveUserRows]
-    });
-  }
-
-  if (targetCategory === 'Master') {
+    finalData = [...inactiveMasterRows, ...inactiveUserRows];
+  } else if (targetCategory === 'Master') {
     const allEmpMasterRows = normalized.filter((row) => empCode(row) && activeRow(row));
     const existingEmpCodes = new Set(allEmpMasterRows.map((row) => safe(empCode(row)).toLowerCase()));
     
@@ -189,11 +188,19 @@ export async function getEmpMasterData(category = 'Master') {
       .map(projectUserAsMaster)
       .filter((row) => empCode(row) && activeRow(row) && !existingEmpCodes.has(safe(empCode(row)).toLowerCase()));
       
-    return ok({ category: 'Master', data: [...allEmpMasterRows, ...legacyUsers] });
+    finalData = [...allEmpMasterRows, ...legacyUsers];
+  } else {
+    finalData = normalized.filter((row) => empCode(row) && row.Category === targetCategory && activeRow(row));
   }
 
-  const categoryRows = normalized.filter((row) => empCode(row) && row.Category === targetCategory && activeRow(row));
-  return ok({ category: targetCategory, data: categoryRows });
+  const role = String(adminRole || '').trim().toLowerCase();
+  if (role === 'admin') {
+    finalData = finalData.filter(u => String(u.Role || '').trim().toLowerCase() !== 'super admin');
+  } else if (role === 'hr' || role === 'hr admin') {
+    finalData = finalData.filter(u => String(u.Role || '').trim().toLowerCase() !== 'super admin' && String(u.Role || '').trim().toLowerCase() !== 'admin');
+  }
+
+  return ok({ category: targetCategory, data: finalData });
 }
 
 export async function getNextEmpCode(category = 'EMP') {
@@ -231,7 +238,26 @@ export async function saveEmpMasterData(category, formData = {}, filePayloads = 
   const records = await listRows('EmpMaster');
   const users = await listRows('User');
   const requestedCode = safe(first(formData, ['EMP Code', 'Employee ID', 'User ID', 'empCode', 'employeeId', 'userId']));
-  const existing = records.find((row) => safe(empCode(row)).toLowerCase() === requestedCode.toLowerCase());
+  
+  let existingEmp = null;
+  let existingUser = null;
+
+  if (formData._id) {
+    existingEmp = records.find(r => String(r._id) === String(formData._id));
+    existingUser = users.find(u => String(u._id) === String(formData._id));
+    
+    if (existingEmp && !existingUser) {
+       const oldUserId = safe(first(existingEmp, ['User ID', 'Employee ID']));
+       existingUser = users.find(u => safe(first(u, ['Employee ID', 'User ID'])) === oldUserId);
+    }
+  }
+  
+  if (!existingEmp && !existingUser) {
+    existingEmp = records.find((row) => safe(empCode(row)).toLowerCase() === requestedCode.toLowerCase());
+    existingUser = users.find((row) => safe(first(row, ['Employee ID', 'User ID'])).toLowerCase() === requestedCode.toLowerCase());
+  }
+
+  const existing = existingEmp || existingUser || {};
   const portalPassword = safe(first(formData, ['Password', 'password']));
   const merged = mergePreservingExisting(existing || {}, formData);
   delete merged.Password;
@@ -243,24 +269,31 @@ export async function saveEmpMasterData(category, formData = {}, filePayloads = 
   if (safe(prepared.Email) && !/^\S+@\S+\.\S+$/.test(safe(prepared.Email))) {
     return { success: false, message: 'Please enter a valid employee email address.' };
   }
-  if (existing && !canActorEditRow(actorRole, existing)) {
+  if ((existingEmp || existingUser) && !canActorEditRow(actorRole, existingEmp || existingUser)) {
     return { success: false, message: 'HR can not edit Admin or Super Admin employee details.' };
   }
-  if (!existing && !canActorEditRow(actorRole, prepared)) {
+  if (!existingEmp && !existingUser && !canActorEditRow(actorRole, prepared)) {
     return { success: false, message: 'HR can not create Admin or Super Admin employee details.' };
   }
-  const duplicateLogin = records.find((row) => safe(first(row, ['User ID', 'Employee ID', 'userId', 'employeeId'])).toLowerCase() === safe(prepared['User ID']).toLowerCase() && safe(empCode(row)).toLowerCase() !== safe(prepared['EMP Code']).toLowerCase());
+  
+  const duplicateEmp = records.find((row) => safe(empCode(row)).toLowerCase() === safe(prepared['EMP Code']).toLowerCase() && String(row._id) !== String(existingEmp?._id));
+  if (duplicateEmp) return { success: false, message: `EMP Code ${prepared['EMP Code']} is already used by another employee.` };
+  
+  const duplicateLogin = records.find((row) => safe(first(row, ['User ID', 'Employee ID', 'userId', 'employeeId'])).toLowerCase() === safe(prepared['User ID']).toLowerCase() && String(row._id) !== String(existingEmp?._id));
   if (duplicateLogin) return { success: false, message: `User ID ${prepared['User ID']} is already assigned to another employee.` };
-  const linkedUser = users.find((user) => safe(first(user, ['Employee ID', 'User ID', 'employeeId', 'userId'])).toLowerCase() === safe(prepared['User ID']).toLowerCase());
-  if (linkedUser && !existing && safe(prepared['EMP Code']).toLowerCase() !== safe(prepared['User ID']).toLowerCase()) {
+  
+  const duplicateUser = users.find((user) => safe(first(user, ['Employee ID', 'User ID', 'employeeId', 'userId'])).toLowerCase() === safe(prepared['User ID']).toLowerCase() && String(user._id) !== String(existingUser?._id));
+  if (duplicateUser && !existingEmp && safe(prepared['EMP Code']).toLowerCase() !== safe(prepared['User ID']).toLowerCase()) {
     return { success: false, message: `User ID ${prepared['User ID']} already belongs to another login account.` };
   }
-  if (!linkedUser && !portalPassword) {
+  if (!existingUser && !duplicateUser && !portalPassword) {
     return { success: false, message: 'Portal Password is required when creating a new employee login.' };
   }
 
-  const saved = await upsertRow('EmpMaster', 'EMP Code', prepared['EMP Code'], prepared);
-  const userSync = await syncToLoginUser(saved, adminId, portalPassword);
+  const empMasterIdentifier = existingEmp ? existingEmp._id : prepared['EMP Code'];
+  const saved = await upsertRow('EmpMaster', 'EMP Code', empMasterIdentifier, prepared);
+  
+  const userSync = await syncToLoginUser(saved, adminId, portalPassword, existingUser);
   if (userSync && !userSync.success) return userSync;
   return ok({ message: `Employee ${prepared['EMP Code']} saved successfully.`, item: saved });
 }

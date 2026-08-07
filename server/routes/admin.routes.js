@@ -15,7 +15,7 @@ const router = express.Router();
 
 router.post('/users', async (req, res) => {
   try {
-    res.json(await getAllUsersForAdmin(req.auth.sub));
+    res.json(await getAllUsersForAdmin(req.auth.sub, req.auth.role));
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -31,7 +31,7 @@ router.post('/managers', async (_req, res) => {
 
 router.post('/emp-master', async (req, res) => {
   try {
-    res.json(await getAdminEmpMasterData(req.body.category || 'Master'));
+    res.json(await getAdminEmpMasterData(req.body.category || 'Master', req.auth.role));
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

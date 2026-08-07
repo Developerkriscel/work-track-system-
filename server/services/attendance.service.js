@@ -309,6 +309,17 @@ function computeAttendanceStatus(dateValue, punchInRow) {
   return 'Very Late';
 }
 
+function computeDepartureStatus(dateValue, punchOutRow) {
+  if (!punchOutRow) return null;
+  const punchTime = new Date(timestampForAttendance(dateValue, first(punchOutRow, ['Punch Out', 'Time']), 'Punch Out'));
+  if (Number.isNaN(punchTime.getTime())) return null;
+  const shiftEnd = new Date(`${normalizedDate(dateValue)}T19:00:00+05:30`);
+  const difference = (punchTime.getTime() - shiftEnd.getTime()) / 60000;
+  if (difference < -15) return 'Early Departure';
+  if (difference <= 60) return 'On Time Departure';
+  return 'Late Departure';
+}
+
 function teamAttendanceAccessSet(reviewer = {}, users = []) {
   if (!canManageTeamAttendance(reviewer)) return new Set();
   return new Set(
@@ -431,6 +442,7 @@ function buildTeamAttendanceGroups(attendanceRows, users, allowedIds, startDate,
         punchInSourceId: punchIn?._sourceLegacyId || '',
         punchOutSourceId: punchOut?._sourceLegacyId || '',
         status: computeAttendanceStatus(group.date, punchIn),
+        outStatus: computeDepartureStatus(group.date, punchOut),
         duration: durationLabel(inDate, outDate) || first(punchOut, ['Duration', 'Total Duration']) || '-'
       };
     })
@@ -600,6 +612,31 @@ export async function recordAttendance(attendanceData = {}) {
     minute: '2-digit'
   });
 
+  let finalStatus = 'Need Approval';
+  if (action === 'Punch In') {
+    const allEmployees = await listRows('EmpMaster');
+    const employee = allEmployees.find(e => eq(first(e, ['Employee ID', 'User ID', 'employeeId', 'EmpID', 'legacyId']), employeeId));
+    const inTimingStr = employee?.['In Timing'];
+    if (inTimingStr) {
+      const [inHour, inMin] = inTimingStr.split(':').map(Number);
+      if (!Number.isNaN(inHour) && !Number.isNaN(inMin)) {
+        const expectedInTime = new Date(serverNow);
+        expectedInTime.setHours(inHour, inMin, 0, 0);
+        const diffMins = (serverNow.getTime() - expectedInTime.getTime()) / 60000;
+        if (diffMins <= 15) {
+          finalStatus = 'Present';
+        }
+      }
+    }
+  } else if (action === 'Punch Out' && latest) {
+    const elapsedMinutes = Math.max(0, Math.floor((serverNow.getTime() - latest.eventTime) / 60000));
+    if (elapsedMinutes < 8 * 60) {
+      finalStatus = 'Half Day';
+    } else {
+      finalStatus = 'Present';
+    }
+  }
+
   const row = sheetAttendance({
     ...attendanceData,
     AttendanceID: attendanceData.AttendanceID || `ATT_${Date.now()}`,
@@ -607,7 +644,7 @@ export async function recordAttendance(attendanceData = {}) {
     employeeName: attendanceData['Employee Name'] || attendanceData.employeeName,
     date: today(),
     action,
-    status: 'Need Approval',
+    status: finalStatus,
     inTime: action === 'Punch In' ? punchTime : '',
     outTime: action === 'Punch Out' ? punchTime : ''
   });

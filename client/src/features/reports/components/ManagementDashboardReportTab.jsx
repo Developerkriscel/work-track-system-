@@ -38,16 +38,18 @@ export function ManagementDashboardReportTab() {
 
       <ManagementDashboardTabs activeTab={activeTab} onTabChange={setActiveTab}>
         <div className="reports-toolbar__actions">
-          <label className="dashboard-control" style={{ marginRight: '12px' }}>
-            <span>Date Range</span>
-            <select value={range} onChange={(event) => setRange(event.target.value)}>
-              {rangeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          {activeTab !== 'batch-planner' && (
+            <label className="dashboard-control" style={{ marginRight: '12px' }}>
+              <span>Date Range</span>
+              <select value={range} onChange={(event) => setRange(event.target.value)}>
+                {rangeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
       </ManagementDashboardTabs>
 

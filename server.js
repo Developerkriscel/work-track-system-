@@ -186,6 +186,21 @@ app.get('/favicon.ico', (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/files', filesRoutes);
 
+app.get('/debug-buddy-raw', async (req, res) => {
+  try {
+    const { listRows } = await import('./server/services/legacyStore.service.js');
+    const data = await listRows();
+    const { normalizedDate } = await import('./server/services/ticket.service.js').catch(() => ({ normalizedDate: d => String(d) }));
+    res.json({
+      leaves: data.leaves,
+      intimations: data.intimations,
+      users: data.users.map(u => ({ id: u['EMP Code'] || u['Employee ID'], buddy: u['Assign Buddy'] || u['Buddy'] }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // All application APIs require a signed MERN session. Login and session refresh
 // routes are mounted above this guard and perform their own checks.
 app.use('/api', (req, res, next) => {

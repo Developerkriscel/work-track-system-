@@ -172,7 +172,7 @@
 
 .shell-main__inner {
   /* Keep the navigation at full size while compacting only the workspace. */
-  zoom: 0.8;
+  zoom: 0.7;
 }
 
 .app-shell--client .shell-main__inner--client {
@@ -279,7 +279,7 @@
 }
 
 .page-card {
-  width: min(100%, var(--wt-content-max));
+  width: 100%;
   margin: 0 auto;
   background: linear-gradient(170deg, #ffffff 70%, #f4f9ff 100%);
   border: 1px solid rgba(213, 225, 241, 0.85);
@@ -293,9 +293,9 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding-bottom: 20px;
+  padding-bottom: 12px;
   border-bottom: 2px solid rgba(213, 225, 241, 0.7);
-  margin-bottom: 4px;
+  margin-bottom: 12px;
 }
 
 .page-card__eyebrow {
@@ -310,12 +310,12 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  display: inline-block;
+  display: none !important;
 }
 
 .page-card__title {
   font-size: 52px;
-  line-height: 1;
+  line-height: 1.15;
   font-weight: 800;
   letter-spacing: -0.02em;
   margin: 0;

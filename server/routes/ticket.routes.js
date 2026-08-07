@@ -16,6 +16,21 @@ import {
 
 const router = express.Router();
 
+router.get('/debug-buddy', async (req, res) => {
+  try {
+    const { getRows } = await import('../services/legacyStore.service.js');
+    const data = await getRows();
+    res.json({
+      leaves: data.leaves,
+      intimations: data.intimations,
+      users: data.users.map(u => ({ id: u['EMP Code'] || u['Employee ID'], buddy: u['Assign Buddy'] || u['Buddy'] })),
+      ticketsLength: data.tickets.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/workspace', async (req, res) => {
   try {
     res.json(await getTicketSystemData(req.auth.sub, req.auth.role));

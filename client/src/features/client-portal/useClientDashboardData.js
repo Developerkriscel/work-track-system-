@@ -18,10 +18,11 @@ export function useClientDashboardData() {
   const pendingActions = useMemo(() => value?.pendingActions || [], [value]);
   const recentActivity = useMemo(() => value?.recentActivity || [], [value]);
   const summaryItems = useMemo(() => ([
-    { key: 'open-tickets', label: 'Open Tickets', value: kpis.openTickets ?? 0, tone: 'yellow', Icon: Tickets, accent: 'yellow' },
-    { key: 'completed-tasks', label: 'Completed Tasks', value: kpis.completedTasks ?? 0, tone: 'green', Icon: LayoutDashboard, accent: 'green' },
-    { key: 'total-tasks', label: 'Total Tasks', value: kpis.totalTasks ?? 0, tone: 'blue', Icon: FileText, accent: 'blue' },
-    { key: 'outstanding', label: 'Outstanding', value: clientCurrency(kpis.outstandingAmount || 0), tone: 'red', Icon: Receipt, accent: 'red' }
+    { key: 'open-tickets', label: 'Open Tickets', value: kpis.openTickets ?? 0, tone: 'yellow', Icon: Tickets, accent: 'yellow', path: '/client/tickets?tab=open' },
+    { key: 'pending-tickets', label: 'Pending Tickets', value: kpis.pendingTickets ?? 0, tone: 'orange', Icon: Tickets, accent: 'orange', path: '/client/tickets?tab=open' },
+    { key: 'completed-tasks', label: 'Completed Tasks', value: kpis.completedTasks ?? 0, tone: 'green', Icon: LayoutDashboard, accent: 'green', path: '/client/tickets?tab=closed' },
+    { key: 'total-tasks', label: 'Total Tasks', value: kpis.totalTasks ?? 0, tone: 'blue', Icon: FileText, accent: 'blue', path: '/client/tickets?tab=all' },
+    { key: 'outstanding', label: 'Outstanding', value: clientCurrency(kpis.outstandingAmount || 0), tone: 'red', Icon: Receipt, accent: 'red', path: '/client/invoices' }
   ]), [kpis]);
 
   const statusChartData = useMemo(() => value?.statusChartData || { labels: [], data: [] }, [value]);

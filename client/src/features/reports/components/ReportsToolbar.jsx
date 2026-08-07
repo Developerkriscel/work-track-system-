@@ -25,22 +25,20 @@ export function ReportsToolbar({
 }) {
   return (
     <>
-      <div className="approval-tabs" style={{ marginBottom: activeTab === 'management' ? '16px' : '24px' }}>
-        <ReportTab active={activeTab === 'management'} onClick={() => onTabChange('management')}>
+      <div className="reports-main-tabs" style={{ marginBottom: '12px' }}>
+        <button type="button" className={`reports-main-tab-btn${activeTab === 'management' ? ' reports-main-tab-btn--active' : ''}`} onClick={() => onTabChange('management')}>
           Management Dashboard
-        </ReportTab>
-        <ReportTab active={activeTab === 'tickets'} onClick={() => onTabChange('tickets')}>
+        </button>
+        <button type="button" className={`reports-main-tab-btn${activeTab === 'tickets' ? ' reports-main-tab-btn--active' : ''}`} onClick={() => onTabChange('tickets')}>
           Tickets Report
-        </ReportTab>
-        <ReportTab active={activeTab === 'fms'} onClick={() => onTabChange('fms')}>
-          FMS Report
-        </ReportTab>
+        </button>
       </div>
 
       {activeTab === 'management' ? null : (
-      <article className="migration-panel migration-panel--full" style={{ marginTop: 0 }}>
+      <article className="migration-panel migration-panel--full" style={{ marginTop: 0, marginBottom: '12px' }}>
         <div className="reports-toolbar">
-        <div className="dashboard-controls">
+        {activeTab !== 'tickets' ? (
+          <div className="dashboard-controls">
           <label className="dashboard-control">
             <span>Date Range</span>
             <select value={range} onChange={(event) => onRangeChange(event.target.value)}>
@@ -65,6 +63,7 @@ export function ReportsToolbar({
             </>
           ) : null}
         </div>
+        ) : <div />}
 
         <div className="reports-toolbar__actions">
           <button type="button" className="attendance-cta attendance-cta--red" disabled={downloading} onClick={() => onDownload('pdf')}>

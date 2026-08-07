@@ -16,7 +16,6 @@ export function AttendanceHeader({ title, employeeLabel, isPunchedIn, timer, act
 
       <div className="dashboard-controls">
         {actions}
-        <div className="page-card__status">{employeeLabel}</div>
       </div>
     </div>
   );

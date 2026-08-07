@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Tickets } from '@/components/common/icons';
 import {
   createClientTickets,
@@ -45,8 +46,12 @@ const MODE_CONFIG = Object.freeze([
 ]);
 
 export function useClientTicketWorkspace() {
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const initialTab = queryParams.get('tab') || 'all';
+
   const [activeMode, setActiveMode] = useState('list');
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [range, setRange] = useState('all');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');

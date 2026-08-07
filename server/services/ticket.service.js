@@ -296,8 +296,31 @@ function asUserRow(row = {}) {
 }
 
 async function getRows() {
-  const [tickets, clients, users] = await Promise.all([listRows('Ticket'), listRows('Client'), listRows('User')]);
-  return { tickets, clients: clients.map(asClientRow), users: users.map(asUserRow) };
+  const [tickets, clients, users, leaves, intimations, empMasters] = await Promise.all([
+    listRows('Ticket'), 
+    listRows('Client'), 
+    listRows('User'),
+    listRows('Leave'),
+    listRows('Intimation'),
+    listRows('EmpMaster')
+  ]);
+  
+  const mergedUsers = users.map(user => {
+    const empData = empMasters.find(e => {
+      const uId = first(user, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'EmpID']);
+      const eId = first(e, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'EmpID']);
+      return safe(uId).toLowerCase() === safe(eId).toLowerCase();
+    });
+    return { ...user, ...(empData || {}) };
+  });
+
+  return { 
+    tickets, 
+    clients: clients.map(asClientRow), 
+    users: mergedUsers.map(asUserRow),
+    leaves,
+    intimations
+  };
 }
 
 async function saveTicket(row) {
@@ -379,12 +402,91 @@ export async function getTicketSystemData(employeeId, role) {
       _canSeeTeam: elevated
     };
   });
+  const todayDate = new Date().toISOString().split('T')[0];
+  const isApprovedStatus = (status) => ['approved', 'approve', 'accepted'].includes(String(status || '').toLowerCase().trim());
+  const onLeaveUserIds = new Set();
+  
+  function normalizedDate(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    const parts = String(dateStr).split(/[-/]/);
+    if (parts.length === 3) {
+      const d2 = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+      if (!isNaN(d2.getTime())) return d2.toISOString().split('T')[0];
+    }
+    return '';
+  }
+
+  (data.leaves || []).forEach(row => {
+    const status = first(row, ['Status', 'status', 'Approval Status']);
+    if (isApprovedStatus(status)) {
+      const start = normalizedDate(first(row, ['Start Date', 'StartDate', 'Date', 'date']));
+      const end = normalizedDate(first(row, ['End Date', 'EndDate', 'Start Date', 'StartDate', 'Date', 'date']));
+      if (start && end && start <= todayDate && todayDate <= end) {
+        onLeaveUserIds.add(userId(row).toLowerCase());
+      }
+    }
+  });
+
+  (data.intimations || []).forEach(row => {
+    const status = first(row, ['Status', 'status', 'Approval Status']);
+    if (isApprovedStatus(status)) {
+      const date = normalizedDate(first(row, ['Intimation Date', 'Date', 'date']));
+      if (date === todayDate) {
+        onLeaveUserIds.add(userId(row).toLowerCase());
+      }
+    }
+  });
+
+  const buddyTickets = [];
+  data.users.forEach(u => {
+    const uId = userId(u).toLowerCase();
+    if (!onLeaveUserIds.has(uId)) return;
+
+    const buddyId = String(first(u, ['Assign Buddy', 'Buddy', 'assignBuddy']) || '').trim().toLowerCase();
+    if (!buddyId) return;
+
+    let canViewBuddy = false;
+    const currentEmpId = String(employeeId).toLowerCase();
+    if (buddyId === currentEmpId || buddyId.includes(currentEmpId) || buddyId.includes(`(${currentEmpId})`)) {
+      canViewBuddy = true;
+    } else if (normalizedRole === 'super admin') {
+      canViewBuddy = true;
+    } else if (normalizedRole === 'manager' || normalizedRole === 'admin' || normalizedRole === 'hr') {
+      const managerIds = splitIds(first(u, ['Manager ID', 'Manager', 'managerId', 'Reporting Manager']));
+      if (managerIds.includes(currentEmpId) || managerIds.some(m => m.includes(currentEmpId))) {
+        canViewBuddy = true;
+      }
+    }
+
+    if (!canViewBuddy) return;
+
+    const buddyUser = data.users.find(bu => userId(bu).toLowerCase() === buddyId);
+    const buddyName = buddyUser ? (first(buddyUser, ['Employee Name', 'Name']) || buddyId) : buddyId;
+
+    const userTickets = data.tickets.filter(t => userId(t).toLowerCase() === uId);
+    userTickets.forEach(ticket => {
+      const row = asTicketRow(ticket, data.clients);
+      buddyTickets.push({
+        ...row,
+        'Employee Name': `${row['Employee Name'] || row['Employee ID']} (On Leave) ➔ Buddy: ${buddyName}`,
+        _isBuddyTicket: true,
+        _canApprove: false,
+        _isActionableByMe: true,
+        _canTransferApproval: false,
+        _canSeeTeam: false
+      });
+    });
+  });
+
   return ok({
     clients,
     users: assignableUsers,
     allUsers: activeUsers,
     employees: assignableUsers,
     tickets: visibleTickets,
+    buddyTickets,
     teamTickets: elevated ? visibleTickets : [],
     clientOriginTickets,
     canViewTeamTickets: elevated,

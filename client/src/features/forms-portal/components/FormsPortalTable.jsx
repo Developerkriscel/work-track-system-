@@ -55,8 +55,7 @@ export function FormsPortalTable({
                         >
                           Open Form
                         </a>
-                        <StatusPill tone={summary.tone}>{summary.label}</StatusPill>
-
+                        {isAdmin && <StatusPill tone={summary.tone}>{summary.label}</StatusPill>}
                       </div>
                     </td>
                     {isAdmin ? (

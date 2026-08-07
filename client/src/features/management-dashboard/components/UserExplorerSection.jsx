@@ -1,5 +1,6 @@
 import { StatusPill } from '@/components/common/StatusPill';
 import { formatManagementDate, managementStatusTone } from '@/features/management-dashboard/services/managementDashboardPresentation';
+import { UserExplorerCharts } from './UserExplorerCharts';
 
 function UserTaskTable({ title, rows = [] }) {
   return (
@@ -9,7 +10,7 @@ function UserTaskTable({ title, rows = [] }) {
         <StatusPill tone="info">{rows.length} rows</StatusPill>
       </div>
       <div className="dashboard-table-wrap">
-        <table className="dashboard-table approval-table">
+        <table className="dashboard-table reports-premium-table">
           <thead>
             <tr>
               <th>ID</th>
@@ -56,6 +57,8 @@ export function UserExplorerSection({ users, selectedUserId, onUserChange, selec
           </label>
         </div>
       </article>
+
+      <UserExplorerCharts explorer={explorer} />
 
       <div className="migration-grid">
         <UserTaskTable title="Attendance" rows={explorer.attendance} />

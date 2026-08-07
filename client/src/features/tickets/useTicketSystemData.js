@@ -17,15 +17,22 @@ import { useAuth } from '@/features/auth/AuthProvider';
 
 function sortStatusWeight(status) {
   const value = String(status || '').trim().toLowerCase();
+  
+  // Actionable tickets go to the top (1-9)
   if (value === 'in progress') return 1;
   if (value === 'open') return 2;
-  if (value === 'paused') return 3;
-  if (value === 'rework' || value === 'reassigned' || value.includes('rework')) return 4;
-  if (value === 'pending approval' || value.includes('pending')) return 5;
-  if (value === 'completed') return 6;
-  if (value === 'closed' || value.includes('approved by client') || value === 'cancelled') return 7;
-  if (value.includes('approved')) return 8;
-  return 9;
+  if (value === 'approved') return 3; // 'Approved' means approved by admin, ready to start!
+  if (value === 'paused') return 4;
+  if (value === 'rework' || value === 'reassigned' || value.includes('rework')) return 5;
+  
+  // Terminal or waiting tickets go to the very bottom (90+)
+  if (value === 'pending approval' || value.includes('pending')) return 90;
+  if (value === 'completed') return 91;
+  if (value === 'closed' || value === 'approved by client' || value === 'cancelled') return 92;
+  if (value.includes('approved')) return 93;
+  
+  // Any other status (e.g. Assigned, New, Not Started) should be treated as active and put above the terminal ones
+  return 10;
 }
 
 export const ticketStatusOptions = [
@@ -189,6 +196,7 @@ export function useTicketSystemData() {
   const users = state.payload?.users || [];
   const categories = state.payload?.categories || [];
   const clientOriginRawTickets = state.payload?.clientOriginTickets || [];
+  const rawBuddyTickets = state.payload?.buddyTickets || [];
 
   const filteredTickets = useMemo(
     () => sortTickets(filterTickets(rawTickets, appliedFilters)),
@@ -197,6 +205,10 @@ export function useTicketSystemData() {
   const filteredClientOriginTickets = useMemo(
     () => sortTickets(filterTickets(clientOriginRawTickets, appliedFilters)),
     [clientOriginRawTickets, appliedFilters]
+  );
+  const filteredBuddyTickets = useMemo(
+    () => sortTickets(filterTickets(rawBuddyTickets, appliedFilters)),
+    [rawBuddyTickets, appliedFilters]
   );
 
   function applyFilters() {
@@ -320,7 +332,6 @@ export function useTicketSystemData() {
   async function submitTicketMessage(ticketId, messageText) {
     try {
       const response = await postTicketMessage(ticketId, messageText, employeeId);
-      await markTicketMessagesRead(ticketId);
       return { success: true, response };
     } catch (error) {
       return { success: false, message: error.message || 'Message could not be sent.' };
@@ -337,6 +348,7 @@ export function useTicketSystemData() {
     users,
     categories,
     tickets: filteredTickets,
+    buddyTickets: filteredBuddyTickets,
     clientOriginTickets: filteredClientOriginTickets,
     canViewClientTickets: Boolean(state.payload?.canViewClientTickets),
     filters,
@@ -353,6 +365,7 @@ export function useTicketSystemData() {
     submitApprovalTransfer,
     submitClientTicketResponse,
     loadTicketMessages,
-    submitTicketMessage
+    submitTicketMessage,
+    markTicketMessagesRead
   };
 }

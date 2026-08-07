@@ -6,10 +6,6 @@ export function FmsTabsPanel({ role, tab, tabCounts, teamTabsVisible, onTabChang
 
   return (
     <article className="migration-panel migration-panel--full">
-      <div className="migration-panel__row">
-        <h2>FMS Views</h2>
-        <StatusPill tone="info">{role} role</StatusPill>
-      </div>
       <div className="fms-tabs-row">
         {fmsTabs
           .filter((item) => !item.teamOnly || allowTeamTabs)

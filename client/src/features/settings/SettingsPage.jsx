@@ -228,13 +228,12 @@ export function SettingsPage() {
               <span className="settings-info-value">{department}</span>
             </div>
             
-            <div className="settings-form-group" style={{ background: 'var(--wt-surface-muted)', padding: '16px 20px', borderRadius: 'var(--wt-radius-button)', border: '1px solid var(--wt-border)', justifyContent: 'center' }}>
+            <div className="settings-form-group settings-info-item">
               <label className="settings-info-label" style={{ marginBottom: 4 }}>Email</label>
               {isEditingProfile ? (
                 <input
                   type="email"
                   className="settings-input"
-                  style={{ padding: '8px 12px', fontSize: '14px', background: 'var(--wt-surface)', marginTop: '4px' }}
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="Enter email address"
@@ -244,13 +243,12 @@ export function SettingsPage() {
                 <span className="settings-info-value">{email || 'N/A'}</span>
               )}
             </div>
-            <div className="settings-form-group" style={{ background: 'var(--wt-surface-muted)', padding: '16px 20px', borderRadius: 'var(--wt-radius-button)', border: '1px solid var(--wt-border)', justifyContent: 'center' }}>
+            <div className="settings-form-group settings-info-item">
               <label className="settings-info-label" style={{ marginBottom: 4 }}>Phone No</label>
               {isEditingProfile ? (
                 <input
                   type="text"
                   className="settings-input"
-                  style={{ padding: '8px 12px', fontSize: '14px', background: 'var(--wt-surface)', marginTop: '4px' }}
                   value={phone}
                   onChange={e => setPhone(e.target.value)}
                   placeholder="Enter phone number"
@@ -261,21 +259,21 @@ export function SettingsPage() {
             </div>
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '16px' }}>
             {isEditingProfile ? (
               <>
                 <button 
                   type="submit" 
                   className="settings-submit" 
                   disabled={isUpdatingProfile || (email === initialEmail && phone === initialPhone)}
-                  style={{ marginTop: 0 }}
+                  style={{ margin: 0 }}
                 >
                   {isUpdatingProfile ? 'Saving...' : 'Save Changes'}
                 </button>
                 <button 
                   type="button" 
                   className="settings-logout-btn" 
-                  style={{ marginTop: 0, padding: '10px 20px', color: 'var(--wt-text-muted)', border: '1px solid var(--wt-border)', background: 'var(--wt-surface)', boxShadow: 'none' }}
+                  style={{ margin: 0, padding: '14px 28px', color: 'var(--wt-text-muted)', border: '1px solid var(--wt-border)', background: 'var(--wt-surface)', boxShadow: 'none' }}
                   onClick={() => {
                     setIsEditingProfile(false);
                     setEmail(initialEmail);
@@ -290,7 +288,7 @@ export function SettingsPage() {
               <button 
                 type="button" 
                 className="settings-submit" 
-                style={{ marginTop: 0, background: 'var(--wt-surface)', color: 'var(--wt-primary)', border: '1px solid var(--wt-primary)', boxShadow: 'none' }}
+                style={{ margin: 0, background: 'rgba(255, 255, 255, 0.8)', color: '#4f46e5', border: '1px solid rgba(99, 102, 241, 0.4)', boxShadow: '0 4px 12px rgba(99, 102, 241, 0.1)' }}
                 onClick={(e) => { e.preventDefault(); setIsEditingProfile(true); }}
               >
                 Edit Contact Details

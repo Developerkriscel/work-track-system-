@@ -63,7 +63,7 @@ export function AttendanceHistoryTable({ rows }) {
             <th style={{ padding: '16px', color: '#475569', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: '#f8fafc', borderRadius: '8px 0 0 8px' }}>Date</th>
             <th style={{ padding: '16px', color: '#475569', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: '#f8fafc' }}>Punch In</th>
             <th style={{ padding: '16px', color: '#475569', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: '#f8fafc' }}>Punch Out</th>
-            <th style={{ padding: '16px', color: '#475569', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: '#f8fafc' }}>Status</th>
+            <th style={{ padding: '16px', color: '#475569', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: '#f8fafc', textAlign: 'left' }}>Status</th>
             <th style={{ padding: '16px', color: '#475569', fontWeight: '700', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', backgroundColor: '#f8fafc', borderRadius: '0 8px 8px 0' }}>Duration</th>
           </tr>
         </thead>
@@ -81,7 +81,10 @@ export function AttendanceHistoryTable({ rows }) {
                 <td data-label="Punch In" style={{ padding: '16px', color: '#1e293b' }}><AttendanceEvent row={row} action="in" /></td>
                 <td data-label="Punch Out" style={{ padding: '16px', color: '#1e293b' }}><AttendanceEvent row={row} action="out" /></td>
                 <td data-label="Status" style={{ padding: '16px' }}>
-                  <StatusPill tone={toneForAttendanceStatus(row.status)}>{row.status}</StatusPill>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-start' }}>
+                    <StatusPill tone={toneForAttendanceStatus(row.status)}>{row.status}</StatusPill>
+                    {row.outStatus && <StatusPill tone={toneForAttendanceStatus(row.outStatus)}>{row.outStatus}</StatusPill>}
+                  </div>
                 </td>
                 <td data-label="Duration" style={{ padding: '16px', fontWeight: '600', color: '#64748b' }}>{row.duration}</td>
               </tr>
@@ -437,7 +440,7 @@ export function TeamAttendanceTable({ rows = [], onEdit }) {
             <th>Date</th>
             <th>Punch In</th>
             <th>Punch Out</th>
-            <th>Status</th>
+            <th style={{ textAlign: 'left' }}>Status</th>
             <th>Duration</th>
             <th>Action</th>
           </tr>
@@ -461,7 +464,12 @@ export function TeamAttendanceTable({ rows = [], onEdit }) {
                 </td>
                 <td data-label="Punch In"><AttendanceEvent row={row} action="in" /></td>
                 <td data-label="Punch Out"><AttendanceEvent row={row} action="out" /></td>
-                <td data-label="Status"><StatusPill tone={toneForAttendanceStatus(row.status)}>{row.status}</StatusPill></td>
+                <td data-label="Status">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-start' }}>
+                    <StatusPill tone={toneForAttendanceStatus(row.status)}>{row.status}</StatusPill>
+                    {row.outStatus && <StatusPill tone={toneForAttendanceStatus(row.outStatus)}>{row.outStatus}</StatusPill>}
+                  </div>
+                </td>
                 <td data-label="Duration">{row.duration || '-'}</td>
                 <td data-label="Action">
                   <button type="button" className="attendance-cta attendance-cta--blue attendance-team-table__edit" onClick={() => onEdit(row)}>

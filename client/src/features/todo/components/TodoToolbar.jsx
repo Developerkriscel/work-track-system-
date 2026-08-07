@@ -2,26 +2,16 @@ export function TodoToolbar({ statusFilter, onStatusFilterChange, formMode, onFo
   return (
     <article className="migration-panel migration-panel--full">
       <div className="migration-panel__row">
-        <div className="approval-tabs">
+        <div className="dashboard-controls">
           <button
             type="button"
-            className={`approval-tab-btn${formMode === 'single' ? ' approval-tab-btn--active' : ''}`}
-            onClick={() => {
-              onFormModeChange('single');
-              onOpenForm?.('single');
-            }}
-          >
-            Single Task
-          </button>
-          <button
-            type="button"
-            className={`approval-tab-btn${formMode === 'bulk' ? ' approval-tab-btn--active' : ''}`}
+            className="attendance-cta attendance-cta--purple"
             onClick={() => {
               onFormModeChange('bulk');
               onOpenForm?.('bulk');
             }}
           >
-            Bulk Add
+            Add Task
           </button>
         </div>
 

@@ -12,7 +12,8 @@ export function TicketTable({
   onApprovalAction,
   onApprovalTransfer,
   onChat,
-  onDetails
+  onDetails,
+  currentUser
 }) {
   const [pageSize, setPageSize] = useState(10);
   const [page, setPage] = useState(1);
@@ -141,7 +142,25 @@ export function TicketTable({
                           Schedule
                         </button>
                         <button type="button" className="ticket-action-btn ticket-action-btn--assign" disabled={submitting} onClick={() => onReassign(ticket)}>Reassign</button>
-                        <button type="button" className="ticket-action-btn ticket-action-btn--chat" disabled={submitting} onClick={() => onChat(ticket)}>Chat</button>
+                        {(() => {
+                          const hasUnread = ticket.HasUnreadAdminMessages === true || String(ticket.HasUnreadAdminMessages).toUpperCase() === 'TRUE';
+                          const lastActionBy = String(ticket['Last Action By'] || '').trim().toLowerCase();
+                          const currentUserName = String(currentUser?.['Employee Name'] || '').trim().toLowerCase();
+                          const notMe = lastActionBy !== currentUserName;
+                          const showRedDot = hasUnread && notMe;
+                          
+                          return (
+                            <button 
+                              type="button" 
+                              className={`ticket-action-btn ticket-action-btn--chat ${showRedDot ? 'ticket-action-btn--unread-active' : ''}`} 
+                              disabled={submitting} 
+                              onClick={() => onChat(ticket)}
+                            >
+                              Chat
+                              {showRedDot && <span className="chat-unread-dot"></span>}
+                            </button>
+                          );
+                        })()}
                       </>
                     ) : (
                       <span

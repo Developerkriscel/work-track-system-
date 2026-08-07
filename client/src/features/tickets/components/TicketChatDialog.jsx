@@ -1,8 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { AppModal } from '@/components/modals';
 
 export function TicketChatDialog({ ticket, messages, loading, sending, onClose, onSend }) {
   const [draft, setDraft] = useState('');
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   useEffect(() => {
     setDraft('');
@@ -30,6 +39,7 @@ export function TicketChatDialog({ ticket, messages, loading, sending, onClose, 
               </div>
             </div>
           )) : null}
+          <div ref={messagesEndRef} />
         </div>
         <form className="client-ticket-chat__composer" onSubmit={handleSubmit}>
           <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Type your message..." />

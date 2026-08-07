@@ -9,11 +9,6 @@ export function FormsPortalHeader({ employeeLabel, isAdmin, onRefresh, onAddForm
       </div>
 
       <div className="dashboard-controls">
-        <div className="page-card__status">{employeeLabel}</div>
-        <button type="button" className="attendance-cta attendance-cta--blue approvals-refresh-btn" onClick={onRefresh}>
-          <RefreshCw className="approvals-refresh-btn__icon" />
-          Refresh
-        </button>
         {isAdmin ? (
           <button type="button" className="attendance-cta attendance-cta--purple" onClick={onAddForm}>
             Add New Form

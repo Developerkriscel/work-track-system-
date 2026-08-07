@@ -167,15 +167,21 @@ export function ClientTicketTable({
                           <span>Reply</span>
                         </button>
                       ) : null}
-                      <button
-                        type="button"
-                        className={actionButtonClass('chat')}
-                        disabled={submitting}
-                        onClick={() => onChat(row)}
-                      >
-                        <ActionIcon action="chat" />
-                        <span>Chat</span>
-                      </button>
+                      {(() => {
+                        const hasUnread = row.HasUnreadMessages === true || String(row.HasUnreadMessages).toUpperCase() === 'TRUE';
+                        return (
+                          <button
+                            type="button"
+                            className={`${actionButtonClass('chat')} ${hasUnread ? 'ticket-action-btn--unread-active' : ''}`}
+                            disabled={submitting}
+                            onClick={() => onChat(row)}
+                          >
+                            <ActionIcon action="chat" />
+                            <span>Chat</span>
+                            {hasUnread && <span className="chat-unread-dot"></span>}
+                          </button>
+                        );
+                      })()}
                       {canApprove ? (
                         <button
                           type="button"

@@ -33,6 +33,7 @@ export function FmsPage() {
     reload
   } = useFmsData();
   const [message, setMessage] = useState(null);
+  const clearMessage = () => setMessage(null);
   const [completionTask, setCompletionTask] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
 

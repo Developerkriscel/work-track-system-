@@ -12,7 +12,7 @@ import {
 import { useAuth } from '@/features/auth/AuthProvider';
 import { todayYmd } from '@/features/attendance/services/attendancePresentation';
 
-function toYmd(date) {
+export function toYmd(date) {
   if (date instanceof Date && Number.isNaN(date.getTime())) return todayYmd();
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Kolkata',
@@ -115,6 +115,17 @@ function attendanceStatus(group, punchIn) {
   return 'Very Late';
 }
 
+function departureStatus(group, punchOut) {
+  if (!punchOut) return null;
+  const punchTime = parseTimeToDate(group.date, punchOut.Time || punchOut['Punch Out']);
+  if (!punchTime) return null;
+  const shiftEnd = new Date(`${group.date}T19:00:00+05:30`);
+  const difference = (punchTime.getTime() - shiftEnd.getTime()) / 60000;
+  if (difference < -15) return 'Early Departure';
+  if (difference <= 60) return 'On Time Departure';
+  return 'Late Departure';
+}
+
 function durationLabel(start, end) {
   if (!start || !end || end < start) return '-';
   const diff = Math.round((end - start) / 60000);
@@ -130,7 +141,7 @@ function rangeIncludesDate(startDate, endDate, dateValue) {
   return Boolean(start && end && current && start <= current && current <= end);
 }
 
-function groupAttendanceRows(rows, bounds) {
+export function groupAttendanceRows(rows, bounds) {
   const groups = new Map();
 
   rows.forEach((row) => {
@@ -164,6 +175,7 @@ function groupAttendanceRows(rows, bounds) {
       punchIn,
       punchOut,
       status: attendanceStatus({ date: group.date }, punchIn),
+      outStatus: departureStatus({ date: group.date }, punchOut),
       duration: durationLabel(inAt, outAt) !== '-'
         ? durationLabel(inAt, outAt)
         : punchOut?.Duration || punchOut?.['Total Duration'] || '-'

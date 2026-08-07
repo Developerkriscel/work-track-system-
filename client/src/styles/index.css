@@ -3,4 +3,5 @@
 @import '@/styles/base/base.css';
 @import '@/styles/components/app-shell.css';
 @import '@/styles/pages/migration-pages.css';
+@import '@/styles/components/hierarchy.css';
 @import '@/styles/mobile.css';

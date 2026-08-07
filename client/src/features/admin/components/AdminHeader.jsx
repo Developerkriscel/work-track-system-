@@ -13,10 +13,6 @@ export function AdminHeader({ employeeId, onEmployeeIdChange, activeTab, onRefre
           <span>User Admin ID</span>
           <input value={employeeId} onChange={(event) => onEmployeeIdChange(event.target.value)} placeholder="e.g. MS101" />
         </label>
-        <button type="button" className="attendance-cta attendance-cta--blue approvals-refresh-btn" onClick={onRefresh}>
-          <RefreshCw className="approvals-refresh-btn__icon" />
-          Refresh
-        </button>
         <button
           type="button"
           className="attendance-cta attendance-cta--purple"

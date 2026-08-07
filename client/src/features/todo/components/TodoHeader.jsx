@@ -12,10 +12,6 @@ export function TodoHeader({ currentUser, employeeId, onRefresh }) {
         <div className="page-card__status">
           {(currentUser?.['Employee Name'] || currentUser?.Name || 'Employee')} {employeeId ? `| ${employeeId}` : ''}
         </div>
-        <button type="button" className="attendance-cta attendance-cta--blue mobile-full-btn" onClick={onRefresh}>
-          <RefreshCw className="approvals-refresh-btn__icon" />
-          Refresh
-        </button>
       </div>
     </div>
   );

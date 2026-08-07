@@ -141,10 +141,18 @@ html,body{max-width:100vw;overflow-x:hidden}
     width: max-content;
     max-width: 90vw;
   }
+  .ticket-filter-dropdown__option input {
+    width: 13px !important;
+    height: 13px !important;
+    min-width: 13px !important;
+    min-height: 13px !important;
+    max-width: 13px !important;
+    max-height: 13px !important;
+  }
   .ticket-form-grid{grid-template-columns:1fr}
   .approval-tabs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none}
   .approval-tabs::-webkit-scrollbar{display:none}
-  .approval-filter-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .approval-filter-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .approval-filter-grid__wide{grid-column:1 / -1}
   .forms-editor__grid{grid-template-columns:1fr}
   .forms-editor__full{grid-column:span 1}
@@ -294,7 +302,7 @@ html,body{max-width:100vw;overflow-x:hidden}
   .ticket-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr)); gap: 8px;}
   .ticket-filter-actions{width:100%; gap: 6px; margin-top: -4px;}
   .ticket-filter-actions .inline-action{flex:1 1 calc(50% - 3px); justify-content:center; text-align:center; padding: 6px 10px; font-size: 12px; min-height: 32px;}
-  .approval-filter-grid{grid-template-columns:1fr 1fr; gap: 8px;}
+  .approval-filter-grid{display:grid;grid-template-columns:1fr 1fr; gap: 8px;}
   .approval-filter-grid__wide{grid-column: 1 / -1;}
   .approval-filter-actions{margin-top: 4px; width: 100%;}
   .approval-filter-actions .attendance-cta{width: 100%; padding: 8px;}

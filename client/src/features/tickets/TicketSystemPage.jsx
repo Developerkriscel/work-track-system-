@@ -25,6 +25,7 @@ export function TicketSystemPage() {
     users,
     categories,
     tickets,
+    buddyTickets = [],
     clientOriginTickets,
     canViewClientTickets,
     filters,
@@ -39,7 +40,9 @@ export function TicketSystemPage() {
     submitApprovalAction,
     submitApprovalTransfer,
     loadTicketMessages,
-    submitTicketMessage
+    submitTicketMessage,
+    markTicketMessagesRead,
+    reload
   } = useTicketSystemData();
 
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -64,7 +67,9 @@ export function TicketSystemPage() {
     ? teamTickets
     : activeTab === 'client' && canViewClientTickets
       ? clientOriginTickets
-      : myTickets;
+      : activeTab === 'buddy'
+        ? buddyTickets
+        : myTickets;
 
   const handleCreate = async (payload) => {
     const result = Array.isArray(payload) ? await submitNewTickets(payload) : await submitNewTicket(payload);
@@ -152,6 +157,12 @@ export function TicketSystemPage() {
     setChatTicketState({ ticket, messages: [], loading: true, sending: false });
     try {
       const response = await loadTicketMessages(ticketId);
+      
+      // Mark as read when opening the chat
+      await markTicketMessagesRead(ticketId);
+      // Reload the table so the red dot disappears immediately
+      reload();
+
       if (response?.success === false) {
         setMessage({ tone: 'danger', text: response.message || 'Unable to load ticket discussion.' });
         setChatTicketState({ ticket: null, messages: [], loading: false, sending: false });
@@ -222,7 +233,7 @@ export function TicketSystemPage() {
   };
 
   return (
-    <section className="page-card">
+    <section className="page-card ticket-system-page">
       <TicketHeader employeeLabel={employeeLabel} />
 
       <TicketFilterPanel
@@ -282,6 +293,15 @@ export function TicketSystemPage() {
                 Client Tickets
               </button>
             ) : null}
+            <button type="button" className={activeTab === 'buddy' ? 'view-mode-tab view-mode-tab--active' : 'view-mode-tab'} onClick={() => setActiveTab('buddy')}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="view-mode-tab__icon">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              Buddy
+            </button>
           </div>
           <StatusPill tone={loading ? 'neutral' : 'info'}>
             {loading ? 'Refreshing' : `${visibleTickets.length} tickets`}
@@ -298,6 +318,7 @@ export function TicketSystemPage() {
           onApprovalTransfer={setTransferDialog}
           onChat={handleChatOpen}
           onDetails={setDetailsTicket}
+          currentUser={currentUser}
         />
       </article>
       {reassignTicket ? <TicketReassignDialog ticket={reassignTicket.ticket || reassignTicket} mode={reassignTicket.mode || 'user'} users={users} saving={submitting} onClose={() => setReassignTicket(null)} onSubmit={handleReassign} /> : null}

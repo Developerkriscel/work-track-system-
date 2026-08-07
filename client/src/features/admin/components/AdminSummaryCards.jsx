@@ -6,8 +6,10 @@ function SummaryCard({ icon: Icon, tone, label, value }) {
       <div className={`dashboard-kpi-card__icon dashboard-kpi-card__icon--${tone}`}>
         <Icon className="dashboard-kpi-card__icon-svg" />
       </div>
-      <p className="dashboard-kpi-card__label">{label}</p>
-      <p className="dashboard-kpi-card__value">{value}</p>
+      <div className="dashboard-kpi-card-content">
+        <p className="dashboard-kpi-card__label">{label}</p>
+        <p className="dashboard-kpi-card__value">{value}</p>
+      </div>
     </article>
   );
 }

@@ -1,13 +1,22 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { AppModal } from '@/components/modals';
 
 export function ClientTicketChatDialog({ clientName, messages, onClose, onSend, sending, ticketId }) {
   const [draft, setDraft] = useState('');
+  const messagesEndRef = useRef(null);
 
   const orderedMessages = useMemo(
     () => [...(messages || [])].sort((left, right) => (Date.parse(left.Timestamp) || 0) - (Date.parse(right.Timestamp) || 0)),
     [messages]
   );
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [orderedMessages]);
 
   const handleSend = async (event) => {
     event.preventDefault();
@@ -41,6 +50,7 @@ export function ClientTicketChatDialog({ clientName, messages, onClose, onSend, 
           ) : (
             <div className="dashboard-table__empty">No messages yet. Start the conversation.</div>
           )}
+          <div ref={messagesEndRef} />
         </div>
 
         <form className="client-ticket-chat__composer" onSubmit={handleSend}>

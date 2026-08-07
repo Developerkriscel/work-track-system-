@@ -88,7 +88,7 @@ export function TodoPage() {
 
       {showFormModal ? (
         <AppModal
-          title={formMode === 'single' ? 'Add a To-Do Task' : 'Bulk Add To-Do Tasks'}
+          title={formMode === 'single' ? 'Add a To-Do Task' : 'Add To-Do Tasks'}
           onClose={() => setShowFormModal(false)}
           width="1180px"
         >

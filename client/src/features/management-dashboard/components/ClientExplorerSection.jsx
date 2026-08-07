@@ -1,6 +1,8 @@
 import { StatusPill } from '@/components/common/StatusPill';
 import { formatManagementCurrency, managementStatusTone } from '@/features/management-dashboard/services/managementDashboardPresentation';
 
+import { ClientExplorerCharts } from './ClientExplorerCharts';
+
 export function ClientExplorerSection({ clients, selectedClientId, onClientChange, selectedClient, explorer }) {
   return (
     <>
@@ -19,6 +21,8 @@ export function ClientExplorerSection({ clients, selectedClientId, onClientChang
           </label>
         </div>
       </article>
+
+      <ClientExplorerCharts explorer={explorer} />
 
       <div className="migration-grid">
         <article className="migration-panel">
@@ -92,7 +96,7 @@ export function ClientExplorerSection({ clients, selectedClientId, onClientChang
           <StatusPill tone="info">{explorer.invoices.length} rows</StatusPill>
         </div>
         <div className="dashboard-table-wrap">
-          <table className="dashboard-table approval-table">
+          <table className="dashboard-table reports-premium-table">
             <thead>
               <tr>
                 <th>Invoice ID</th>
