@@ -160,7 +160,7 @@ try {
   assert(Array.isArray(dashboard.data?.fms) && dashboard.data.fms.some((item) => String(item['Task ID'] || item.ID) === fmsId), 'Dashboard should include the seeded FMS item.');
   assert(Array.isArray(dashboard.data?.todo) && dashboard.data.todo.some((item) => String(item['Task ID'] || item.TodoID) === todoId), 'Dashboard should include the seeded todo item.');
   assert(Array.isArray(dashboard.data?.attendance) && dashboard.data.attendance.some((item) => String(item['Employee ID'] || item.EmpID) === managerId), 'Dashboard should include the seeded attendance records.');
-  assert(String(dashboard.data?.kpis?.attendanceCount || '').includes('Checked In'), `Unexpected attendance KPI: ${dashboard.data?.kpis?.attendanceCount}`);
+  assert(String(dashboard.data?.kpis?.attendanceCount || '').includes('of'), `Unexpected attendance KPI: ${dashboard.data?.kpis?.attendanceCount}`);
   assert(Number.isFinite(Number(dashboard.data?.kpis?.completedRate)), `Completion rate should be numeric: ${dashboard.data?.kpis?.completedRate}`);
   assert(String(dashboard.data?.kpis?.plannedTime || '').includes('h'), `Unexpected planned time: ${dashboard.data?.kpis?.plannedTime}`);
   assert(Number.isFinite(Number(dashboard.data?.kpis?.outstanding)), `Outstanding amount should be numeric: ${dashboard.data?.kpis?.outstanding}`);

@@ -91,6 +91,7 @@ export function AppShell() {
                 key={route.key}
                 to={route.path}
                 end={route.path === '/'}
+                onClick={() => setMobileNavOpen(false)}
                 className={({ isActive }) =>
                   `sidebar__link${isActive ? ' sidebar__link--active' : ''}`
                 }

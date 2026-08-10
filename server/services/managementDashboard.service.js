@@ -159,7 +159,7 @@ export async function getManagementDashboardData(startDate, endDate) {
       invoices: data.invoices,
       kpis: {
         attendancePct: activeUsers.length ? Math.round((checkedIn.size / activeUsers.length) * 100) : 0,
-        attendanceCount: `${checkedIn.size} of ${activeUsers.length} Checked In`,
+        attendanceCount: `${checkedIn.size} of ${activeUsers.length}`,
         plannedTime: `${Math.floor(plannedMinutes / 60)}h ${plannedMinutes % 60}m`,
         outstanding,
         completedToday: completed,
