@@ -23,7 +23,7 @@ export function MyApprovalStatusPage() {
   } = useMyApprovalStatusData();
 
   return (
-    <section className="page-card">
+    <section className="page-card my-approval-status-page">
       <MyApprovalStatusHeader
         employeeLabel={`${currentUser?.['Employee Name'] || currentUser?.Name || 'Employee'}${employeeId ? ` | ${employeeId}` : ''}`}
         onRefresh={refresh}

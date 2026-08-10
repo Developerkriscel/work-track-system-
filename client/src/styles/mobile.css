@@ -63,6 +63,18 @@ html,body{max-width:100vw;overflow-x:hidden}
   .content-area{padding:2px 4px 10px}
   .page-card{padding:6px;border-radius:12px;max-width:100vw;overflow-x:hidden;box-sizing:border-box !important;}
   .page-card__header{flex-direction:column;gap:4px;align-items:stretch;width:100%;box-sizing:border-box;margin-bottom:2px;padding-bottom:4px;}
+  
+  /* Dashboard Header Mobile Row Layout */
+  .dashboard-page .page-card__header { flex-direction: row !important; justify-content: space-between !important; align-items: flex-start !important; }
+  .dashboard-page .page-card__header > div:first-child { flex: 1; min-width: 0; }
+  .dashboard-page .page-card__header .dashboard-controls { flex-direction: column !important; align-items: flex-end !important; gap: 4px !important; width: auto !important; margin-left: 8px; }
+  
+  .dashboard-desktop-pill { display: none !important; }
+  .dashboard-mobile-pill { display: inline-flex !important; margin: 4px 0 0 0 !important; align-self: flex-start !important; padding: 4px 8px !important; font-size: 11px !important; min-height: 24px !important; min-width: unset !important; }
+
+  .dashboard-page .dashboard-control span { font-size: 8px !important; margin-bottom: 0 !important; text-align: right; width: 100%; }
+  .dashboard-page .dashboard-control select { padding: 0 4px !important; font-size: 10px !important; height: 22px !important; min-height: 22px !important; width: 85px !important; }
+  
   .page-card__title{font-size:20px;max-width:100%;overflow-wrap:break-word;margin:0;}
   .page-card__title--dashboard{font-size:20px;margin:0;}
   .dashboard-page__welcome{margin:0 0 4px 0;font-size:12px;}
@@ -108,6 +120,43 @@ html,body{max-width:100vw;overflow-x:hidden}
   .attendance-section-head{flex-direction:column;align-items:flex-start}
   .attendance-page .page-card__header { align-items: stretch; gap: 16px; }
   .attendance-page .page-card__header .dashboard-controls { flex-direction: column-reverse; align-items: flex-start; gap: 16px; }
+  
+  /* Attendance Calendar Mobile Fixes */
+  .attendance-calendar-container { padding: 8px !important; margin-bottom: 8px !important; border-radius: 12px !important; overflow-x: hidden; }
+  .attendance-calendar-header { flex-direction: column !important; gap: 8px !important; margin-bottom: 12px !important; }
+  .attendance-calendar-legend { flex-wrap: wrap !important; justify-content: center !important; gap: 6px !important; }
+  .attendance-calendar-grid { gap: 2px !important; }
+  .attendance-calendar-cell { padding: 2px !important; border-radius: 8px !important; }
+  .attendance-calendar-cell > span { font-size: 12px !important; margin-bottom: 2px !important; }
+  .attendance-calendar-badge { font-size: 5.5px !important; padding: 2px 3px !important; border-radius: 4px !important; letter-spacing: 0 !important; }
+  .attendance-calendar-cell > div > div { font-size: 6px !important; margin-top: 1px !important; }
+  .attendance-calendar-grid > div { font-size: 9px !important; } /* Day headers */
+
+  /* Hierarchy Organizational Chart Mobile Fixes */
+  .hierarchy-container { padding: 16px 8px !important; }
+  .hierarchy-children { min-width: max-content !important; }
+  .hierarchy-node { padding: 20px 8px 0 8px !important; }
+  .hierarchy-card { min-width: 130px !important; max-width: 140px !important; padding: 8px !important; }
+  .hierarchy-card__name { font-size: 12px !important; margin-bottom: 2px !important; }
+  .hierarchy-card__role { font-size: 10px !important; margin-bottom: 4px !important; }
+  .hierarchy-card__id { font-size: 9px !important; padding: 2px 6px !important; }
+  
+  /* Fix toggle button oval stretch issue */
+  .hierarchy-card__toggle {
+    width: 24px !important;
+    height: 24px !important;
+    min-height: 24px !important;
+    min-width: 24px !important;
+    padding: 0 !important;
+    font-size: 16px !important;
+    line-height: 1 !important;
+    border-radius: 50% !important;
+    bottom: -12px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
   .attendance-action-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%}
   .attendance-cta{display:flex;align-items:center;width:100%;justify-content:center;min-height:32px !important;font-size:11px !important;padding:4px !important;text-align:center;line-height:1.2}
   .attendance-tabs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;padding-bottom:2px;margin-bottom:12px !important;margin-top:12px !important;}
@@ -166,8 +215,12 @@ html,body{max-width:100vw;overflow-x:hidden}
     max-height: 13px !important;
   }
   .page-card:not(.dashboard-page) .page-card__status { display: none !important; }
-  .dashboard-page .page-card__status { padding: 4px 8px !important; font-size: 11px !important; min-height: 24px !important; min-width: unset !important; margin: 0; align-self: flex-start; }
-  .ticket-form-grid{grid-template-columns:1fr}
+  .ticket-form-grid{grid-template-columns:1fr !important;}
+  .ticket-form-grid fieldset { grid-template-columns: 1fr !important; gap: 8px !important; align-items: stretch !important; }
+  .ticket-form-grid .dashboard-control { width: 100% !important; }
+  .ticket-form-grid .dashboard-control select, .ticket-form-grid .dashboard-control input, .ticket-form-grid .dashboard-control textarea { width: 100% !important; box-sizing: border-box !important; }
+  .ticket-form-actions { flex-direction: column !important; gap: 8px !important; }
+  .ticket-form-actions button { width: 100% !important; margin: 0 !important; }
   .approval-tabs{overflow-x:auto;flex-wrap:nowrap;scrollbar-width:none;margin-bottom:6px !important;}
   .approval-tabs::-webkit-scrollbar{display:none}
   .approval-tab-btn{flex-shrink:0;min-height:28px !important;padding:4px 8px !important;font-size:11px !important;}
@@ -177,6 +230,15 @@ html,body{max-width:100vw;overflow-x:hidden}
   .approval-filter-grid .dashboard-control select { min-height: 24px !important; height: 24px !important; padding: 0 4px !important; font-size: 10px !important; }
   .approval-filter-grid button { min-height: 24px !important; font-size: 10px !important; padding: 4px !important; }
   .approval-filter-grid__wide{grid-column:1 / -1}
+  
+  /* My Approval Status Filter Reordering */
+  .my-approval-status-page .approval-filter-grid { display: grid !important; grid-template-columns: 1fr 1fr !important; }
+  .my-approval-status-page .approval-filter-grid .dashboard-control { grid-column: auto !important; }
+  .my-approval-status-page .approval-filter-grid .dashboard-control:nth-child(1) { order: 1 !important; } /* Status */
+  .my-approval-status-page .approval-filter-grid .dashboard-control:nth-child(4) { order: 2 !important; } /* Search */
+  .my-approval-status-page .approval-filter-grid .dashboard-control:nth-child(2) { order: 3 !important; } /* Start Date */
+  .my-approval-status-page .approval-filter-grid .dashboard-control:nth-child(3) { order: 4 !important; } /* End Date */
+
   .forms-editor__grid{grid-template-columns:1fr}
   .forms-editor__full{grid-column:span 1}
   .forms-user-picker__grid{grid-template-columns:1fr}

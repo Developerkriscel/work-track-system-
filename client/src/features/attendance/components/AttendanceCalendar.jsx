@@ -132,7 +132,7 @@ export function AttendanceCalendar({ rows = [] }) {
       marginBottom: '24px',
       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)'
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+      <div className="attendance-calendar-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
             type="button"
@@ -168,7 +168,7 @@ export function AttendanceCalendar({ rows = [] }) {
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
           </button>
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div className="attendance-calendar-legend" style={{ display: 'flex', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: '600', color: '#64748b' }}>
             <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#22c55e' }}></span> Present
           </div>
@@ -184,7 +184,7 @@ export function AttendanceCalendar({ rows = [] }) {
         </div>
       </div>
 
-      <div style={{
+      <div className="attendance-calendar-grid" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(7, 1fr)',
         gap: '12px',
@@ -207,6 +207,7 @@ export function AttendanceCalendar({ rows = [] }) {
           return (
             <div
               key={dayObj.date}
+              className="attendance-calendar-cell"
               style={{
                 aspectRatio: '1',
                 display: 'flex',
@@ -238,7 +239,7 @@ export function AttendanceCalendar({ rows = [] }) {
               </span>
               {isKnown && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
-                  <span style={{ 
+                  <span className="attendance-calendar-badge" style={{ 
                     fontSize: '10px', 
                     fontWeight: '700', 
                     color: colors.badgeText, 

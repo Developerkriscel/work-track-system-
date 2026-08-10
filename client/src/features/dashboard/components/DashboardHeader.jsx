@@ -9,10 +9,11 @@ export function DashboardHeader({ employeeId, dashboardUser, range, ranges, onRa
             ? `Welcome back, ${dashboardUser['Employee Name']}`
             : 'Loading your employee dashboard.'}
         </p>
+        <div className="page-card__status dashboard-mobile-pill" style={{ display: 'none' }}>{employeeId || 'Employee session'}</div>
       </div>
 
       <div className="dashboard-controls">
-        <div className="page-card__status">{employeeId || 'Employee session'}</div>
+        <div className="page-card__status dashboard-desktop-pill">{employeeId || 'Employee session'}</div>
         <label className="dashboard-control">
           <span>Date Range</span>
           <select value={range} onChange={(event) => onRangeChange(event.target.value)}>
