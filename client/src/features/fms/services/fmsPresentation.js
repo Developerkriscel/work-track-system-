@@ -4,7 +4,8 @@ export const fmsTabs = [
   { id: 'my-completed', label: 'My Completed' },
   { id: 'team-pending', label: 'Team Pending', teamOnly: true },
   { id: 'team-future', label: 'Team Future', teamOnly: true },
-  { id: 'team-completed', label: 'Team Completed', teamOnly: true }
+  { id: 'team-completed', label: 'Team Completed', teamOnly: true },
+  { id: 'fms-forms', label: 'FMS Form', showCount: false }
 ];
 
 export function showFmsTeamTabs(role) {

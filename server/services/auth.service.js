@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
-import { listMongoRows, upsertRow } from './legacyStore.service.js';
+import { LegacyModels } from '../models/legacyModels.js';
+import { upsertRow } from './legacyStore.service.js';
 import { createAccessToken } from '../middleware/auth.middleware.js';
 import { saveBase64File } from './fileStorage.service.js';
 
@@ -40,6 +41,50 @@ function hashedCredentialRow(row, hashedPassword) {
 
 function isHashedPassword(value) {
   return /^\$2[aby]\$\d{2}\$/.test(safe(value));
+}
+
+function employeeLookupQuery(employeeId) {
+  const value = safe(employeeId);
+  return {
+    $or: [
+      { 'data.Employee ID': value },
+      { 'data.User ID': value },
+      { 'data.EMP Code': value },
+      { 'data.employeeId': value },
+      { 'data.EmpID': value },
+      { legacyId: value }
+    ]
+  };
+}
+
+function clientLookupQuery(clientId) {
+  const value = safe(clientId);
+  return {
+    $or: [
+      { 'data.Client_Id': value },
+      { 'data.Client ID': value },
+      { 'data.CustomerID': value },
+      { 'data.clientId': value },
+      { legacyId: value }
+    ]
+  };
+}
+
+function normalizeLegacyDoc(doc) {
+  if (!doc) return null;
+  return { ...(doc.data || {}), _id: String(doc._id), _legacyId: doc.legacyId };
+}
+
+async function findEmployeeDoc(employeeId) {
+  return LegacyModels.User.collection.findOne(employeeLookupQuery(employeeId), {
+    projection: { data: 1, legacyId: 1 }
+  });
+}
+
+async function findClientDoc(clientId) {
+  return LegacyModels.Client.collection.findOne(clientLookupQuery(clientId), {
+    projection: { data: 1, legacyId: 1 }
+  });
 }
 
 function accessProfileForRole(roleValue) {
@@ -108,11 +153,7 @@ export function normalizeClient(row = {}) {
 
 export async function authenticateEmployeeFromMongo(employeeId, password) {
   assertMongoReady();
-  const users = await listMongoRows('User');
-  const user = users.find((item) => {
-    const candidateId = first(item, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'EmpID']);
-    return eq(candidateId, employeeId);
-  });
+  const user = normalizeLegacyDoc(await findEmployeeDoc(employeeId));
   if (!user || !isActive(user)) return null;
   const storedPassword = first(user, ['Password', 'password']);
   if (!(await passwordMatches(password, storedPassword))) return null;
@@ -124,22 +165,14 @@ export async function authenticateEmployeeFromMongo(employeeId, password) {
 
 export async function getEmployeeSessionFromMongo(employeeId) {
   assertMongoReady();
-  const users = await listMongoRows('User');
-  const user = users.find((item) => {
-    const candidateId = first(item, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'EmpID']);
-    return eq(candidateId, employeeId);
-  });
+  const user = normalizeLegacyDoc(await findEmployeeDoc(employeeId));
   if (!user || !isActive(user)) return null;
   return normalizeEmployee(user);
 }
 
 export async function authenticateClientFromMongo(clientId, password) {
   assertMongoReady();
-  const clients = await listMongoRows('Client');
-  const client = clients.find((item) => {
-    const candidateId = first(item, ['Client_Id', 'Client ID', 'CustomerID', 'clientId']);
-    return eq(candidateId, clientId);
-  });
+  const client = normalizeLegacyDoc(await findClientDoc(clientId));
   if (!client || !isActive(client)) return null;
   const storedPassword = first(client, ['Password', 'password']);
   if (!(await passwordMatches(password, storedPassword))) return null;
@@ -151,22 +184,14 @@ export async function authenticateClientFromMongo(clientId, password) {
 
 export async function getClientSessionFromMongo(clientId) {
   assertMongoReady();
-  const clients = await listMongoRows('Client');
-  const client = clients.find((item) => {
-    const candidateId = first(item, ['Client_Id', 'Client ID', 'CustomerID', 'clientId']);
-    return eq(candidateId, clientId);
-  });
+  const client = normalizeLegacyDoc(await findClientDoc(clientId));
   if (!client || !isActive(client)) return null;
   return normalizeClient(client);
 }
 
 export async function changeEmployeePasswordFromMongo(employeeId, currentPassword, nextPassword) {
   assertMongoReady();
-  const users = await listMongoRows('User');
-  const user = users.find((item) => {
-    const candidateId = first(item, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'EmpID']);
-    return eq(candidateId, employeeId);
-  });
+  const user = normalizeLegacyDoc(await findEmployeeDoc(employeeId));
   if (!user || !isActive(user)) return null;
 
   const storedPassword = first(user, ['Password', 'password']);
@@ -191,11 +216,7 @@ export function clientToken(client) {
 
 export async function updateEmployeeProfileFromMongo(employeeId, { avatarBase64, email, phone }) {
   assertMongoReady();
-  const users = await listMongoRows('User');
-  const user = users.find((item) => {
-    const candidateId = first(item, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'EmpID']);
-    return eq(candidateId, employeeId);
-  });
+  const user = normalizeLegacyDoc(await findEmployeeDoc(employeeId));
   if (!user || !isActive(user)) return null;
 
   const updateData = {};
@@ -219,11 +240,7 @@ export async function updateEmployeeProfileFromMongo(employeeId, { avatarBase64,
 
 export async function changeClientPasswordFromMongo(clientId, currentPassword, nextPassword) {
   assertMongoReady();
-  const clients = await listMongoRows('Client');
-  const client = clients.find((item) => {
-    const candidateId = first(item, ['Client_Id', 'Client ID', 'CustomerID', 'clientId']);
-    return eq(candidateId, clientId);
-  });
+  const client = normalizeLegacyDoc(await findClientDoc(clientId));
   if (!client || !isActive(client)) return null;
 
   const storedPassword = first(client, ['Password', 'password']);
@@ -236,11 +253,7 @@ export async function changeClientPasswordFromMongo(clientId, currentPassword, n
 
 export async function updateClientProfileFromMongo(clientId, { email, phone, avatarBase64 }) {
   assertMongoReady();
-  const clients = await listMongoRows('Client');
-  const client = clients.find((item) => {
-    const candidateId = first(item, ['Client_Id', 'Client ID', 'CustomerID', 'clientId']);
-    return eq(candidateId, clientId);
-  });
+  const client = normalizeLegacyDoc(await findClientDoc(clientId));
   if (!client || !isActive(client)) return null;
 
   const updateData = {};

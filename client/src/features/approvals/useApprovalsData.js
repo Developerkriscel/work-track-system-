@@ -8,104 +8,102 @@ import {
 } from '@/features/approvals/api';
 import { useAuth } from '@/features/auth/AuthProvider';
 
-function normalizeDate(value) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getDate()}`.padStart(2, '0');
-  return `${year}-${month}-${day}`;
+const DEFAULT_FILTERS = Object.freeze({
+  employee: '',
+  category: '',
+  startDate: '',
+  endDate: '',
+  search: '',
+  status: ''
+});
+
+const PAGE_SIZE = 20;
+
+function emptyTabFilters() {
+  return {
+    tickets: { ...DEFAULT_FILTERS },
+    leaves: { ...DEFAULT_FILTERS },
+    intimations: { ...DEFAULT_FILTERS },
+    attendance: { ...DEFAULT_FILTERS }
+  };
 }
 
-function includesFilter(value, query) {
-  if (!query) return true;
-  return String(value || '').toLowerCase().includes(query.toLowerCase());
-}
-
-function inDateRange(value, start, end) {
-  if (!start && !end) return true;
-  const normalized = normalizeDate(value);
-  if (!normalized) return false;
-  if (start && normalized < start) return false;
-  if (end && normalized > end) return false;
-  return true;
+function normalizeCounts(payload = {}) {
+  return {
+    tickets: Number(payload.tickets || 0),
+    leaves: Number(payload.leaves || 0),
+    intimations: Number(payload.intimations || 0),
+    attendance: Number(payload.attendance || 0)
+  };
 }
 
 function safeArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
-function sortApprovalRows(rows = [], getDateValue) {
-  return [...rows].sort((left, right) => {
-    const actionableDiff = Number(Boolean(right?._isActionableByMe)) - Number(Boolean(left?._isActionableByMe));
-    if (actionableDiff) return actionableDiff;
-
-    const rightDate = new Date(getDateValue(right) || right?.['Last Update Date'] || right?.Timestamp || 0).getTime();
-    const leftDate = new Date(getDateValue(left) || left?.['Last Update Date'] || left?.Timestamp || 0).getTime();
-    return rightDate - leftDate;
-  });
+function firstAvailableTab(counts = {}) {
+  return ['tickets', 'leaves', 'intimations', 'attendance'].find((tab) => Number(counts[tab] || 0) > 0) || 'tickets';
 }
 
 export function useApprovalsData() {
   const { user } = useAuth();
   const employeeId = user?.['Employee ID'] || '';
   const [activeTab, setActiveTab] = useState('tickets');
-  const [filters, setFilters] = useState({
-    tickets: { employee: '', category: '', startDate: '', endDate: '', search: '', status: '' },
-    leaves: { employee: '', startDate: '', endDate: '', search: '', status: '' },
-    intimations: { employee: '', startDate: '', endDate: '', search: '', status: '' },
-    attendance: { employee: '', startDate: '', endDate: '', search: '', status: '' }
-  });
-  const [state, setState] = useState({
-    loading: true,
-    error: null,
-    data: { tickets: [], leaves: [], intimations: [], attendance: [], users: [] }
-  });
+  const [filters, setFilters] = useState(() => emptyTabFilters());
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [rowsLoading, setRowsLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
   const [approvers, setApprovers] = useState([]);
+  const [counts, setCounts] = useState(() => normalizeCounts());
+  const [userOptions, setUserOptions] = useState([]);
+  const [ticketCategories, setTicketCategories] = useState([]);
+  const [rowsState, setRowsState] = useState({
+    tickets: [],
+    leaves: [],
+    intimations: [],
+    attendance: []
+  });
   const refreshRef = useRef(0);
+  const loadTokenRef = useRef(0);
 
   useEffect(() => {
     if (!employeeId) {
-      setState({
-        loading: false,
-        error: null,
-        data: { tickets: [], leaves: [], intimations: [], attendance: [], users: [] }
-      });
+      setSummaryLoading(false);
+      setRowsLoading(false);
+      setCounts(normalizeCounts());
+      setRowsState({ tickets: [], leaves: [], intimations: [], attendance: [] });
+      setUserOptions([]);
+      setTicketCategories([]);
       return undefined;
     }
 
     let alive = true;
-
-    async function loadApprovals() {
-      setState((current) => ({ ...current, loading: true, error: null }));
+    async function loadSummary() {
+      setSummaryLoading(true);
+      setError(null);
       try {
-        const payload = await fetchPendingApprovals(employeeId);
+        const payload = await fetchPendingApprovals(employeeId, { mode: 'summary' });
         if (!alive) return;
-        setState({
-          loading: false,
-          error: null,
-          data: {
-            tickets: safeArray(payload.tickets),
-            leaves: safeArray(payload.leaves),
-            intimations: safeArray(payload.intimations),
-            attendance: safeArray(payload.attendance),
-            users: safeArray(payload.users)
-          }
-        });
-      } catch (error) {
+        const nextCounts = normalizeCounts(payload.counts || {});
+        setCounts(nextCounts);
+        setUserOptions(safeArray(payload.users).sort((left, right) => String(left.name || '').localeCompare(String(right.name || ''))));
+        setTicketCategories(safeArray(payload.ticketCategories));
+        setActiveTab((current) => ((nextCounts[current] || 0) > 0 ? current : firstAvailableTab(nextCounts)));
+      } catch (loadError) {
         if (!alive) return;
-        setState({
-          loading: false,
-          error: error.message || 'Failed to load approvals.',
-          data: { tickets: [], leaves: [], intimations: [], attendance: [], users: [] }
-        });
+        setError(loadError.message || 'Failed to load approvals.');
+        setCounts(normalizeCounts());
+        setRowsState({ tickets: [], leaves: [], intimations: [], attendance: [] });
+        setUserOptions([]);
+        setTicketCategories([]);
+      } finally {
+        if (alive) setSummaryLoading(false);
       }
     }
 
-    loadApprovals();
+    loadSummary();
     return () => {
       alive = false;
     };
@@ -131,122 +129,69 @@ export function useApprovalsData() {
     };
   }, []);
 
-  const userOptions = useMemo(() => {
-    const users = state.data.users.map((user) => ({
-      id: user.id || user['Employee ID'],
-      name: user.name || user['Employee Name'] || user.id
-    }));
-    return users.sort((left, right) => String(left.name || '').localeCompare(String(right.name || '')));
-  }, [state.data.users]);
+  useEffect(() => {
+    if (!employeeId || summaryLoading) return undefined;
 
-  const ticketCategories = useMemo(() => {
-    return Array.from(
-      new Set(state.data.tickets.map((ticket) => ticket['Task Category'] || ticket.Category).filter(Boolean))
-    ).sort((left, right) => left.localeCompare(right));
-  }, [state.data.tickets]);
+    const token = loadTokenRef.current + 1;
+    loadTokenRef.current = token;
+    let cancelled = false;
 
-  const filteredTickets = useMemo(() => {
-    const filter = filters.tickets;
-    const rows = state.data.tickets.filter((ticket) => {
-      const employeeText = `${ticket['Employee Name'] || ''} ${ticket['Employee ID'] || ''}`;
-      const searchable = [
-        ticket['Ticket ID'],
-        ticket['Task Description'],
-        ticket.Remarks,
-        ticket.Name,
-        ticket['Client Name'],
-        ticket['Client ID']
-      ].join(' ');
-      const isPending = /pending approval|hr approved/i.test(ticket.Status);
-      const isStatusMatch = !filter.status || 
-        (filter.status === 'pending' && isPending) || 
-        (filter.status === 'approved' && /approved/i.test(ticket.Status) && !isPending) ||
-        (filter.status === 'rejected' && /reject|rework|closed/i.test(ticket.Status));
+    async function loadRowsProgressively() {
+      setRowsLoading(true);
+      setError(null);
+      setRowsState((current) => ({ ...current, [activeTab]: [] }));
 
-      return (
-        isStatusMatch &&
-        includesFilter(employeeText, filter.employee) &&
-        (!filter.category || (ticket['Task Category'] || ticket.Category) === filter.category) &&
-        inDateRange(ticket['Plan Date'], filter.startDate, filter.endDate) &&
-        includesFilter(searchable, filter.search)
-      );
-    });
-    return sortApprovalRows(rows, (item) => item?.['Plan Date']);
-  }, [filters.tickets, state.data.tickets]);
+      const activeFilters = filters[activeTab] || DEFAULT_FILTERS;
+      let page = 1;
+      let shouldContinue = true;
 
-  const filteredLeaves = useMemo(() => {
-    const filter = filters.leaves;
-    const rows = state.data.leaves.filter((item) => {
-      const employeeText = `${item['Employee Name'] || item.employeeName || ''} ${item['Employee ID'] || item.employeeId || ''}`;
-      const searchable = [item['Leave Type'] || item.leaveType || item.type, item.Reason || item.reason, item['Day Type'] || item.dayType].join(' ');
-      const isPending = /pending/i.test(item.Status);
-      const isStatusMatch = !filter.status || 
-        (filter.status === 'pending' && isPending) || 
-        (filter.status === 'approved' && /approved/i.test(item.Status)) ||
-        (filter.status === 'rejected' && /reject/i.test(item.Status));
+      try {
+        while (!cancelled && shouldContinue) {
+          const payload = await fetchPendingApprovals(employeeId, {
+            mode: 'rows',
+            tab: activeTab,
+            page,
+            pageSize: PAGE_SIZE,
+            filters: activeFilters
+          });
+          if (cancelled || loadTokenRef.current !== token) return;
 
-      return (
-        isStatusMatch &&
-        includesFilter(employeeText, filter.employee) &&
-        inDateRange(item['Start Date'] || item.startDate, filter.startDate, filter.endDate) &&
-        inDateRange(item['End Date'] || item.endDate, filter.startDate, filter.endDate) &&
-        includesFilter(searchable, filter.search)
-      );
-    });
-    return sortApprovalRows(rows, (item) => item?.['Start Date'] || item?.startDate);
-  }, [filters.leaves, state.data.leaves]);
+          const nextRows = safeArray(payload.rows);
+          const pagination = payload.pagination || {};
+          if (activeTab === 'tickets' && Array.isArray(payload.ticketCategories)) {
+            setTicketCategories(payload.ticketCategories);
+          }
+          setRowsState((current) => ({
+            ...current,
+            [activeTab]: page === 1 ? nextRows : [...current[activeTab], ...nextRows]
+          }));
 
-  const filteredIntimations = useMemo(() => {
-    const filter = filters.intimations;
-    const rows = state.data.intimations.filter((item) => {
-      const employeeText = `${item['Employee Name'] || item.employeeName || ''} ${item['Employee ID'] || item.employeeId || ''}`;
-      const searchable = [item['Intimation Type'] || item.type, item.Reason || item.reason].join(' ');
-      const isPending = /pending|submitted/i.test(item.Status);
-      const isStatusMatch = !filter.status || 
-        (filter.status === 'pending' && isPending) || 
-        (filter.status === 'approved' && /approved/i.test(item.Status)) ||
-        (filter.status === 'rejected' && /reject/i.test(item.Status));
+          shouldContinue = Boolean(pagination.hasMore);
+          page += 1;
 
-      return (
-        isStatusMatch &&
-        includesFilter(employeeText, filter.employee) &&
-        inDateRange(item['Intimation Date'] || item.Date || item.date, filter.startDate, filter.endDate) &&
-        includesFilter(searchable, filter.search)
-      );
-    });
-    return sortApprovalRows(rows, (item) => item?.['Intimation Date'] || item?.Date || item?.date);
-  }, [filters.intimations, state.data.intimations]);
+          if (shouldContinue) {
+            await new Promise((resolve) => {
+              setTimeout(resolve, 0);
+            });
+          }
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError.message || 'Failed to load approvals.');
+          setRowsState((current) => ({ ...current, [activeTab]: [] }));
+        }
+      } finally {
+        if (!cancelled && loadTokenRef.current === token) {
+          setRowsLoading(false);
+        }
+      }
+    }
 
-  const filteredAttendance = useMemo(() => {
-    const filter = filters.attendance;
-    const rows = state.data.attendance.filter((item) => {
-      const employeeText = `${item['Employee Name'] || ''} ${item['Employee ID'] || ''}`;
-      const searchable = [item.Status, item.Remarks, item['Admin Remarks']].join(' ');
-      const isPending = /pending|need approval/i.test(item.Status);
-      const isStatusMatch = !filter.status || 
-        (filter.status === 'pending' && isPending) || 
-        (filter.status === 'approved' && /present|approved/i.test(item.Status) && !isPending) ||
-        (filter.status === 'rejected' && /reject|absent/i.test(item.Status));
-
-      return (
-        isStatusMatch &&
-        includesFilter(employeeText, filter.employee) &&
-        inDateRange(item.Date || item.DateStr, filter.startDate, filter.endDate) &&
-        includesFilter(searchable, filter.search)
-      );
-    });
-    return sortApprovalRows(rows, (item) => item?.Date || item?.DateStr);
-  }, [filters.attendance, state.data.attendance]);
-
-  const counts = useMemo(
-    () => ({
-      tickets: state.data.tickets.filter((t) => t._isActionableByMe === true).length,
-      leaves: state.data.leaves.filter((l) => l._isActionableByMe === true).length,
-      intimations: state.data.intimations.filter((i) => i._isActionableByMe === true).length,
-      attendance: state.data.attendance.filter((a) => a._isActionableByMe === true).length
-    }),
-    [state.data]
-  );
+    loadRowsProgressively();
+    return () => {
+      cancelled = true;
+    };
+  }, [employeeId, activeTab, filters, summaryLoading]);
 
   function updateFilter(tab, patch) {
     setFilters((current) => ({
@@ -261,20 +206,14 @@ export function useApprovalsData() {
   function resetFilter(tab) {
     setFilters((current) => ({
       ...current,
-      [tab]: {
-        employee: '',
-        category: '',
-        startDate: '',
-        endDate: '',
-        search: '',
-        status: ''
-      }
+      [tab]: { ...DEFAULT_FILTERS }
     }));
   }
 
   function refresh() {
     refreshRef.current += 1;
-    setState((current) => ({ ...current }));
+    setRowsState({ tickets: [], leaves: [], intimations: [], attendance: [] });
+    setSummaryLoading(true);
   }
 
   function keepApprovedItemVisible(tab) {
@@ -301,8 +240,8 @@ export function useApprovalsData() {
       });
       if (result.success) refresh();
       return result;
-    } catch (error) {
-      const result = { success: false, message: error.message || 'Action failed.' };
+    } catch (actionError) {
+      const result = { success: false, message: actionError.message || 'Action failed.' };
       setMessage({ tone: 'danger', text: result.message });
       return result;
     } finally {
@@ -378,10 +317,13 @@ export function useApprovalsData() {
     currentUser: user || null,
     activeTab,
     setActiveTab,
-    loading: state.loading,
-    error: state.error, clearError: () => setState((current) => ({ ...current, error: null })),
+    loading: summaryLoading,
+    rowsLoading,
+    error,
+    clearError: () => setError(null),
     submitting,
-    message, clearMessage: () => setMessage(null),
+    message,
+    clearMessage: () => setMessage(null),
     userOptions,
     approvers,
     ticketCategories,
@@ -390,10 +332,10 @@ export function useApprovalsData() {
     updateFilter,
     resetFilter,
     refresh,
-    filteredTickets,
-    filteredLeaves,
-    filteredIntimations,
-    filteredAttendance,
+    filteredTickets: rowsState.tickets,
+    filteredLeaves: rowsState.leaves,
+    filteredIntimations: rowsState.intimations,
+    filteredAttendance: rowsState.attendance,
     approveItem,
     rejectItem,
     approveTicket,

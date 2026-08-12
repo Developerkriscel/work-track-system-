@@ -9,12 +9,13 @@ function toneForRow(row) {
   return 'info';
 }
 
-export function MyApprovalStatusTable({ rows, loading }) {
+export function MyApprovalStatusTable({ rows, loading, totalRows = 0, hasMoreRows = false }) {
+  const recordLabel = totalRows > 0 ? `${rows.length} / ${totalRows} records` : `${rows.length} records`;
   return (
     <article className="migration-panel migration-panel--full">
       <div className="migration-panel__row">
         <h2>Approval History</h2>
-        <StatusPill tone="info">{rows.length} records</StatusPill>
+        <StatusPill tone="info">{recordLabel}</StatusPill>
       </div>
 
       <div className="dashboard-table-wrap">
@@ -30,33 +31,40 @@ export function MyApprovalStatusTable({ rows, loading }) {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {loading && !rows.length ? (
               <tr>
                 <td colSpan="6" className="dashboard-table__empty">Loading approval history...</td>
               </tr>
             ) : rows.length ? (
-              rows.map((row) => (
-                <tr key={row.id}>
-                  <td data-label="Type">
-                    <span className={`my-approval-status__type-chip my-approval-status__type-chip--${String(row.Type || '').toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'default'}`}>
-                      {row.Type || '-'}
-                    </span>
-                  </td>
-                  <td data-label="Category / SubType" className="my-approval-status__subtype">{row.SubType || '-'}</td>
-                  <td data-label="Date(s)" className="my-approval-status__date">{row.Date || '-'}</td>
-                  <td data-label="Details / Reason" className="my-approval-status__reason">{row.Reason || '-'}</td>
-                  <td data-label="Status">
-                    <StatusPill tone={toneForRow(row)}>{row.Status || '-'}</StatusPill>
-                  </td>
-                  <td data-label="Admin Remarks">
-                    {row.Remarks && row.Remarks !== '-' ? (
-                      <div className="my-approval-status__remarks">{row.Remarks}</div>
-                    ) : (
-                      <span className="my-approval-status__empty-remarks">No Remarks</span>
-                    )}
-                  </td>
-                </tr>
-              ))
+              <>
+                {rows.map((row) => (
+                  <tr key={row.id}>
+                    <td data-label="Type">
+                      <span className={`my-approval-status__type-chip my-approval-status__type-chip--${String(row.Type || '').toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'default'}`}>
+                        {row.Type || '-'}
+                      </span>
+                    </td>
+                    <td data-label="Category / SubType" className="my-approval-status__subtype">{row.SubType || '-'}</td>
+                    <td data-label="Date(s)" className="my-approval-status__date">{row.Date || '-'}</td>
+                    <td data-label="Details / Reason" className="my-approval-status__reason">{row.Reason || '-'}</td>
+                    <td data-label="Status">
+                      <StatusPill tone={toneForRow(row)}>{row.Status || '-'}</StatusPill>
+                    </td>
+                    <td data-label="Admin Remarks">
+                      {row.Remarks && row.Remarks !== '-' ? (
+                        <div className="my-approval-status__remarks">{row.Remarks}</div>
+                      ) : (
+                        <span className="my-approval-status__empty-remarks">No Remarks</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {loading && hasMoreRows ? (
+                  <tr>
+                    <td colSpan="6" className="dashboard-table__empty">Loading more approval records...</td>
+                  </tr>
+                ) : null}
+              </>
             ) : (
               <tr>
                 <td colSpan="6" className="dashboard-table__empty">No approval status records found for the current filter.</td>

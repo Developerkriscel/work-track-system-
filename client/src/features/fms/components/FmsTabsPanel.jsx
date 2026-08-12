@@ -16,7 +16,8 @@ export function FmsTabsPanel({ role, tab, tabCounts, teamTabsVisible, onTabChang
               className={`attendance-tab${tab === item.id ? ' attendance-tab--active' : ''}`}
               onClick={() => onTabChange(item.id)}
             >
-              {item.label} <span className="fms-tab-count">{tabCounts[item.id] || 0}</span>
+              {item.label}
+              {item.showCount === false ? null : <span className="fms-tab-count">{tabCounts[item.id] || 0}</span>}
             </button>
           ))}
       </div>

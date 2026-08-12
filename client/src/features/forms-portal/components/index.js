@@ -11,3 +11,4 @@ export { FormsPortalHeader } from './FormsPortalHeader';
 export { FormsPortalFilterPanel } from './FormsPortalFilterPanel';
 export { FormsPortalTable } from './FormsPortalTable';
 export { FormsPortalEditor } from './FormsPortalEditor';
+export { FormsPortalWorkspace } from './FormsPortalWorkspace';

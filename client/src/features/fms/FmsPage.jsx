@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { StatusPill } from '@/components/common/StatusPill';
+import { FormsPortalWorkspace } from '@/features/forms-portal/components/FormsPortalWorkspace';
 import { FmsCreateDialog } from '@/features/fms/components/FmsCreateDialog';
 import { FmsFilterPanel } from '@/features/fms/components/FmsFilterPanel';
 import { FmsCompletionDialog } from '@/features/fms/components/FmsCompletionDialog';
@@ -21,6 +22,8 @@ export function FmsPage() {
     setFilters,
     tasks,
     meta,
+    pagination,
+    setPage,
     teamTabsVisible,
     employeeOptions,
     categoryOptions,
@@ -36,6 +39,7 @@ export function FmsPage() {
   const clearMessage = () => setMessage(null);
   const [completionTask, setCompletionTask] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const formsTabActive = tab === 'fms-forms';
 
   const handleComplete = async (task) => {
     setCompletionTask(task);
@@ -61,11 +65,11 @@ export function FmsPage() {
   };
 
   return (
-    <section className="page-card">
+    <section className="page-card fms-page">
       <FmsHeader
         currentUser={currentUser}
         employeeId={employeeId}
-        canCreateFms={canCreateFms}
+        canCreateFms={canCreateFms && !formsTabActive}
         onCreate={() => setCreateOpen(true)}
       />
 
@@ -77,37 +81,49 @@ export function FmsPage() {
         onTabChange={setTab}
       />
 
-      <FmsFilterPanel
-        filters={filters}
-        employeeOptions={employeeOptions}
-        categoryOptions={categoryOptions}
-        onFilterChange={(patch) => setFilters((current) => ({ ...current, ...patch }))}
-        onReset={() => setFilters({ emp: '', name: '', date: '', search: '' })}
-        onRefresh={reload}
-      />
+      {formsTabActive ? (
+        <FormsPortalWorkspace
+          showHeader={false}
+          headerTitle="FMS Form"
+          scopeDepartment="FMS"
+          defaultDepartment="FMS"
+          fixedDepartment="FMS"
+        />
+      ) : (
+        <>
+          <FmsFilterPanel
+            filters={filters}
+            employeeOptions={employeeOptions}
+            categoryOptions={categoryOptions}
+            onFilterChange={(patch) => setFilters((current) => ({ ...current, ...patch }))}
+            onReset={() => setFilters({ emp: '', name: '', date: '', search: '' })}
+            onRefresh={reload}
+          />
 
-      {message ? (
-        <div className={`dashboard-banner${message.tone === 'danger' ? ' dashboard-banner--error' : ''}`}>
-          <StatusPill tone={message.tone === 'danger' ? 'danger' : 'success'}>
-            {message.tone === 'danger' ? 'Issue' : 'Done'}
-          </StatusPill>
-          <span>{message.text}</span>
-        
-          <button type="button" className="dashboard-banner__close" onClick={clearMessage}>OK</button>
-        </div>
-      ) : null}
+          {message ? (
+            <div className={`dashboard-banner${message.tone === 'danger' ? ' dashboard-banner--error' : ''}`}>
+              <StatusPill tone={message.tone === 'danger' ? 'danger' : 'success'}>
+                {message.tone === 'danger' ? 'Issue' : 'Done'}
+              </StatusPill>
+              <span>{message.text}</span>
+            
+              <button type="button" className="dashboard-banner__close" onClick={clearMessage}>OK</button>
+            </div>
+          ) : null}
 
-      {error ? <div className="dashboard-banner dashboard-banner--error"><span>{error}</span><button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button></div> : null}
+          {error ? <div className="dashboard-banner dashboard-banner--error"><span>{error}</span><button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button></div> : null}
 
-      <article className="migration-panel migration-panel--full">
-        <div className="migration-panel__row">
-          <h2>FMS Task Table</h2>
-          <StatusPill tone={loading ? 'neutral' : 'info'}>
-            {loading ? 'Refreshing' : `${tasks.length} tasks`}
-          </StatusPill>
-        </div>
-        <FmsTaskTable tasks={tasks} submitting={submitting} onComplete={handleComplete} />
-      </article>
+          <article className="migration-panel migration-panel--full">
+            <div className="migration-panel__row">
+              <h2>FMS Task Table</h2>
+              <StatusPill tone={loading ? 'neutral' : 'info'}>
+                {loading ? 'Refreshing' : `${pagination?.total ?? tasks.length} tasks`}
+              </StatusPill>
+            </div>
+            <FmsTaskTable tasks={tasks} pagination={pagination} submitting={submitting} onPageChange={setPage} onComplete={handleComplete} />
+          </article>
+        </>
+      )}
       {completionTask ? <FmsCompletionDialog task={completionTask} saving={submitting} onClose={() => setCompletionTask(null)} onSubmit={handleCompletionSubmit} /> : null}
       {createOpen ? (
         <FmsCreateDialog

@@ -6,6 +6,7 @@ export function FormsPortalTable({
   allFormsCount,
   isAdmin,
   submitting,
+  onOpenForm,
   onOpenEdit,
   onRequestRemove
 }) {
@@ -47,21 +48,20 @@ export function FormsPortalTable({
                     <td data-label="For / Purpose" className="approval-table__copy">{form.For || '-'}</td>
                     <td data-label="Form Action">
                       <div className="forms-action-stack">
-                        <a
-                          href={form['Form link'] || '#'}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          type="button"
                           className="attendance-cta attendance-cta--purple forms-open-link"
+                          onClick={() => onOpenForm?.(form)}
                         >
                           Open Form
-                        </a>
+                        </button>
                         {isAdmin && <StatusPill tone={summary.tone}>{summary.label}</StatusPill>}
                       </div>
                     </td>
                     {isAdmin ? (
                       <td data-label="Action">
                         <div className="approval-action-stack form-portal-action-stack">
-                          <button type="button" className="ticket-action-btn ticket-action-btn--done" onClick={() => onOpenEdit(form)}>
+                          <button type="button" className="ticket-action-btn ticket-action-btn--done" title="Manage Access" aria-label="Manage Access" onClick={() => onOpenEdit(form)}>
                             Edit
                           </button>
                           <button

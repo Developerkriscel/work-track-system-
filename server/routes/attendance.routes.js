@@ -4,6 +4,7 @@ import {
   getAttendanceLocationPolicyForUser,
   enforceAttendanceGate,
   getAttendanceForUser,
+  getTeamAttendanceCalendarForReviewer,
   recordAttendance,
   getTeamAttendanceForReviewer,
   submitIntimation,
@@ -33,6 +34,21 @@ router.post('/record', async (req, res) => {
 router.post('/team/list', async (req, res) => {
   try {
     const result = await getTeamAttendanceForReviewer(req.auth.sub, req.body.startDate, req.body.endDate);
+    if (!result.success) return res.status(403).json(result);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/team/calendar', async (req, res) => {
+  try {
+    const result = await getTeamAttendanceCalendarForReviewer(
+      req.auth.sub,
+      req.body.employeeId,
+      req.body.startDate,
+      req.body.endDate
+    );
     if (!result.success) return res.status(403).json(result);
     res.json(result);
   } catch (error) {

@@ -23,7 +23,7 @@ function today() {
 function nowIso() {
   return referenceNow().toISOString();
 }
-
+      
 function normalizedDate(value) {
   if (!value) return today();
   const raw = safe(value);

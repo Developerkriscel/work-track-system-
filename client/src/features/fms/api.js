@@ -1,10 +1,11 @@
 import { httpClient } from '@/lib/api/httpClient';
 
-export async function fetchFmsTasks(employeeId) {
+export async function fetchFmsTasks(employeeId, options = {}) {
   return httpClient('/api/fms/tasks', {
     method: 'POST',
     body: JSON.stringify({
-      employeeId
+      employeeId,
+      ...options
     })
   });
 }

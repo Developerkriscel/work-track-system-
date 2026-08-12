@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AppModal } from '@/components/modals';
+import { fmsFormLinkOptions } from '@/features/fms/services/fmsFormLinks';
 
 function todayYmd() {
   return new Date().toISOString().slice(0, 10);
@@ -190,12 +191,17 @@ export function FmsCreateDialog({
 
         <label className="dashboard-control forms-editor__full">
           <span>Form Link</span>
-          <input
-            type="url"
+          <select
             value={form.formLink}
             onChange={(event) => patch({ formLink: event.target.value })}
-            placeholder="https://..."
-          />
+          >
+            <option value="">Select form link</option>
+            {fmsFormLinkOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </label>
 
         <label className="dashboard-control forms-editor__full">

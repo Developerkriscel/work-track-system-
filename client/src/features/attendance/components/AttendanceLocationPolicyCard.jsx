@@ -11,6 +11,8 @@ export function AttendanceLocationPolicyCard({ policy, canEdit, loading, saving,
     locations: [{ officeName: '', latitude: '', longitude: '', radiusMeters: 200 }],
     enabled: true
   });
+  const [geoMessage, setGeoMessage] = useState('');
+  const [geoLoadingIndex, setGeoLoadingIndex] = useState(null);
 
   useEffect(() => {
     let locs = policy?.locations || [];
@@ -44,18 +46,39 @@ export function AttendanceLocationPolicyCard({ policy, canEdit, loading, saving,
   }, [form.enabled, form.locations]);
 
   const useCurrentLocation = (index) => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition((position) => {
-      setForm((current) => {
-        const updatedLocs = [...current.locations];
-        updatedLocs[index] = {
-          ...updatedLocs[index],
-          latitude: String(position.coords.latitude),
-          longitude: String(position.coords.longitude)
-        };
-        return { ...current, locations: updatedLocs };
-      });
-    });
+    setGeoMessage('');
+    if (!navigator.geolocation) {
+      setGeoMessage('Current location is not supported by this browser.');
+      return;
+    }
+
+    setGeoLoadingIndex(index);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setForm((current) => {
+          const updatedLocs = [...current.locations];
+          updatedLocs[index] = {
+            ...updatedLocs[index],
+            latitude: String(position.coords.latitude),
+            longitude: String(position.coords.longitude)
+          };
+          return { ...current, locations: updatedLocs };
+        });
+        setGeoLoadingIndex(null);
+      },
+      (error) => {
+        const message = error?.code === 1
+          ? 'Location access is blocked. Allow permission and try again.'
+          : error?.code === 2
+            ? 'Location is unavailable right now. Try again after moving to a better signal area.'
+            : error?.code === 3
+              ? 'Location request timed out. Please try again.'
+              : 'Unable to capture your current location.';
+        setGeoLoadingIndex(null);
+        setGeoMessage(message);
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    );
   };
 
   const addLocation = () => {
@@ -161,11 +184,22 @@ export function AttendanceLocationPolicyCard({ policy, canEdit, loading, saving,
             </div>
             
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
-              <button type="button" className="attendance-cta attendance-cta--gray" style={{ padding: '8px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => useCurrentLocation(index)}>
+              <button
+                type="button"
+                className="attendance-cta attendance-cta--gray"
+                style={{ padding: '8px 14px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                onClick={() => useCurrentLocation(index)}
+                disabled={geoLoadingIndex === index}
+              >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
-                Use Current Location
+                {geoLoadingIndex === index ? 'Capturing...' : 'Use Current Location'}
               </button>
             </div>
+            {geoMessage ? (
+              <p style={{ margin: '12px 0 0', fontSize: '13px', color: '#b91c1c' }} aria-live="polite">
+                {geoMessage}
+              </p>
+            ) : null}
           </div>
         ))}
       </div>

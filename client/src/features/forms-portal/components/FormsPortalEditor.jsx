@@ -4,6 +4,7 @@ export function FormsPortalEditor({
   editor,
   assignableUsers,
   submitting,
+  fixedDepartment = '',
   onUpdate,
   onClose,
   onSubmit
@@ -30,8 +31,9 @@ export function FormsPortalEditor({
         <label className="dashboard-control">
           <span>Department</span>
           <input
-            value={editor.form.Department || ''}
+            value={fixedDepartment || editor.form.Department || ''}
             onChange={(event) => onUpdate({ Department: event.target.value })}
+            disabled={Boolean(fixedDepartment)}
             placeholder="e.g. HR, Sales, Development"
           />
         </label>

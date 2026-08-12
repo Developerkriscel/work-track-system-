@@ -8,6 +8,37 @@ const ok = (payload = {}) => ({ success: true, ...payload });
 const fail = (message) => ({ success: false, message });
 const isPlaceholderUrl = (value) => /(^|\/\/)(www\.)?example\.com(\/|$)/i.test(safe(value));
 
+const defaultFmsForms = [
+  {
+    'Form ID': 'FORM_FMS_SERVICE',
+    Department: 'FMS',
+    'Sheet name': 'Service FMS',
+    For: 'Service FMS',
+    'Form link': 'https://docs.google.com/forms/d/e/1FAIpQLSepmNI6YLqY2NDe6H86LD3oY3JC9AKPwCjcJ37gOKdj0ie4tA/viewform'
+  },
+  {
+    'Form ID': 'FORM_FMS_FEEDBACK',
+    Department: 'FMS',
+    'Sheet name': 'Feedback FMS',
+    For: 'Feedback FMS',
+    'Form link': 'https://docs.google.com/forms/d/e/1FAIpQLSd8lt-G--uDdj3K6JvhaXYxdIDtuKeicQsMHR8bVYNl6KL17Q/viewform'
+  },
+  {
+    'Form ID': 'FORM_FMS_CLIENT_FOLLOW_UP',
+    Department: 'FMS',
+    'Sheet name': 'Client Follow-up FMS',
+    For: 'Client Follow-up FMS',
+    'Form link': 'https://docs.google.com/forms/d/e/1FAIpQLSfq0qd7WJzpj0MJf5C6mzTyPB1SZMGM1FFtjef_Nx37HpsJzw/viewform'
+  },
+  {
+    'Form ID': 'FORM_FMS_CAMPAIGN_SOCIAL',
+    Department: 'FMS',
+    'Sheet name': 'Campaign / Social FMS',
+    For: 'Campaign / Social FMS',
+    'Form link': 'https://docs.google.com/forms/d/e/1FAIpQLSeEkyaN67ilbBSEJh-tyBTsxreAq9OSuWf-DCSFANSL8Xv85A/viewform'
+  }
+];
+
 function formPortalIdForSheet(sheetName) {
   const cleaned = safe(sheetName).toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   return cleaned ? `FORM_${cleaned}` : `FORM_${Date.now()}`;
@@ -47,13 +78,32 @@ function normalizeFormPortalPayload(formData = {}) {
   };
 }
 
+async function ensureDefaultFmsForms() {
+  const forms = await listRows('FormsPortal');
+  const existingSheetNames = new Set(
+    forms.map((form) => safe(first(form, ['Sheet name', 'Sheet Name', 'sheetName'])).toLowerCase()).filter(Boolean)
+  );
+
+  for (const form of defaultFmsForms) {
+    const sheetName = safe(form['Sheet name']);
+    if (!sheetName || existingSheetNames.has(sheetName.toLowerCase())) continue;
+    await upsertRow('FormsPortal', 'Sheet name', sheetName, {
+      ...form,
+      'Visibility Type': 'SELECTED_USERS',
+      'Visible Users': '',
+      Viewer: '',
+      Status: 'Active'
+    });
+  }
+}
+
 export async function canManageFormsPortal(employeeId = '') {
   const cleanEmpId = safe(employeeId).toUpperCase();
   if (!cleanEmpId) return false;
   const users = await listRows('User');
   const user = users.find((item) => eq(first(item, ['Employee ID', 'User ID', 'employeeId']), cleanEmpId));
   const role = safe(first(user, ['Role', 'role']));
-  return cleanEmpId === 'MS101' || role === 'Super Admin';
+  return cleanEmpId === 'MS101' || /^(super admin|admin)$/i.test(role);
 }
 
 function serializeForm(form) {
@@ -73,8 +123,9 @@ export async function getFormsForEmployee(employeeId = '') {
   const cleanEmpId = safe(employeeId).toUpperCase();
   if (!cleanEmpId) return ok({ data: [] });
 
-  const forms = await listRows('FormsPortal');
   const isFormsAdmin = await canManageFormsPortal(cleanEmpId);
+  if (isFormsAdmin) await ensureDefaultFmsForms();
+  const forms = await listRows('FormsPortal');
   const visibleForms = forms
     .filter((form) => !eq(form.Status, 'Inactive'))
     .filter((form) => {
@@ -90,7 +141,7 @@ export async function getFormsForEmployee(employeeId = '') {
 }
 
 export async function getFormsAssignableUsers(adminId = '') {
-  if (!(await canManageFormsPortal(adminId))) return fail('Access Denied: Only Super Admin can manage form access.');
+  if (!(await canManageFormsPortal(adminId))) return fail('Access Denied: Only Admin or Super Admin can manage form access.');
 
   const users = await listRows('User');
   return ok({
@@ -109,7 +160,7 @@ export async function getFormsAssignableUsers(adminId = '') {
 }
 
 export async function saveForm(formData = {}, adminId = '') {
-  if (!(await canManageFormsPortal(adminId))) return fail('Access Denied: Only Super Admin has rights to update Forms.');
+  if (!(await canManageFormsPortal(adminId))) return fail('Access Denied: Only Admin or Super Admin has rights to update Forms.');
 
   const sheetName = first(formData, ['Sheet name', 'sheetName', 'Category'], `FORM_${Date.now()}`);
   const formId = first(formData, ['Form ID', 'ID'], formPortalIdForSheet(sheetName));
@@ -123,7 +174,7 @@ export async function saveForm(formData = {}, adminId = '') {
 }
 
 export async function addForm(formData = {}, adminId = '') {
-  if (!(await canManageFormsPortal(adminId))) return fail('Access Denied: Only Super Admin can add forms.');
+  if (!(await canManageFormsPortal(adminId))) return fail('Access Denied: Only Admin or Super Admin can add forms.');
 
   const sheetName = first(formData, ['Sheet name', 'sheetName', 'Category'], `FORM_${Date.now()}`);
   const normalized = normalizeFormPortalPayload(formData);
@@ -137,7 +188,7 @@ export async function addForm(formData = {}, adminId = '') {
 }
 
 export async function deleteForm(sheetName, adminId = '') {
-  if (!(await canManageFormsPortal(adminId))) return fail('Access Denied: Only Super Admin can delete records.');
+  if (!(await canManageFormsPortal(adminId))) return fail('Access Denied: Only Admin or Super Admin can delete records.');
 
   const forms = await listRows('FormsPortal');
   const target = forms.find((form) => eq(first(form, ['Sheet name', 'Sheet Name', 'sheetName']), sheetName));

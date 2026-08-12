@@ -1,6 +1,14 @@
-import { listRows } from './legacyStore.service.js';
+import { LegacyModels } from '../models/legacyModels.js';
+import { listRows, registerStoreMutationListener, stripInternalMetadata } from './legacyStore.service.js';
 
 const closedTerms = ['closed', 'approved', 'cancelled', 'completed', 'done', 'resolved', 'paid'];
+const DASHBOARD_CACHE_TTL_MS = Number(process.env.WORKTRACK_DASHBOARD_CACHE_TTL_MS || 10000);
+const DASHBOARD_SNAPSHOT_TTL_MS = Number(process.env.WORKTRACK_DASHBOARD_SNAPSHOT_TTL_MS || 60000);
+const dashboardCache = new Map();
+const dashboardSnapshotCache = new Map();
+const dashboardSnapshotRefreshes = new Map();
+const dashboardPrimeJobs = new Map();
+let dashboardCacheVersion = 0;
 const safe = (value = '') => String(value ?? '').trim();
 const eq = (left, right) => safe(left).toLowerCase() === safe(right).toLowerCase();
 const num = (value) => Number(String(value ?? 0).replace(/[^0-9.-]/g, '')) || 0;
@@ -9,6 +17,22 @@ const isClosedStatus = (status = '') => closedTerms.some((term) => safe(status).
 const isUserCompletedStatus = (status) => isClosedStatus(status) || /pending approval/i.test(safe(status));
 const isDashboardActionableStatus = (status) => !isClosedStatus(status) && !/pending approval/i.test(safe(status));
 const ok = (payload = {}) => ({ success: true, ...payload });
+const splitIds = (value) => safe(value).split(/[,;|]/).map((item) => item.trim().toLowerCase()).filter(Boolean);
+const userId = (row = {}) => first(row, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'EmpID']);
+const userName = (row = {}) => first(row, ['Employee Name', 'Name', 'name'], userId(row));
+const userRole = (row = {}) => safe(first(row, ['Role', 'role', 'Designation'], 'User')).toLowerCase();
+const teamDashboardRoles = new Set(['super admin', 'admin', 'hr', 'manager']);
+const DEFAULT_DASHBOARD_TASKS_PAGE_SIZE = 20;
+
+function clearDashboardCaches() {
+  dashboardCacheVersion += 1;
+  dashboardCache.clear();
+  dashboardSnapshotCache.clear();
+}
+
+registerStoreMutationListener(() => {
+  clearDashboardCaches();
+});
 
 function parseReferenceNow(value) {
   if (!value) return new Date();
@@ -116,6 +140,86 @@ function durationToMinutes(value) {
   return num(raw);
 }
 
+function buildEmployeeQuery(employeeIds = []) {
+  const ids = employeeIds.map((value) => safe(value)).filter(Boolean);
+  if (!ids.length) return { $or: [{ legacyId: '__no_match__' }] };
+  return {
+    $or: [
+      { 'data.Employee ID': { $in: ids } },
+      { 'data.User ID': { $in: ids } },
+      { 'data.EMP Code': { $in: ids } },
+      { 'data.employeeId': { $in: ids } },
+      { 'data.EmpID': { $in: ids } },
+      { legacyId: { $in: ids } }
+    ]
+  };
+}
+
+function selfTicketQuery(employeeId = '') {
+  const value = safe(employeeId);
+  return {
+    $or: [
+      { 'data.Employee ID': value },
+      { 'data.EmpID': value },
+      { 'data.employeeId': value },
+      { 'data.User ID': value },
+      { 'data.Task Approver': value }
+    ]
+  };
+}
+
+function escapeRegex(value = '') {
+  return safe(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function csvContainsQuery(field, value) {
+  const normalized = escapeRegex(value);
+  return { [field]: { $regex: `(^|\\s*[,;|]\\s*)${normalized}(\\s*[,;|]\\s*|$)`, $options: 'i' } };
+}
+
+function scopedDateQuery(fields = [], start, end) {
+  if (!start || !end || !fields.length) return null;
+  const inclusiveEnd = `${end}T23:59:59.999Z`;
+  return {
+    $or: fields.map((field) => ({
+      [field]: { $gte: start, $lte: inclusiveEnd }
+    }))
+  };
+}
+
+function combineAndQueries(...clauses) {
+  return {
+    $and: clauses.filter(Boolean)
+  };
+}
+
+function teamUsersQuery(employeeId = '') {
+  const value = safe(employeeId);
+  return {
+    $or: [
+      csvContainsQuery('data.Manager ID', value),
+      csvContainsQuery('data.Manager', value),
+      csvContainsQuery('data.managerId', value),
+      csvContainsQuery('data.Reporting Manager', value),
+      csvContainsQuery('data.Task Approver', value),
+      csvContainsQuery('data.Approver ID', value),
+      csvContainsQuery('data.taskApprover', value)
+    ]
+  };
+}
+
+function teamMemberRows(users = [], employeeId = '') {
+  const target = safe(employeeId).toLowerCase();
+  return users.filter((user) => {
+    if (!eq(first(user, ['Status', 'status'], 'Active'), 'Active')) return false;
+    const memberId = safe(userId(user)).toLowerCase();
+    if (!memberId || memberId === target) return false;
+    const managers = splitIds(first(user, ['Manager ID', 'Manager', 'managerId', 'Reporting Manager']));
+    const approvers = splitIds(first(user, ['Task Approver', 'Approver ID', 'taskApprover']));
+    return managers.includes(target) || approvers.includes(target);
+  });
+}
+
 function taskOwnerName(task, users = []) {
   const explicit = first(task, ['Employee Name', 'User', 'Who', 'Assigned To']);
   if (explicit) return explicit;
@@ -124,22 +228,12 @@ function taskOwnerName(task, users = []) {
   return user?.['Employee Name'] || empId || 'Unassigned';
 }
 
-function clientName(task, clients = []) {
-  const explicit = first(task, ['Client', 'Client Name', 'CustomerName']);
-  if (explicit) return explicit;
-  const clientId = first(task, ['Client_Id', 'Client ID', 'CustomerID']);
-  const client = clients.find((item) => eq(item.Client_Id, clientId));
-  return client?.['Client Name'] || 'Internal / General';
-}
-
-function normalizeTicketForDashboard(ticket, users, clients) {
+function normalizeTicketForDashboard(ticket, users) {
   const status = first(ticket, ['Status'], 'Open');
   const date = first(ticket, ['Plan Date', 'Date', 'Timestamp', 'Due Date'], today());
   return {
-    ...ticket,
     ID: first(ticket, ['Ticket ID', 'Task ID', 'ID']),
     Type: 'Ticket',
-    Client: clientName(ticket, clients),
     User: taskOwnerName(ticket, users),
     Status: status,
     Date: normalizedDate(date),
@@ -149,14 +243,12 @@ function normalizeTicketForDashboard(ticket, users, clients) {
   };
 }
 
-function normalizeFmsForDashboard(task, users, clients) {
+function normalizeFmsForDashboard(task, users) {
   const status = first(task, ['Status'], first(task, ['Done Date', 'actualDate']) ? 'Completed' : 'Pending');
   const date = first(task, ['Plan Date', 'Date'], today());
   return {
-    ...task,
     ID: first(task, ['Task ID', 'ID', 'rowId']),
     Type: 'FMS',
-    Client: clientName(task, clients),
     User: taskOwnerName(task, users),
     Status: status,
     Date: normalizedDate(date),
@@ -169,10 +261,8 @@ function normalizeFmsForDashboard(task, users, clients) {
 function normalizeTodoForDashboard(todo, users) {
   const date = first(todo, ['Due Date', 'Date'], today());
   return {
-    ...todo,
     ID: first(todo, ['Task ID', 'TodoID', 'ID']),
     Type: 'To-Do',
-    Client: 'Internal / General',
     User: taskOwnerName(todo, users),
     Status: first(todo, ['Status'], 'Pending'),
     Date: normalizedDate(date),
@@ -181,44 +271,90 @@ function normalizeTodoForDashboard(todo, users) {
   };
 }
 
-async function getRows() {
-  const [users, clients, tickets, expenses, fms, todos, leaves, ticketHistory] = await Promise.all([
-    listRows('User'),
-    listRows('Client'),
-    listRows('Ticket'),
-    listRows('Expense'),
-    listRows('FmsTask'),
-    listRows('Todo'),
-    listRows('Leave'),
-    listRows('TicketHistory')
-  ]);
-  return { users, clients, tickets, expenses, fms, todos, leaves, ticketHistory };
+function fromLegacyDocs(docs = []) {
+  return docs.map((doc) => ({
+    ...stripInternalMetadata(doc.data || {}),
+    _id: String(doc._id),
+    _legacyId: doc.legacyId
+  }));
 }
 
-export async function getDashboardData(employeeId, filterRange) {
-  const data = await getRows();
-  const user = data.users.find((item) => eq(item['Employee ID'], employeeId));
-  const allMyTickets = data.tickets
-    .filter((ticket) => eq(ticket['Employee ID'], employeeId) || eq(ticket['Task Approver'], employeeId))
-    .map((ticket) => normalizeTicketForDashboard(ticket, data.users, data.clients));
-  const allMyFms = data.fms
-    .filter((task) => eq(task['Employee ID'], employeeId) || eq(task.empId, employeeId))
-    .map((task) => normalizeFmsForDashboard(task, data.users, data.clients));
-  const allMyTodos = data.todos
-    .filter((todo) => eq(todo['Employee ID'], employeeId))
-    .map((todo) => normalizeTodoForDashboard(todo, data.users));
+async function listDataRows(modelName, query = {}, projection = { data: 1, legacyId: 1 }) {
+  const docs = await LegacyModels[modelName].collection.find(query, { projection }).toArray();
+  return fromLegacyDocs(docs);
+}
 
-  const { start, end } = rangeForFilter(filterRange);
-  const myTickets = allMyTickets.filter((task) => dateInRange(task.Date, start, end));
-  const myFms = allMyFms.filter((task) => dateInRange(task.Date, start, end));
-  const myTodos = allMyTodos.filter((task) => dateInRange(task.Date, start, end));
+async function findDataRow(modelName, query = {}, projection = { data: 1, legacyId: 1 }) {
+  const doc = await LegacyModels[modelName].collection.findOne(query, { projection });
+  return doc ? fromLegacyDocs([doc])[0] : null;
+}
 
-  const allTasks = [...allMyTickets, ...allMyFms, ...allMyTodos];
-  const dashboardTickets = myTickets;
-  const dashboardFms = myFms;
-  const dashboardTodos = myTodos;
-  const dashboardTasks = [...dashboardTickets, ...dashboardFms, ...dashboardTodos];
-  const todaysTasks = dashboardTasks;
+function sortDashboardTasks(rows = []) {
+  return [...rows].sort((left, right) => {
+    const leftDate = normalizedDate(left.Date || left['Plan Date'] || '');
+    const rightDate = normalizedDate(right.Date || right['Plan Date'] || '');
+    if (leftDate !== rightDate) return rightDate.localeCompare(leftDate);
+    const leftStatus = safe(left.Status);
+    const rightStatus = safe(right.Status);
+    if (leftStatus !== rightStatus) return leftStatus.localeCompare(rightStatus);
+    return safe(left.ID).localeCompare(safe(right.ID));
+  });
+}
+
+function paginateDashboardTasks(rows = [], page = 1, pageSize = DEFAULT_DASHBOARD_TASKS_PAGE_SIZE) {
+  const normalizedPage = Math.max(1, Number(page || 1) || 1);
+  const normalizedPageSize = Math.min(50, Math.max(10, Number(pageSize || DEFAULT_DASHBOARD_TASKS_PAGE_SIZE) || DEFAULT_DASHBOARD_TASKS_PAGE_SIZE));
+  const total = rows.length;
+  const pageCount = Math.max(1, Math.ceil(total / normalizedPageSize));
+  const safePage = Math.min(normalizedPage, pageCount);
+  const startIndex = (safePage - 1) * normalizedPageSize;
+  return {
+    rows: rows.slice(startIndex, startIndex + normalizedPageSize),
+    pagination: {
+      page: safePage,
+      pageSize: normalizedPageSize,
+      total,
+      pageCount
+    }
+  };
+}
+
+function buildDashboardSnapshotKey(employeeId = '', filterRange = 'today', viewMode = 'my') {
+  return `${safe(employeeId).toLowerCase()}::${safe(filterRange || 'today').toLowerCase()}::${safe(viewMode || 'my').toLowerCase()}`;
+}
+
+function buildDashboardSnapshotData({
+  scopeUser,
+  visibleUsers,
+  tickets,
+  fms,
+  todos,
+  expenses,
+  pendingLeaveCount,
+  ticketHistory,
+  chartTickets,
+  chartFms,
+  start,
+  end,
+  scopeLabel = 'my'
+}) {
+  const scopeEmployeeId = userId(scopeUser);
+  const scopeUserName = userName(scopeUser);
+  const allTickets = tickets.map((ticket) => normalizeTicketForDashboard(ticket, visibleUsers));
+  const allFms = fms.map((task) => normalizeFmsForDashboard(task, visibleUsers));
+  const allTodos = todos.map((todo) => normalizeTodoForDashboard(todo, visibleUsers));
+
+  const scopedTickets = allTickets.filter((task) => dateInRange(task.Date, start, end));
+  const scopedFms = allFms.filter((task) => dateInRange(task.Date, start, end));
+  const scopedTodos = allTodos.filter((task) => dateInRange(task.Date, start, end));
+
+  const allTasks = [...allTickets, ...allFms, ...allTodos];
+  const dashboardTickets = scopedTickets;
+  const dashboardFms = scopedFms;
+  const dashboardTodos = scopedTodos;
+  const normalizedChartTickets = (chartTickets || tickets).map((ticket) => normalizeTicketForDashboard(ticket, visibleUsers));
+  const normalizedChartFms = (chartFms || fms).map((task) => normalizeFmsForDashboard(task, visibleUsers));
+  const dashboardTasks = sortDashboardTasks([...dashboardTickets, ...dashboardFms, ...dashboardTodos]);
   const upcomingTasks = dashboardTasks.filter((task) => isDashboardActionableStatus(task.Status));
   const pendingTickets = dashboardTickets.filter((task) => isDashboardActionableStatus(task.Status)).length;
   const doneTickets = dashboardTickets.filter((task) => isUserCompletedStatus(task.Status)).length;
@@ -237,11 +373,15 @@ export async function getDashboardData(employeeId, filterRange) {
   const hasShortfall = productiveMinutes < plannedMinutes;
 
   const assumedMinutes = workingDaysBetween(start, end) * 8 * 60;
-  const totalGapMinutes = data.ticketHistory
+  const totalGapMinutes = ticketHistory
     .filter((entry) => {
       const actionBy = first(entry, ['Action By', 'Employee ID', 'Employee Name']);
       const timestamp = first(entry, ['Timestamp', 'Date', 'Created At']);
-      return (eq(actionBy, employeeId) || eq(actionBy, user?.['Employee Name'])) && dateInRange(timestamp, start, end);
+      return (
+        visibleUsers.some((user) => eq(userId(user), actionBy) || eq(userName(user), actionBy))
+        || eq(actionBy, scopeEmployeeId)
+        || eq(actionBy, scopeUserName)
+      ) && dateInRange(timestamp, start, end);
     })
     .sort((left, right) => new Date(first(left, ['Timestamp', 'Date', 'Created At'])) - new Date(first(right, ['Timestamp', 'Date', 'Created At'])))
     .reduce((gap, entry, index, history) => {
@@ -265,50 +405,398 @@ export async function getDashboardData(employeeId, filterRange) {
     const ymdValue = localDate(date);
     lastSevenLabels.push(date.toLocaleDateString('en-US', { weekday: 'short' }));
     lastSevenCompleted.push(
-      [...allMyTickets, ...allMyFms].filter((task) => task.Date === ymdValue && isUserCompletedStatus(task.Status)).length
+      [...normalizedChartTickets, ...normalizedChartFms]
+        .filter((task) => task.Date === ymdValue && isUserCompletedStatus(task.Status)).length
     );
   }
 
-  return ok({
-    data: {
-      currentUser: user,
-      user,
-      tickets: myTickets,
-      fmsTasks: myFms,
-      todos: myTodos,
-      todaysTasks,
-      upcomingTasks,
-      kpis: {
-        pendingTickets,
-        doneTickets,
-        completedTickets: doneTickets,
-        pendingFms,
-        doneFms,
-        pendingTodos,
-        overdueTasks: upcomingTasks.filter((task) => task.Date && task.Date < today()).length,
-        totalExpenses: data.expenses
-          .filter((expense) => eq(expense['Employee ID'], employeeId))
-          .reduce((sum, expense) => sum + num(first(expense, ['Amount', 'Expense Amount'])), 0)
-          .toFixed(2),
-        assumedBandwidthHours: minutesLabel(assumedMinutes),
-        plannedBandwidthHours: minutesLabel(plannedMinutes),
-        actualBandwidthHours: minutesLabel(productiveMinutes),
-        totalGapTime: minutesLabel(totalGapMinutes),
-        occupiedBandwidth: occupied,
-        bandwidthDifference: `${hasShortfall ? '+' : '-'}${Math.floor(bandwidthDelta / 60)}h ${bandwidthDelta % 60}m`,
-        differenceColor: hasShortfall ? 'text-red-600' : 'text-green-600',
-        adminPendingApprovals: data.leaves.filter((row) => /pending/i.test(first(row, ['Status'], 'Pending'))).length
+  return {
+    currentUser: scopeUser,
+    user: scopeUser,
+    tickets: scopedTickets,
+    fmsTasks: scopedFms,
+    todos: scopedTodos,
+    allTasks: dashboardTasks,
+    upcomingTasks,
+    scope: scopeLabel,
+    taskTotals: {
+      tickets: scopedTickets.length,
+      fms: scopedFms.length,
+      todos: scopedTodos.length,
+      all: dashboardTasks.length
+    },
+    teamMembers: visibleUsers.filter((user) => !eq(userId(user), scopeEmployeeId)).map((user) => ({
+      employeeId: userId(user),
+      name: userName(user),
+      role: first(user, ['Role', 'role'], 'User'),
+      department: first(user, ['Department', 'department'], '')
+    })),
+    kpis: {
+      pendingTickets,
+      doneTickets,
+      completedTickets: doneTickets,
+      pendingFms,
+      doneFms,
+      pendingTodos,
+      overdueTasks: upcomingTasks.filter((task) => task.Date && task.Date < today()).length,
+      totalExpenses: expenses.reduce((sum, expense) => sum + num(first(expense, ['Amount', 'Expense Amount'])), 0)
+        .toFixed(2),
+      assumedBandwidthHours: minutesLabel(assumedMinutes),
+      plannedBandwidthHours: minutesLabel(plannedMinutes),
+      actualBandwidthHours: minutesLabel(productiveMinutes),
+      totalGapTime: minutesLabel(totalGapMinutes),
+      occupiedBandwidth: occupied,
+      bandwidthDifference: `${hasShortfall ? '+' : '-'}${Math.floor(bandwidthDelta / 60)}h ${bandwidthDelta % 60}m`,
+      differenceColor: hasShortfall ? 'text-red-600' : 'text-green-600',
+      adminPendingApprovals: pendingLeaveCount,
+      teamMembers: Math.max(0, visibleUsers.filter((user) => !eq(userId(user), scopeEmployeeId)).length)
+    },
+    chartData: {
+      lineChart: {
+        labels: lastSevenLabels,
+        data: lastSevenCompleted
       },
-      chartData: {
-        lineChart: {
-          labels: lastSevenLabels,
-          data: lastSevenCompleted
-        },
-        barChart: {
-          labels: ['Tickets', 'FMS'],
-          data: [pendingTickets, pendingFms]
-        }
+      barChart: {
+        labels: ['Tickets', 'FMS', 'To-Do'],
+        data: [pendingTickets, pendingFms, pendingTodos]
       }
     }
+  };
+}
+
+async function computeDashboardSnapshot(employeeId, filterRange, normalizedViewMode) {
+  const { start, end } = rangeForFilter(filterRange);
+  const lastSevenEnd = today();
+  const lastSevenStart = normalizedDate(addDays(referenceNow(), -6));
+  const userQuery = {
+    $or: [
+      { 'data.Employee ID': employeeId },
+      { 'data.User ID': employeeId },
+      { 'data.EMP Code': employeeId }
+    ]
+  };
+  const userProjection = {
+    legacyId: 1,
+    'data.Employee ID': 1,
+    'data.User ID': 1,
+    'data.EMP Code': 1,
+    'data.employeeId': 1,
+    'data.EmpID': 1,
+    'data.Employee Name': 1,
+    'data.Name': 1,
+    'data.name': 1,
+    'data.Role': 1,
+    'data.role': 1,
+    'data.Department': 1,
+    'data.department': 1,
+    'data.Status': 1,
+    'data.status': 1,
+    'data.Manager ID': 1,
+    'data.Manager': 1,
+    'data.managerId': 1,
+    'data.Reporting Manager': 1,
+    'data.Task Approver': 1,
+    'data.Approver ID': 1,
+    'data.taskApprover': 1
+  };
+  const dashboardTaskProjection = {
+    legacyId: 1,
+    'data.Ticket ID': 1,
+    'data.Task ID': 1,
+    'data.TodoID': 1,
+    'data.ID': 1,
+    'data.Employee ID': 1,
+    'data.EmpID': 1,
+    'data.empId': 1,
+    'data.Employee Name': 1,
+    'data.User': 1,
+    'data.Who': 1,
+    'data.Assigned To': 1,
+    'data.Status': 1,
+    'data.Plan Date': 1,
+    'data.Date': 1,
+    'data.Timestamp': 1,
+    'data.Due Date': 1,
+    'data.TAT': 1,
+    'data.When': 1,
+    'data.TAT Minutes': 1,
+    'data.Duration': 1,
+    'data.Total Duration': 1,
+    'data.Actual Duration': 1,
+    'data.Task Description': 1,
+    'data.Description': 1,
+    'data.Task': 1,
+    'data.Content': 1,
+    'data.Done Date': 1,
+    'data.actualDate': 1
+  };
+  const historyProjection = {
+    legacyId: 1,
+    'data.Action By': 1,
+    'data.Employee ID': 1,
+    'data.Employee Name': 1,
+    'data.Timestamp': 1,
+    'data.Date': 1,
+    'data.Created At': 1,
+    'data.Action Type': 1,
+    'data.Action': 1,
+    'data.Status': 1
+  };
+  const expenseProjection = {
+    legacyId: 1,
+    'data.Employee ID': 1,
+    'data.employeeId': 1,
+    'data.EmpID': 1,
+    'data.Amount': 1,
+    'data.Expense Amount': 1
+  };
+  const [user, initialTeamMembers] = await Promise.all([
+    findDataRow('User', userQuery, userProjection),
+    normalizedViewMode === 'team' ? listDataRows('User', teamUsersQuery(employeeId), userProjection) : Promise.resolve([])
+  ]);
+
+  const normalizedRole = userRole(user);
+  const canViewTeamDashboard = teamDashboardRoles.has(normalizedRole);
+  const isTeamMode = normalizedViewMode === 'team' && canViewTeamDashboard;
+  const teamMembers = isTeamMode ? teamMemberRows(initialTeamMembers, employeeId) : [];
+  const scopedEmployeeIds = isTeamMode ? teamMembers.map((member) => userId(member)).filter(Boolean) : [employeeId];
+  const scopedUserRows = isTeamMode ? teamMembers : (user ? [user] : []);
+  const ticketHistoryUserNames = scopedUserRows.map((item) => userName(item)).filter(Boolean);
+  const ticketHistoryQuery = isTeamMode
+    ? {
+      $or: [
+        { 'data.Action By': { $in: scopedEmployeeIds } },
+        { 'data.Employee ID': { $in: scopedEmployeeIds } },
+        { 'data.Employee Name': { $in: ticketHistoryUserNames } },
+        { 'data.Action By': { $in: ticketHistoryUserNames } }
+      ]
+    }
+    : {
+      $or: [
+        { 'data.Action By': employeeId },
+        { 'data.Employee ID': employeeId },
+        { 'data.Employee Name': userName(user) || employeeId }
+      ]
+    };
+
+  const taskRangeClause = scopedDateQuery(['data.Plan Date', 'data.Date', 'data.Timestamp', 'data.Due Date'], start, end);
+  const chartRangeClause = scopedDateQuery(['data.Plan Date', 'data.Date', 'data.Timestamp', 'data.Due Date'], lastSevenStart, lastSevenEnd);
+  const historyRangeClause = scopedDateQuery(['data.Timestamp', 'data.Date', 'createdAt'], start, end);
+  const expenseRangeClause = scopedDateQuery(['data.Date', 'createdAt'], start, end);
+  const chartTicketBaseQuery = isTeamMode ? buildEmployeeQuery(scopedEmployeeIds) : selfTicketQuery(employeeId);
+  const chartFmsBaseQuery = buildEmployeeQuery(scopedEmployeeIds);
+  const selectedTicketQuery = combineAndQueries(isTeamMode ? buildEmployeeQuery(scopedEmployeeIds) : selfTicketQuery(employeeId), taskRangeClause);
+  const selectedFmsQuery = combineAndQueries(buildEmployeeQuery(scopedEmployeeIds), taskRangeClause);
+  const selectedTodoQuery = combineAndQueries(buildEmployeeQuery(scopedEmployeeIds), taskRangeClause);
+  const selectedExpenseQuery = combineAndQueries(buildEmployeeQuery(scopedEmployeeIds), expenseRangeClause);
+  const selectedHistoryQuery = combineAndQueries(ticketHistoryQuery, historyRangeClause);
+  const chartTicketQuery = combineAndQueries(chartTicketBaseQuery, chartRangeClause);
+  const chartFmsQuery = combineAndQueries(chartFmsBaseQuery, chartRangeClause);
+
+  const [tickets, fms, todos, expenses, pendingLeaveCount, ticketHistory] = await Promise.all([
+    listDataRows('Ticket', selectedTicketQuery, dashboardTaskProjection),
+    listDataRows('FmsTask', selectedFmsQuery, dashboardTaskProjection),
+    listDataRows('Todo', selectedTodoQuery, dashboardTaskProjection),
+    listDataRows('Expense', selectedExpenseQuery, expenseProjection),
+    LegacyModels.Leave.collection.countDocuments({
+      $and: [
+        buildEmployeeQuery(scopedEmployeeIds),
+        { $or: [{ 'data.Status': /pending/i }, { 'data.status': /pending/i }, { 'data.Admin Approval': /pending/i }] }
+      ]
+    }),
+    listDataRows('TicketHistory', selectedHistoryQuery, historyProjection)
+  ]);
+
+  const [chartTickets, chartFms] = await Promise.all([
+    listDataRows('Ticket', chartTicketQuery, dashboardTaskProjection),
+    listDataRows('FmsTask', chartFmsQuery, dashboardTaskProjection)
+  ]);
+
+  return {
+    ...buildDashboardSnapshotData({
+      scopeUser: user,
+      visibleUsers: scopedUserRows,
+      tickets,
+      fms,
+      todos,
+      expenses,
+      pendingLeaveCount,
+      ticketHistory,
+      chartTickets,
+      chartFms,
+      start,
+      end,
+      scopeLabel: isTeamMode ? 'team' : 'my'
+    }),
+    canViewTeamDashboard
+  };
+}
+
+export async function primeDashboardSnapshotsForAllEmployees() {
+  const users = await listRows('User');
+  const activeUsers = users.filter((user) => eq(first(user, ['Status', 'status'], 'Active'), 'Active'));
+  for (const user of activeUsers) {
+    await primeDashboardSnapshots(userId(user), first(user, ['Role', 'role'], 'User'));
+  }
+}
+
+function materializeDashboardPayload(snapshot, options = {}) {
+  const includeTasks = options.includeTasks !== false;
+  const includeCollections = options.includeCollections !== false;
+  const taskPage = Math.max(1, Number(options.taskPage || options.page || 1) || 1);
+  const taskPageSize = Math.min(50, Math.max(10, Number(options.taskPageSize || options.pageSize || DEFAULT_DASHBOARD_TASKS_PAGE_SIZE) || DEFAULT_DASHBOARD_TASKS_PAGE_SIZE));
+  const pagedTasks = paginateDashboardTasks(snapshot.allTasks || [], taskPage, taskPageSize);
+  const {
+    allTasks,
+    ...publicSnapshot
+  } = snapshot;
+
+  return ok({
+    data: {
+      ...publicSnapshot,
+      tickets: includeCollections ? (publicSnapshot.tickets || []) : [],
+      fmsTasks: includeCollections ? (publicSnapshot.fmsTasks || []) : [],
+      todos: includeCollections ? (publicSnapshot.todos || []) : [],
+      todaysTasks: includeTasks ? pagedTasks.rows : [],
+      upcomingTasks: includeTasks ? (publicSnapshot.upcomingTasks || []) : [],
+      taskPagination: pagedTasks.pagination
+    }
   });
+}
+
+function scheduleSnapshotRefresh(snapshotKey, employeeId, filterRange, normalizedViewMode) {
+  if (dashboardSnapshotRefreshes.has(snapshotKey)) return;
+  const cacheVersion = dashboardCacheVersion;
+  const refreshPromise = Promise.resolve()
+    .then(async () => {
+      const snapshot = await computeDashboardSnapshot(employeeId, filterRange, normalizedViewMode);
+      if (cacheVersion === dashboardCacheVersion) {
+        dashboardSnapshotCache.set(snapshotKey, { createdAt: Date.now(), snapshot });
+      }
+    })
+    .catch(() => null)
+    .finally(() => {
+      dashboardSnapshotRefreshes.delete(snapshotKey);
+    });
+  dashboardSnapshotRefreshes.set(snapshotKey, refreshPromise);
+}
+
+function trackPrimeJob(snapshotKey, job) {
+  if (dashboardPrimeJobs.has(snapshotKey)) return dashboardPrimeJobs.get(snapshotKey);
+  const tracked = Promise.resolve(job)
+    .catch(() => null)
+    .finally(() => {
+      dashboardPrimeJobs.delete(snapshotKey);
+    });
+  dashboardPrimeJobs.set(snapshotKey, tracked);
+  return tracked;
+}
+
+export async function getDashboardData(employeeId, filterRange, viewMode = 'my', options = {}) {
+  const normalizedViewMode = safe(viewMode || 'my').toLowerCase() === 'team' ? 'team' : 'my';
+  const includeTasks = options.includeTasks !== false;
+  const includeCollections = options.includeCollections !== false;
+  const taskPage = Math.max(1, Number(options.taskPage || options.page || 1) || 1);
+  const taskPageSize = Math.min(50, Math.max(10, Number(options.taskPageSize || options.pageSize || DEFAULT_DASHBOARD_TASKS_PAGE_SIZE) || DEFAULT_DASHBOARD_TASKS_PAGE_SIZE));
+  const cacheKey = `${buildDashboardSnapshotKey(employeeId, filterRange, normalizedViewMode)}::${includeTasks ? 'tasks' : 'summary'}::${includeCollections ? 'collections' : 'compact'}::${taskPage}::${taskPageSize}`;
+  const cacheVersion = dashboardCacheVersion;
+  const cached = dashboardCache.get(cacheKey);
+  if (cached && Date.now() - cached.createdAt < DASHBOARD_CACHE_TTL_MS) {
+    return cached.payload;
+  }
+
+  const snapshotKey = buildDashboardSnapshotKey(employeeId, filterRange, normalizedViewMode);
+  const primeJob = dashboardPrimeJobs.get(snapshotKey);
+  if (primeJob) {
+    await primeJob.catch(() => null);
+    const primedSnapshotEntry = dashboardSnapshotCache.get(snapshotKey);
+    if (primedSnapshotEntry) {
+      const primedPayload = materializeDashboardPayload(primedSnapshotEntry.snapshot, {
+        includeTasks,
+        includeCollections,
+        taskPage,
+        taskPageSize
+      });
+      dashboardCache.set(cacheKey, { createdAt: Date.now(), payload: primedPayload });
+      return primedPayload;
+    }
+  }
+  const snapshotEntry = dashboardSnapshotCache.get(snapshotKey);
+  if (snapshotEntry) {
+    if (Date.now() - snapshotEntry.createdAt >= DASHBOARD_SNAPSHOT_TTL_MS) {
+      scheduleSnapshotRefresh(snapshotKey, employeeId, filterRange, normalizedViewMode);
+    }
+    const payload = materializeDashboardPayload(snapshotEntry.snapshot, {
+      includeTasks,
+      includeCollections,
+      taskPage,
+      taskPageSize
+    });
+    dashboardCache.set(cacheKey, { createdAt: Date.now(), payload });
+    return payload;
+  }
+
+  const snapshot = await computeDashboardSnapshot(employeeId, filterRange, normalizedViewMode);
+  if (cacheVersion === dashboardCacheVersion) {
+    dashboardSnapshotCache.set(snapshotKey, { createdAt: Date.now(), snapshot });
+  }
+  const payload = materializeDashboardPayload(snapshot, {
+    includeTasks,
+    includeCollections,
+    taskPage,
+    taskPageSize
+  });
+  dashboardCache.set(cacheKey, { createdAt: Date.now(), payload });
+  return payload;
+}
+
+export function primeDashboardSnapshots(employeeId, role) {
+  const normalizedRole = safe(role).toLowerCase();
+  const tasksPageSize = DEFAULT_DASHBOARD_TASKS_PAGE_SIZE;
+  const cacheVersion = dashboardCacheVersion;
+  const jobs = [
+    trackPrimeJob(
+      buildDashboardSnapshotKey(employeeId, 'today', 'my'),
+      computeDashboardSnapshot(employeeId, 'today', 'my').then((snapshot) => {
+        if (cacheVersion !== dashboardCacheVersion) return;
+        dashboardSnapshotCache.set(buildDashboardSnapshotKey(employeeId, 'today', 'my'), { createdAt: Date.now(), snapshot });
+        dashboardCache.set(
+          `${buildDashboardSnapshotKey(employeeId, 'today', 'my')}::summary::compact::1::${DEFAULT_DASHBOARD_TASKS_PAGE_SIZE}`,
+          {
+            createdAt: Date.now(),
+            payload: materializeDashboardPayload(snapshot, {
+              includeTasks: false,
+              includeCollections: false,
+              taskPage: 1,
+              taskPageSize: DEFAULT_DASHBOARD_TASKS_PAGE_SIZE
+            })
+          }
+        );
+      })
+    )
+  ];
+  if (teamDashboardRoles.has(normalizedRole)) {
+    jobs.push(
+      trackPrimeJob(
+        buildDashboardSnapshotKey(employeeId, 'today', 'team'),
+        computeDashboardSnapshot(employeeId, 'today', 'team').then((snapshot) => {
+          if (cacheVersion !== dashboardCacheVersion) return;
+          dashboardSnapshotCache.set(buildDashboardSnapshotKey(employeeId, 'today', 'team'), { createdAt: Date.now(), snapshot });
+          dashboardCache.set(
+            `${buildDashboardSnapshotKey(employeeId, 'today', 'team')}::tasks::compact::1::${tasksPageSize}`,
+            {
+              createdAt: Date.now(),
+              payload: materializeDashboardPayload(snapshot, {
+                includeTasks: true,
+                includeCollections: false,
+                taskPage: 1,
+                taskPageSize: tasksPageSize
+              })
+            }
+          );
+        })
+      )
+    );
+  }
+  return Promise.allSettled(jobs);
 }

@@ -5,7 +5,7 @@ const router = express.Router();
 
 router.post('/tasks', async (req, res) => {
   try {
-    const result = await getFmsTasks(req.auth.sub);
+    const result = await getFmsTasks(req.auth.sub, req.body || {});
     if (!result.success) return res.status(400).json(result);
     res.json(result);
   } catch (error) {

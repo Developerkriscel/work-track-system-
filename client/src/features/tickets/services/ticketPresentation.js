@@ -18,7 +18,7 @@ export function formatPlanDate(value) {
 
 export function toneForTicketStatus(status) {
   const normalized = String(status || '').toLowerCase();
-  if (normalized === 'in progress') return 'info';
+  if (normalized === 'in progress') return 'success';
   if (normalized === 'open' || normalized === 'paused') return 'warning';
   if (normalized === 'rework' || normalized === 'reassigned') return 'danger';
   if (normalized.includes('pending')) return 'warning';
@@ -32,4 +32,26 @@ export function toneForTicketPriority(priority) {
   if (normalized === 'high' || normalized === 'urgent') return 'warning';
   if (normalized === 'low') return 'neutral';
   return 'info';
+}
+
+function firstMatchingUserName(users = [], id = '') {
+  const normalizedId = String(id || '').trim().toLowerCase();
+  if (!normalizedId) return '';
+  const match = users.find((user) => {
+    const userId = String(user['Employee ID'] || user['User ID'] || user['EMP Code'] || user.employeeId || user.EmpID || user.id || '').trim().toLowerCase();
+    return userId === normalizedId;
+  });
+  const resolved = String(match?.['Employee Name'] || match?.Name || match?.['Full Name'] || match?.name || '').trim();
+  return resolved && resolved.toLowerCase() !== normalizedId ? resolved : '';
+}
+
+export function formatTicketAssignee(ticket = {}, users = []) {
+  const id = String(ticket['Employee ID'] || ticket.employeeId || ticket.EmpID || ticket.id || '').trim();
+  const rawName = String(ticket['Employee Name'] || ticket.EmployeeName || ticket.User || ticket.name || '').trim();
+  const lookupName = firstMatchingUserName(users, id);
+  const name = [rawName, lookupName].find((value) => value && value.toLowerCase() !== id.toLowerCase()) || '';
+  return {
+    id: id || '-',
+    name
+  };
 }

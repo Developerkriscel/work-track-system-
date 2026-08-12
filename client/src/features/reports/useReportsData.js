@@ -109,7 +109,9 @@ export function useReportsData() {
   const { user } = useAuth();
   const employeeId = user?.['Employee ID'] || '';
   const role = user?.Role || 'User';
-  const [activeTab, setActiveTab] = useState('management');
+  const normalizedRole = String(role || '').trim().toLowerCase();
+  const isManagerOnly = normalizedRole === 'manager';
+  const [activeTab, setActiveTab] = useState(isManagerOnly ? 'tickets' : 'management');
   const [range, setRange] = useState('month');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -124,6 +126,12 @@ export function useReportsData() {
   const [message, setMessage] = useState(null);
   const [downloading, setDownloading] = useState(false);
   const refreshIndex = useRef(0);
+
+  useEffect(() => {
+    if (isManagerOnly && activeTab === 'management') {
+      setActiveTab('tickets');
+    }
+  }, [activeTab, isManagerOnly]);
 
   const bounds = useMemo(
     () => rangeBounds(range, customStart, customEnd),
@@ -317,6 +325,7 @@ export function useReportsData() {
     employeeId,
     currentUser: user || null,
     role,
+    isManagerOnly,
     activeTab,
     setActiveTab,
     range,

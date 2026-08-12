@@ -1,10 +1,11 @@
 import { httpClient } from '@/lib/api/httpClient';
 
-export async function fetchPendingApprovals(employeeId) {
+export async function fetchPendingApprovals(employeeId, payload = {}) {
   return httpClient('/api/approvals/queue', {
     method: 'POST',
     body: JSON.stringify({
-      employeeId
+      employeeId,
+      ...payload
     })
   });
 }

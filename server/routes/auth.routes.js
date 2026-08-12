@@ -11,6 +11,7 @@ import {
   changeClientPasswordFromMongo,
   updateClientProfileFromMongo
 } from '../services/auth.service.js';
+import { primeDashboardSnapshots } from '../services/dashboard.service.js';
 import { assertIdentity, requireAuth } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
@@ -20,6 +21,7 @@ router.post('/employee/login', async (req, res) => {
     const { employeeId, password } = req.body;
     const user = await authenticateEmployeeFromMongo(employeeId, password);
     if (!user) return res.status(401).json({ success: false, message: 'Invalid employee ID or password.' });
+    void primeDashboardSnapshots(user['Employee ID'], user.Role);
     return res.json({ success: true, user, token: employeeToken(user) });
   } catch (error) {
     return res.status(503).json({ success: false, message: error.message });
@@ -43,6 +45,7 @@ router.post('/employee/session', requireAuth({ kind: 'employee' }), async (req, 
     if (!user || !assertIdentity(req, 'employee', user['Employee ID'])) {
       return res.status(401).json({ success: false, message: 'Employee session is no longer valid.' });
     }
+    void primeDashboardSnapshots(user['Employee ID'], user.Role);
     return res.json({ success: true, user, token: employeeToken(user) });
   } catch (error) {
     return res.status(503).json({ success: false, message: error.message });

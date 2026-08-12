@@ -1,10 +1,11 @@
 import { httpClient } from '@/lib/api/httpClient';
 
-export async function fetchTicketSystemData(employeeId) {
+export async function fetchTicketSystemData(employeeId, options = {}) {
   return httpClient('/api/tickets/workspace', {
     method: 'POST',
     body: JSON.stringify({
-      employeeId
+      employeeId,
+      ...options
     })
   });
 }

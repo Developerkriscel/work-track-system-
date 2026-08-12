@@ -1,11 +1,79 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { formatPunchTime, todayYmd } from '@/features/attendance/services/attendancePresentation';
 
-export function AttendanceCalendar({ rows = [] }) {
+function normalizeDateKey(value) {
+  const raw = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const dmy = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
+  if (dmy) {
+    return `${dmy[3]}-${String(dmy[2]).padStart(2, '0')}-${String(dmy[1]).padStart(2, '0')}`;
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(parsed);
+  const values = Object.fromEntries(parts.map(({ type, value: partValue }) => [type, partValue]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function firstValue(...values) {
+  return values.find((value) => String(value ?? '').trim()) ?? '';
+}
+
+function hasAttendancePunch(row) {
+  if (!row) return false;
+  return Boolean(firstValue(
+    row.punchIn?.Time,
+    row.punchIn?.['Punch In'],
+    row.punchOut?.Time,
+    row.punchOut?.['Punch Out'],
+    row.punchInTime,
+    row.punchOutTime,
+    row['Punch In'],
+    row['Punch Out'],
+    row.Time
+  ));
+}
+
+function isPlaceholderAttendanceRow(row) {
+  if (!row || hasAttendancePunch(row)) return false;
+  const status = String(row.status || row.Status || '').trim().toLowerCase();
+  return status.includes('absent') || status.includes('weekly off') || status.includes('unknown');
+}
+
+function attendanceRowRank(row) {
+  if (!row) return 0;
+  if (hasAttendancePunch(row)) return 3;
+  if (!isPlaceholderAttendanceRow(row) && String(row.status || row.Status || '').trim()) return 2;
+  return 1;
+}
+
+function resolveCellStatus(row, dateStr) {
+  const rawStatus = String(row?.status || row?.Status || '').trim();
+  const hasPunch = hasAttendancePunch(row);
+  if (!hasPunch && isPlaceholderAttendanceRow(row) && dateStr > todayYmd()) return 'Unknown';
+  if (hasPunch && (!rawStatus || /absent|weekly off|unknown/i.test(rawStatus))) return 'Present';
+  if (hasPunch && !/present|on time|late|early|half/i.test(rawStatus)) return 'Present';
+  if (rawStatus) return rawStatus;
+  if (hasPunch) return 'Present';
+  const isSunday = new Date(`${dateStr}T00:00:00`).getDay() === 0;
+  return isSunday ? 'Weekly Off' : 'Absent';
+}
+
+export function AttendanceCalendar({ rows = [], onMonthChange }) {
   const currentMonthDate = useMemo(() => {
     if (rows.length > 0) {
-      // Use the first row's date to determine the month
-      const date = new Date(`${rows[0].date}T00:00:00`);
-      if (!Number.isNaN(date.getTime())) return date;
+      const firstKnownDate = rows
+        .map((row) => normalizeDateKey(row.date || row.Date))
+        .find((value) => /^\d{4}-\d{2}-\d{2}$/.test(value));
+      if (firstKnownDate) {
+        const date = new Date(`${firstKnownDate}T00:00:00`);
+        if (!Number.isNaN(date.getTime())) return date;
+      }
     }
     return new Date();
   }, [rows]);
@@ -25,6 +93,13 @@ export function AttendanceCalendar({ rows = [] }) {
   const year = displayDate.getFullYear();
   const month = displayDate.getMonth();
 
+  useEffect(() => {
+    if (!onMonthChange) return;
+    const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(new Date(year, month + 1, 0).getDate()).padStart(2, '0')}`;
+    onMonthChange({ startDate, endDate });
+  }, [year, month, onMonthChange]);
+
   const today = new Date();
   const isCurrentMonthOrFuture = 
     year > today.getFullYear() || 
@@ -35,9 +110,25 @@ export function AttendanceCalendar({ rows = [] }) {
 
   // Map dates to status
   const rowMap = useMemo(() => {
-    const map = {};
-    rows.forEach(row => {
-      map[row.date] = row;
+    const map = new Map();
+    rows.forEach((row) => {
+      const key = normalizeDateKey(row.date || row.Date);
+      if (!key) return;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, row);
+        return;
+      }
+
+      const existingRank = attendanceRowRank(existing);
+      const incomingRank = attendanceRowRank(row);
+      if (incomingRank > existingRank) {
+        map.set(key, row);
+        return;
+      }
+      if (incomingRank === existingRank && !hasAttendancePunch(existing) && !isPlaceholderAttendanceRow(row)) {
+        map.set(key, row);
+      }
     });
     return map;
   }, [rows]);
@@ -49,31 +140,26 @@ export function AttendanceCalendar({ rows = [] }) {
   }
   const formatTime = (rawTime) => {
     if (!rawTime) return null;
-    const s = String(rawTime).trim();
-    if (s.includes('T')) return s.split('T')[1].substring(0, 5);
-    if (s.includes(' ')) {
-      const parts = s.split(' ');
-      return parts[parts.length - 1].substring(0, 5);
-    }
-    return s.substring(0, 5);
+    return formatPunchTime(rawTime);
   };
 
   for (let i = 1; i <= daysInMonth; i++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
-    const rowObj = rowMap[dateStr];
-    let status = rowObj?.status;
+    const rowObj = rowMap.get(dateStr);
+    let status = resolveCellStatus(rowObj, dateStr);
 
-    if (!status) {
+    if (!rowObj) {
       const isSunday = new Date(`${dateStr}T00:00:00`).getDay() === 0;
-      status = isSunday ? 'Weekly Off' : 'Unknown';
+      const isPastOrToday = dateStr <= todayYmd();
+      status = isSunday ? 'Weekly Off' : (isPastOrToday ? 'Absent' : 'Unknown');
     }
 
     days.push({
       day: i,
       date: dateStr,
       status: status,
-      punchIn: formatTime(rowObj?.punchIn ? (rowObj.punchIn.Time || rowObj.punchIn['Punch In']) : null),
-      punchOut: formatTime(rowObj?.punchOut ? (rowObj.punchOut.Time || rowObj.punchOut['Punch Out']) : null)
+      punchIn: formatTime(firstValue(rowObj?.punchIn?.Time, rowObj?.punchIn?.['Punch In'], rowObj?.punchInTime, rowObj?.['Punch In'], rowObj?.Time)),
+      punchOut: formatTime(firstValue(rowObj?.punchOut?.Time, rowObj?.punchOut?.['Punch Out'], rowObj?.punchOutTime, rowObj?.['Punch Out']))
     });
   }
 

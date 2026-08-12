@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { AppModal, AlertDialog } from '@/components/modals';
 import { openProtectedFile, toPreviewUrl, toPreviewUrls } from '@/lib/fileLinks';
+import { formatTicketAssignee } from '@/features/tickets/services/ticketPresentation';
 
-export function TicketDetailsDialog({ ticket, onClose }) {
+export function TicketDetailsDialog({ ticket, users = [], onClose }) {
   const [alertMsg, setAlertMsg] = useState(null);
   const attachments = Array.from(
     new Set([
@@ -15,7 +16,18 @@ export function TicketDetailsDialog({ ticket, onClose }) {
     <AppModal title={`Ticket Details ${ticket?.['Ticket ID'] || ''}`} onClose={onClose} width="680px">
       <div className="ticket-details-grid">
         <div><strong>Client</strong><span>{ticket?.Name || '-'}</span></div>
-        <div><strong>Assigned To</strong><span>{ticket?.['Employee Name'] || ticket?.['Employee ID'] || '-'}</span></div>
+        <div>
+          <strong>Assigned To</strong>
+          {(() => {
+            const assignee = formatTicketAssignee(ticket, users);
+            return (
+              <span className="ticket-assignee-cell">
+                <strong>{assignee.id}</strong>
+                {assignee.name ? <span>{assignee.name}</span> : null}
+              </span>
+            );
+          })()}
+        </div>
         <div><strong>Status</strong><span>{ticket?.Status || '-'}</span></div>
         <div><strong>Priority</strong><span>{ticket?.Priority || '-'}</span></div>
         <div><strong>TAT</strong><span>{ticket?.TAT || '-'}</span></div>

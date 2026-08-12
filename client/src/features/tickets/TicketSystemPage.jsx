@@ -21,13 +21,19 @@ export function TicketSystemPage() {
     loading,
     error, clearError,
     submitting,
+    activeTab,
+    setActiveTab,
     clients,
     users,
+    allUsers,
     categories,
     tickets,
     buddyTickets = [],
     clientOriginTickets,
     canViewClientTickets,
+    pagination,
+    setTicketPage,
+    setTicketPageSize,
     filters,
     setFilters,
     applyFilters,
@@ -49,7 +55,6 @@ export function TicketSystemPage() {
   const [message, setMessage] = useState(null);
   const [reassignTicket, setReassignTicket] = useState(null);
   const [scheduleTicket, setScheduleTicket] = useState(null);
-  const [activeTab, setActiveTab] = useState('my');
   const [actionDialog, setActionDialog] = useState(null);
   const [transferDialog, setTransferDialog] = useState(null);
   const [chatTicketState, setChatTicketState] = useState({ ticket: null, messages: [], loading: false, sending: false });
@@ -61,8 +66,12 @@ export function TicketSystemPage() {
     : employeeId || 'Ticket Workspace';
   const canViewTeam = ['Super Admin', 'Admin', 'Manager', 'HR'].includes(role);
   const clearMessage = () => setMessage(null);
-  const myTickets = tickets.filter((ticket) => String(ticket['Employee ID'] || '').toLowerCase() === String(employeeId).toLowerCase());
-  const teamTickets = tickets.filter((ticket) => !ticket._isClientOrigin);
+  const currentEmployeeId = String(employeeId || '').trim().toLowerCase();
+  const myTickets = tickets.filter((ticket) => String(ticket['Employee ID'] || '').trim().toLowerCase() === currentEmployeeId);
+  const teamTickets = tickets.filter((ticket) => (
+    !ticket._isClientOrigin &&
+    String(ticket['Employee ID'] || '').trim().toLowerCase() !== currentEmployeeId
+  ));
   const visibleTickets = activeTab === 'team' && canViewTeam
     ? teamTickets
     : activeTab === 'client' && canViewClientTickets
@@ -70,6 +79,7 @@ export function TicketSystemPage() {
       : activeTab === 'buddy'
         ? buddyTickets
         : myTickets;
+  const visibleTicketTotal = pagination?.total ?? visibleTickets.length;
 
   const handleCreate = async (payload) => {
     const result = Array.isArray(payload) ? await submitNewTickets(payload) : await submitNewTicket(payload);
@@ -304,13 +314,17 @@ export function TicketSystemPage() {
             </button>
           </div>
           <StatusPill tone={loading ? 'neutral' : 'info'}>
-            {loading ? 'Refreshing' : `${visibleTickets.length} tickets`}
+            {loading ? 'Refreshing' : `${visibleTicketTotal} tickets`}
           </StatusPill>
         </div>
       <TicketTable
           tickets={visibleTickets}
+          pagination={pagination}
           role={role}
           submitting={submitting}
+          allUsers={allUsers}
+          onPageChange={setTicketPage}
+          onPageSizeChange={setTicketPageSize}
           onStatusAction={handleStatusAction}
           onScheduleAction={handleScheduleAction}
           onReassign={setReassignTicket}
@@ -335,7 +349,7 @@ export function TicketSystemPage() {
           onSend={handleChatSend}
         />
       ) : null}
-      {detailsTicket ? <TicketDetailsDialog ticket={detailsTicket} onClose={() => setDetailsTicket(null)} /> : null}
+      {detailsTicket ? <TicketDetailsDialog ticket={detailsTicket} users={allUsers} onClose={() => setDetailsTicket(null)} /> : null}
       {confirmDialog ? (
         <ConfirmDialog
           tone="warning"

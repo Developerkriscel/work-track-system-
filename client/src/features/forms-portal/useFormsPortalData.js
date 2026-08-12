@@ -34,7 +34,7 @@ function normalizeForm(values) {
   };
 }
 
-export function useFormsPortalData() {
+export function useFormsPortalData({ scopeDepartment = '', defaultDepartment = '' } = {}) {
   const { user } = useAuth();
   const employeeId = user?.['Employee ID'] || '';
   const [filters, setFilters] = useState({
@@ -57,6 +57,8 @@ export function useFormsPortalData() {
     form: normalizeForm({})
   });
   const refreshRef = useRef(0);
+  const currentRole = String(user?.Role || user?.role || '').trim();
+  const canManageForms = /^(super admin|admin)$/i.test(currentRole);
 
   useEffect(() => {
     if (!employeeId) {
@@ -97,8 +99,7 @@ export function useFormsPortalData() {
   }, [employeeId, refreshRef.current]);
 
   useEffect(() => {
-    const isSuperAdmin = /^(super admin)$/i.test(String(user?.Role || user?.role || '').trim());
-    if (!employeeId || !isSuperAdmin) {
+    if (!employeeId || !canManageForms) {
       setAssignableUsers([]);
       setIsAdmin(false);
       return undefined;
@@ -126,16 +127,26 @@ export function useFormsPortalData() {
     };
   }, [employeeId]);
 
+  useEffect(() => {
+    setIsAdmin(canManageForms);
+  }, [canManageForms]);
+
+  const scopedForms = useMemo(() => {
+    const scope = String(scopeDepartment || '').trim().toLowerCase();
+    if (!scope) return state.forms;
+    return state.forms.filter((form) => String(form.Department || '').trim().toLowerCase() === scope);
+  }, [scopeDepartment, state.forms]);
+
   const departmentOptions = useMemo(() => {
-    return Array.from(new Set(state.forms.map((form) => form.Department).filter((dept) => dept && dept.toLowerCase() !== 'all'))).sort((left, right) => left.localeCompare(right));
-  }, [state.forms]);
+    return Array.from(new Set(scopedForms.map((form) => form.Department).filter((dept) => dept && dept.toLowerCase() !== 'all'))).sort((left, right) => left.localeCompare(right));
+  }, [scopedForms]);
 
   const sheetOptions = useMemo(() => {
-    return Array.from(new Set(state.forms.map((form) => form['Sheet name']).filter(Boolean))).sort((left, right) => left.localeCompare(right));
-  }, [state.forms]);
+    return Array.from(new Set(scopedForms.map((form) => form['Sheet name']).filter(Boolean))).sort((left, right) => left.localeCompare(right));
+  }, [scopedForms]);
 
   const filteredForms = useMemo(() => {
-    return state.forms.filter((form) => {
+    return scopedForms.filter((form) => {
       const matchesDepartment = !filters.department || form.Department === filters.department;
       const matchesSheet = !filters.sheet || form['Sheet name'] === filters.sheet;
       const query = String(filters.search || '').toLowerCase();
@@ -149,7 +160,7 @@ export function useFormsPortalData() {
       ].join(' ').toLowerCase();
       return matchesDepartment && matchesSheet && (!query || searchBlock.includes(query));
     });
-  }, [filters, state.forms]);
+  }, [filters, scopedForms]);
 
   function updateFilters(patch) {
     setFilters((current) => ({ ...current, ...patch }));
@@ -168,7 +179,7 @@ export function useFormsPortalData() {
     setEditor({
       open: true,
       mode: 'add',
-      form: normalizeForm({})
+      form: normalizeForm({ Department: defaultDepartment || scopeDepartment || '' })
     });
   }
 
@@ -215,7 +226,10 @@ export function useFormsPortalData() {
   }
 
   async function submitEditor() {
-    const form = normalizeForm(editor.form);
+    const form = normalizeForm({
+      ...editor.form,
+      Department: defaultDepartment || scopeDepartment || editor.form.Department
+    });
     if (!form['Sheet name'].trim() || !form.For.trim() || !form['Form link'].trim()) {
       setMessage({ tone: 'danger', text: 'Category / Sheet Name, Purpose, and Form Link are required.' });
       return { success: false, message: 'Missing required fields.' };
@@ -250,7 +264,7 @@ export function useFormsPortalData() {
     loading: state.loading,
     error: state.error, clearError: () => setState((current) => ({ ...current, error: null })),
     forms: filteredForms,
-    allFormsCount: state.forms.length,
+    allFormsCount: scopedForms.length,
     filters,
     updateFilters,
     resetFilters,

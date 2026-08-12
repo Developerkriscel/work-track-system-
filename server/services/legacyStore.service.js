@@ -4,6 +4,10 @@ import { LegacyModels } from '../models/legacyModels.js';
 const today = () => new Date().toISOString().slice(0, 10);
 const isMongoReady = () => mongoose.connection.readyState === 1;
 const appendOnlyModels = new Set(['Attendance', 'Message', 'TicketHistory', 'SocialHistory', 'WhatsAppLog']);
+const READ_CACHE_TTL_MS = Number(process.env.WORKTRACK_READ_CACHE_TTL_MS || 30000);
+const readCache = new Map();
+const storeMutationListeners = new Set();
+let indexesReady = null;
 
 const closedTerms = ['closed', 'approved', 'cancelled', 'completed', 'done', 'resolved', 'paid'];
 export const isClosedStatus = (status = '') => closedTerms.some((term) => String(status).toLowerCase().includes(term));
@@ -254,6 +258,102 @@ async function assertMongoReady() {
   }
 }
 
+function cloneRows(rows = []) {
+  return rows.map((row) => ({ ...row }));
+}
+
+function clearReadCache(modelName = '') {
+  if (modelName) {
+    readCache.delete(modelName);
+    return;
+  }
+  readCache.clear();
+}
+
+export function registerStoreMutationListener(listener) {
+  if (typeof listener === 'function') {
+    storeMutationListeners.add(listener);
+  }
+  return () => storeMutationListeners.delete(listener);
+}
+
+export function touchStoreMutation(modelName = '') {
+  clearReadCache(modelName);
+  for (const listener of storeMutationListeners) {
+    try {
+      listener(modelName);
+    } catch {
+      // Listener errors must never block writes.
+    }
+  }
+}
+
+export async function ensurePerformanceIndexes() {
+  await assertMongoReady();
+  if (indexesReady) return indexesReady;
+  const compoundIndexes = {
+    Ticket: [
+      [{ 'data.Employee ID': 1, 'data.Status': 1, 'data.Plan Date': -1 }, { background: true }],
+      [{ 'data.Task Approver': 1, 'data.Status': 1, 'data.Plan Date': -1 }, { background: true }],
+      [{ 'data.Client_Id': 1, 'data.Status': 1, 'data.Plan Date': -1 }, { background: true }]
+    ],
+    FmsTask: [
+      [{ 'data.Employee ID': 1, 'data.Status': 1, 'data.Plan Date': -1 }, { background: true }],
+      [{ 'data.Task Approver': 1, 'data.Status': 1, 'data.Plan Date': -1 }, { background: true }]
+    ],
+    Todo: [
+      [{ 'data.Employee ID': 1, 'data.Status': 1, 'data.Due Date': -1 }, { background: true }]
+    ],
+    Attendance: [
+      [{ 'data.Employee ID': 1, 'data.Date': -1 }, { background: true }],
+      [{ 'data.Employee ID': 1, 'data.Status': 1, 'data.Date': -1 }, { background: true }],
+      [{ 'data.Task Approver': 1, 'data.Status': 1, 'data.Date': -1 }, { background: true }]
+    ],
+    Leave: [
+      [{ 'data.Employee ID': 1, 'data.Status': 1, 'data.Start Date': -1 }, { background: true }],
+      [{ 'data.Employee ID': 1, 'data.Status': 1, 'data.End Date': -1 }, { background: true }]
+    ],
+    Intimation: [
+      [{ 'data.Employee ID': 1, 'data.Status': 1, 'data.Intimation Date': -1 }, { background: true }]
+    ],
+    Expense: [
+      [{ 'data.Employee ID': 1, createdAt: -1 }, { background: true }]
+    ],
+    TicketHistory: [
+      [{ 'data.Action By': 1, 'data.Timestamp': -1 }, { background: true }],
+      [{ 'data.Employee ID': 1, 'data.Timestamp': -1 }, { background: true }]
+    ],
+    User: [
+      [{ 'data.Status': 1, 'data.Manager ID': 1 }, { background: true }],
+      [{ 'data.Status': 1, 'data.Task Approver': 1 }, { background: true }],
+      [{ 'data.Status': 1, 'data.Role': 1 }, { background: true }]
+    ]
+  };
+  indexesReady = Promise.all(Object.entries(LegacyModels).map(async ([name, Model]) => {
+    await Promise.all([
+      Model.collection.createIndex({ createdAt: 1 }).catch(() => null),
+      Model.collection.createIndex({ updatedAt: -1 }).catch(() => null),
+      Model.collection.createIndex({ 'data.Employee ID': 1 }).catch(() => null),
+      Model.collection.createIndex({ 'data.EmpID': 1 }).catch(() => null),
+      Model.collection.createIndex({ 'data.User ID': 1 }).catch(() => null),
+      Model.collection.createIndex({ 'data.Status': 1 }).catch(() => null),
+      Model.collection.createIndex({ 'data.Plan Date': 1 }).catch(() => null),
+      Model.collection.createIndex({ 'data.Date': 1 }).catch(() => null),
+      Model.collection.createIndex({ 'data.Task Approver': 1 }).catch(() => null),
+      Model.collection.createIndex({ 'data.Ticket ID': 1 }).catch(() => null),
+      Model.collection.createIndex({ 'data.Task ID': 1 }).catch(() => null),
+      Model.collection.createIndex({ 'data.Client_Id': 1 }).catch(() => null)
+    ]);
+    await Promise.all((compoundIndexes[name] || []).map(([keys, options]) => Model.collection.createIndex(keys, options).catch(() => null)));
+  })).catch((error) => {
+    indexesReady = null;
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(`Mongo index warmup skipped: ${error.message}`);
+    }
+  });
+  return indexesReady;
+}
+
 const legacyIdKeyMap = {
     User: ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'userId', 'empCode'],
     EmpMaster: ['EMP Code', 'Employee ID', 'User ID', 'empCode', 'employeeId', 'userId'],
@@ -303,14 +403,21 @@ export function stripInternalMetadata(row = {}) {
 
 export async function listRows(modelName) {
   await assertMongoReady();
+  void ensurePerformanceIndexes();
+  const cached = readCache.get(modelName);
+  if (cached && Date.now() - cached.at < READ_CACHE_TTL_MS) {
+    return cloneRows(cached.rows);
+  }
   const Model = LegacyModels[modelName];
   const docs = await Model.find({}).sort({ createdAt: 1 }).lean();
-  if (!docs.length) return [];
-  return docs.map((doc) => ({ ...stripInternalMetadata(doc.data), _id: String(doc._id), _legacyId: doc.legacyId }));
+  const rows = docs.map((doc) => ({ ...stripInternalMetadata(doc.data), _id: String(doc._id), _legacyId: doc.legacyId }));
+  readCache.set(modelName, { at: Date.now(), rows });
+  return cloneRows(rows);
 }
 
 export async function listMongoRows(modelName) {
   await assertMongoReady();
+  void ensurePerformanceIndexes();
   const Model = LegacyModels[modelName];
   const docs = await Model.find({}).sort({ createdAt: 1 }).lean();
   return docs.map((doc) => ({ ...stripInternalMetadata(doc.data), _id: String(doc._id), _legacyId: doc.legacyId }));
@@ -332,9 +439,11 @@ export async function insertRow(modelName, row) {
     if (existingDoc) {
       await Model.deleteMany({ legacyId, _id: { $ne: existingDoc._id } });
     }
+    touchStoreMutation(modelName);
     return next;
   }
   await Model.create({ legacyId, data: cleanRow });
+  touchStoreMutation(modelName);
   return cleanRow;
 }
 
@@ -365,6 +474,7 @@ export async function upsertRow(modelName, key, value, updateData) {
   if (existingDoc) {
     await Model.deleteMany({ legacyId, _id: { $ne: existingDoc._id } });
   }
+  touchStoreMutation(modelName);
   return next;
 }
 
@@ -374,6 +484,7 @@ export async function deleteOrDeactivate(modelName, key, value) {
   if (!row) return null;
   const next = { ...row, Status: 'Inactive' };
   await LegacyModels[modelName].findOneAndUpdate({ legacyId: getLegacyId(modelName, row) }, { $set: { data: next } });
+  touchStoreMutation(modelName);
   return next;
 }
 
@@ -384,6 +495,7 @@ export async function deleteRow(modelName, key, value) {
   if (!row) return null;
   const legacyId = row._legacyId || getLegacyId(modelName, row);
   await LegacyModels[modelName].deleteMany({ legacyId });
+  touchStoreMutation(modelName);
   return row;
 }
 
@@ -391,11 +503,13 @@ export async function replaceCollection(modelName, rows) {
   await assertMongoReady();
   const Model = LegacyModels[modelName];
   await Model.deleteMany({});
+  clearReadCache(modelName);
   if (!rows.length) return 0;
   await Model.insertMany(rows.map((row) => {
     const cleanRow = stripInternalMetadata(row);
     return { legacyId: getLegacyId(modelName, cleanRow), data: cleanRow };
   }), { ordered: false });
+  touchStoreMutation(modelName);
   return rows.length;
 }
 
@@ -404,4 +518,12 @@ export async function resetLegacyStore() {
   await Promise.all(Object.keys(LegacyModels).map(async (modelName) => {
     await LegacyModels[modelName].deleteMany({});
   }));
+  clearReadCache();
+  for (const listener of storeMutationListeners) {
+    try {
+      listener();
+    } catch {
+      // ignore listener errors during reset
+    }
+  }
 }

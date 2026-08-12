@@ -45,6 +45,39 @@ function splitIds(value) {
     .filter(Boolean);
 }
 
+function buildUserNameIndex(users = []) {
+  const index = new Map();
+
+  users.forEach((user) => {
+    const id = safe(first(user, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'EmpID'])).toLowerCase();
+    const name = safe(first(user, ['Employee Name', 'Name', 'Full Name', 'name'], id));
+    if (id) {
+      index.set(id, name || id);
+    }
+
+    const aliases = [
+      first(user, ['Employee Name', 'Name', 'Full Name', 'name']),
+      first(user, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'EmpID'])
+    ]
+      .map((value) => safe(value).toLowerCase())
+      .filter(Boolean);
+
+    aliases.forEach((alias) => {
+      if (!index.has(alias)) {
+        index.set(alias, name || id || alias);
+      }
+    });
+  });
+
+  return index;
+}
+
+function resolveUserName(value, userIndex, fallback = '') {
+  const raw = safe(value);
+  if (!raw) return fallback;
+  return userIndex.get(raw.toLowerCase()) || fallback || raw;
+}
+
 function teamMemberIds(users, managerId) {
   const target = safe(managerId).toLowerCase();
   return users
@@ -188,10 +221,14 @@ function asTicketRow(row = {}, clients = []) {
   };
 }
 
-function asFmsRow(row = {}) {
+function asFmsRow(row = {}, userIndex = new Map()) {
   const id = first(row, ['Task ID', 'FMS ID', 'ID', 'rowId', 'taskId']);
   const employeeId = first(row, ['Employee ID', 'EmpID', 'empId', 'employeeId']);
-  const employeeName = first(row, ['Employee Name', 'User', 'who', 'employeeName'], employeeId);
+  const employeeName = resolveUserName(
+    first(row, ['Employee Name', 'User', 'who', 'employeeName', 'Who', 'Assigned To'], employeeId),
+    userIndex,
+    employeeId
+  );
   const clientId = first(row, ['Client_Id', 'Client ID', 'clientId']);
   const client = first(row, ['Client', 'Client Name', 'fmsName', 'clientName']);
   const description = first(row, ['Task Description', 'Description', 'Task Name', 'taskName', 'description']);
@@ -277,6 +314,7 @@ export async function getTicketReportData(employeeId, role, startDate, endDate) 
 
 export async function getFmsReportData(employeeId, role, startDate, endDate) {
   const data = await getRows();
+  const userIndex = buildUserNameIndex(data.users);
   const normalizedRole = safe(role).toLowerCase();
   const canSeeAll = ['super admin', 'hr'].includes(normalizedRole);
   const teamIds = canSeeAll ? [] : teamMemberIds(data.users, employeeId);
@@ -286,7 +324,7 @@ export async function getFmsReportData(employeeId, role, startDate, endDate) {
       const visible = canSeeAll || ownerId === safe(employeeId).toLowerCase() || (['admin', 'manager'].includes(normalizedRole) && teamIds.includes(ownerId));
       return visible && dateInRange(first(task, ['Plan Date', 'Date']), startDate, endDate);
     })
-    .map((task) => asFmsRow(task));
+    .map((task) => asFmsRow(task, userIndex));
   return ok({
     data: items,
     summary: {
@@ -298,6 +336,7 @@ export async function getFmsReportData(employeeId, role, startDate, endDate) {
 
 export async function exportReportForWeb(format = 'csv', sheetName = 'Report', employeeId = '', role = '', startDate = '', endDate = '', filters = {}) {
   const data = await getRows();
+  const userIndex = buildUserNameIndex(data.users);
   const normalizedRole = safe(role).toLowerCase();
   const ticketTeamIds = teamMemberIds(data.users, employeeId);
   const fmsTeamIds = teamMemberIds(data.users, employeeId);
@@ -323,7 +362,7 @@ export async function exportReportForWeb(format = 'csv', sheetName = 'Report', e
         (['admin', 'manager'].includes(normalizedRole) && fmsTeamIds.includes(ownerId));
       return visible && dateInRange(first(task, ['Plan Date', 'Date']), startDate, endDate);
     })
-    .map((task) => asFmsRow(task))
+    .map((task) => asFmsRow(task, userIndex))
     .filter((task) => matchesFmsFilters(task, filters));
   const sheetKey = safe(sheetName).toLowerCase();
   const source =

@@ -19,7 +19,7 @@ export function AttendanceRangeToolbar({
             className={`attendance-tab${activeView === 'team' ? ' attendance-tab--active' : ''}`}
             onClick={() => onViewChange('team')}
           >
-            My Team Attendance
+            Team Attendance
           </button>
         ) : null}
       </div>

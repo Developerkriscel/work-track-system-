@@ -13,6 +13,7 @@ export function ReportsPage() {
     employeeId,
     currentUser,
     role,
+    isManagerOnly,
     activeTab,
     setActiveTab,
     range,
@@ -104,6 +105,7 @@ export function ReportsPage() {
       ) : null}
 
       <ReportsToolbar
+        isManagerOnly={isManagerOnly}
         activeTab={activeTab}
         onTabChange={setActiveTab}
         range={range}
@@ -117,7 +119,37 @@ export function ReportsPage() {
         onDownload={download}
       />
 
-      {activeTab === 'tickets' ? (
+      {isManagerOnly ? (
+        <>
+          <ReportsSummaryCards items={activeTab === 'fms' ? fmsSummaryItems : ticketSummaryItems} />
+          {activeTab === 'fms' ? (
+            <FmsReportSection
+              fms={fms}
+              fmsStatuses={fmsStatuses}
+              fmsFilters={fmsFilters}
+              onFmsFiltersChange={setFmsFilters}
+              onResetFilters={resetFmsFilters}
+            />
+          ) : (
+            <TicketReportSection
+              tickets={tickets}
+              ticketStatuses={ticketStatuses}
+              ticketPriorities={ticketPriorities}
+              ticketUsers={ticketUsers}
+              ticketFilters={ticketFilters}
+              onTicketFiltersChange={setTicketFilters}
+              onResetFilters={resetTicketFilters}
+              range={range}
+              onRangeChange={setRange}
+              rangeOptions={rangeOptions}
+              customStart={customStart}
+              onCustomStartChange={setCustomStart}
+              customEnd={customEnd}
+              onCustomEndChange={setCustomEnd}
+            />
+          )}
+        </>
+      ) : activeTab === 'tickets' ? (
         <>
           <ReportsSummaryCards items={ticketSummaryItems} />
           <TicketReportSection

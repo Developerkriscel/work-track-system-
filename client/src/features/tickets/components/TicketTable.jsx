@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { StatusPill } from '@/components/common/StatusPill';
-import { formatPlanDate, toneForTicketPriority, toneForTicketStatus } from '@/features/tickets/services/ticketPresentation';
+import { formatPlanDate, formatTicketAssignee, toneForTicketPriority, toneForTicketStatus } from '@/features/tickets/services/ticketPresentation';
 
 export function TicketTable({
   tickets,
+  pagination = null,
   role,
   submitting,
+  allUsers = [],
+  onPageChange,
+  onPageSizeChange,
   onStatusAction,
   onScheduleAction,
   onReassign,
@@ -15,9 +19,13 @@ export function TicketTable({
   onDetails,
   currentUser
 }) {
-  const [pageSize, setPageSize] = useState(10);
-  const [page, setPage] = useState(1);
-  const pageCount = Math.max(1, Math.ceil(tickets.length / pageSize));
+  const serverPaged = Boolean(pagination && onPageChange && onPageSizeChange);
+  const [localPageSize, setLocalPageSize] = useState(10);
+  const [localPage, setLocalPage] = useState(1);
+  const pageSize = serverPaged ? pagination.pageSize : localPageSize;
+  const page = serverPaged ? pagination.page : localPage;
+  const totalRows = serverPaged ? pagination.total : tickets.length;
+  const pageCount = serverPaged ? pagination.totalPages : Math.max(1, Math.ceil(tickets.length / pageSize));
 
   function ticketStatus(value) {
     return String(value || '').trim();
@@ -34,23 +42,39 @@ export function TicketTable({
   }
 
   useEffect(() => {
-    setPage(1);
-  }, [tickets, pageSize]);
+    if (!serverPaged) setLocalPage(1);
+  }, [tickets, pageSize, serverPaged]);
 
   const pageTickets = useMemo(() => {
+    if (serverPaged) return tickets;
     const start = (Math.min(page, pageCount) - 1) * pageSize;
     return tickets.slice(start, start + pageSize);
-  }, [page, pageCount, pageSize, tickets]);
+  }, [page, pageCount, pageSize, tickets, serverPaged]);
 
-  const firstEntry = tickets.length ? (Math.min(page, pageCount) - 1) * pageSize + 1 : 0;
-  const lastEntry = tickets.length ? Math.min(Math.min(page, pageCount) * pageSize, tickets.length) : 0;
+  const firstEntry = serverPaged ? (pagination.start || 0) : tickets.length ? (Math.min(page, pageCount) - 1) * pageSize + 1 : 0;
+  const lastEntry = serverPaged ? (pagination.end || 0) : tickets.length ? Math.min(Math.min(page, pageCount) * pageSize, tickets.length) : 0;
+
+  const hasUnreadMessages = (ticket = {}) => {
+    const adminUnread = ticket.HasUnreadAdminMessages === true || String(ticket.HasUnreadAdminMessages).toUpperCase() === 'TRUE';
+    const teamUnread = ticket.HasUnreadMessages === true || String(ticket.HasUnreadMessages).toUpperCase() === 'TRUE';
+    return adminUnread || teamUnread;
+  };
+
   return (
     <div className="react-data-table">
       <div className="react-data-table__toolbar">
         <label className="react-data-table__length">
           <span>Show</span>
-          <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}>
+          <select
+            value={pageSize}
+            onChange={(event) => {
+              const nextSize = Number(event.target.value);
+              if (serverPaged) onPageSizeChange(nextSize);
+              else setLocalPageSize(nextSize);
+            }}
+          >
             <option value="10">10</option>
+            <option value="20">20</option>
             <option value="25">25</option>
             <option value="50">50</option>
           </select>
@@ -92,7 +116,17 @@ export function TicketTable({
                 <td data-label="Start">{ticket['Start Time'] || '-'}</td>
                 <td data-label="End">{ticket['End Time'] || '-'}</td>
                 <td data-label="Duration">{ticket['Total Duration'] || ticket.Duration || '-'}</td>
-                <td data-label="Assigned To">{ticket['Employee Name'] || ticket['Employee ID'] || '-'}</td>
+                <td data-label="Assigned To">
+                  {(() => {
+                    const assignee = formatTicketAssignee(ticket, allUsers);
+                    return (
+                      <div className="ticket-assignee-cell">
+                        <strong>{assignee.id}</strong>
+                        {assignee.name ? <span>{assignee.name}</span> : null}
+                      </div>
+                    );
+                  })()}
+                </td>
                 <td data-label="Status">
                   <StatusPill tone={toneForTicketStatus(ticket.Status)}>{ticket.Status || 'Open'}</StatusPill>
                 </td>
@@ -143,11 +177,7 @@ export function TicketTable({
                         </button>
                         <button type="button" className="ticket-action-btn ticket-action-btn--assign" disabled={submitting} onClick={() => onReassign(ticket)}>Reassign</button>
                         {(() => {
-                          const hasUnread = ticket.HasUnreadAdminMessages === true || String(ticket.HasUnreadAdminMessages).toUpperCase() === 'TRUE';
-                          const lastActionBy = String(ticket['Last Action By'] || '').trim().toLowerCase();
-                          const currentUserName = String(currentUser?.['Employee Name'] || '').trim().toLowerCase();
-                          const notMe = lastActionBy !== currentUserName;
-                          const showRedDot = hasUnread && notMe;
+                          const showRedDot = hasUnreadMessages(ticket);
                           
                           return (
                             <button 
@@ -188,14 +218,14 @@ export function TicketTable({
 
       <div className="react-data-table__footer">
         <span className="react-data-table__info">
-          Showing {firstEntry} to {lastEntry} of {tickets.length} entries
+          Showing {firstEntry} to {lastEntry} of {totalRows} entries
         </span>
         <div className="react-data-table__pager">
-          <button type="button" disabled={page <= 1} onClick={() => setPage(1)} aria-label="First page">«</button>
-          <button type="button" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))} aria-label="Previous page">‹</button>
+          <button type="button" disabled={page <= 1} onClick={() => (serverPaged ? onPageChange(1) : setLocalPage(1))} aria-label="First page">«</button>
+          <button type="button" disabled={page <= 1} onClick={() => (serverPaged ? onPageChange(Math.max(1, page - 1)) : setLocalPage((current) => Math.max(1, current - 1)))} aria-label="Previous page">‹</button>
           <span className="react-data-table__pager-current">{Math.min(page, pageCount)}</span>
-          <button type="button" disabled={page >= pageCount} onClick={() => setPage((current) => Math.min(pageCount, current + 1))} aria-label="Next page">›</button>
-          <button type="button" disabled={page >= pageCount} onClick={() => setPage(pageCount)} aria-label="Last page">»</button>
+          <button type="button" disabled={page >= pageCount} onClick={() => (serverPaged ? onPageChange(Math.min(pageCount, page + 1)) : setLocalPage((current) => Math.min(pageCount, current + 1)))} aria-label="Next page">›</button>
+          <button type="button" disabled={page >= pageCount} onClick={() => (serverPaged ? onPageChange(pageCount) : setLocalPage(pageCount))} aria-label="Last page">»</button>
         </div>
       </div>
     </div>

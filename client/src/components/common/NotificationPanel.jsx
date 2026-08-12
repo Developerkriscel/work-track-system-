@@ -134,7 +134,7 @@ export function NotificationPanel({ title = 'Notifications', items = [], loading
               return (
                 <article
                   key={`${item.id || item.Message || 'notification'}-${index}`}
-                  className={`notification-card${isClickable ? ' notification-card--clickable' : ''}`}
+                  className={`notification-card${isClickable ? ' notification-card--clickable' : ''}${item.isNew ? ' notification-card--new' : ' notification-card--seen'}`}
                   onClick={isClickable ? () => navigate(route) : undefined}
                   title={isClickable ? `Go to ${item.type}` : undefined}
                   role={isClickable ? 'button' : undefined}
@@ -153,6 +153,9 @@ export function NotificationPanel({ title = 'Notifications', items = [], loading
                       </span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span className="notification-card__status">{item.Status || 'Updated'}</span>
+                        <span className={`notification-card__read-state${item.isNew ? ' notification-card__read-state--new' : ' notification-card__read-state--seen'}`}>
+                          {item.isNew ? 'New' : 'Seen'}
+                        </span>
                         {isClickable && (
                           <span className="notification-card__go-arrow" style={{ color: typeStyle.dot }}>
                             <ArrowIcon />

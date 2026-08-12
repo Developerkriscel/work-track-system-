@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createFmsTask, fetchFmsAssignableUsers, fetchFmsTasks, markFmsTaskDone } from '@/features/fms/api';
 import { useAuth } from '@/features/auth/AuthProvider';
 
@@ -113,11 +113,11 @@ export function useFmsData() {
   const [submitting, setSubmitting] = useState(false);
   const [assignableUsers, setAssignableUsers] = useState([]);
   const [assignableLoading, setAssignableLoading] = useState(false);
-  const refreshKey = useRef(0);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [pagination, setPagination] = useState({ page: 1, pageSize: 60, total: 0, totalPages: 1, start: 0, end: 0 });
 
   const reload = () => {
-    refreshKey.current += 1;
-    setState((current) => ({ ...current }));
+    setRefreshKey((current) => current + 1);
   };
 
   useEffect(() => {
@@ -131,13 +131,29 @@ export function useFmsData() {
     async function load() {
       setState((current) => ({ ...current, loading: true, error: null }));
       try {
-        const payload = await fetchFmsTasks(employeeId);
+        const payload = await fetchFmsTasks(employeeId, {
+          paginated: true,
+          tab,
+          filters,
+          page: pagination.page,
+          pageSize: pagination.pageSize
+        });
         if (!alive) return;
+        const nextPagination = payload.meta?.pagination || {};
         setState({
           loading: false,
           error: null,
           payload
         });
+        setPagination((current) => ({
+          ...current,
+          page: nextPagination.page || current.page,
+          pageSize: nextPagination.pageSize || current.pageSize,
+          total: nextPagination.total || 0,
+          totalPages: nextPagination.totalPages || 1,
+          start: nextPagination.start || 0,
+          end: nextPagination.end || 0
+        }));
       } catch (error) {
         if (!alive) return;
         setState({
@@ -152,7 +168,7 @@ export function useFmsData() {
     return () => {
       alive = false;
     };
-  }, [employeeId, refreshKey.current]);
+  }, [employeeId, refreshKey, tab, filters, pagination.page, pagination.pageSize]);
 
   const today = useMemo(() => {
     const value = new Date();
@@ -197,18 +213,21 @@ export function useFmsData() {
     };
   }, [employeeId, canCreateFms]);
 
+  const serverPaged = Boolean(meta.serverPaged);
+
   const visibleTasks = useMemo(
-    () => applyFilters(visibleByTab(tasks, tab), filters),
-    [tasks, tab, filters]
+    () => serverPaged ? tasks : applyFilters(visibleByTab(tasks, tab), filters),
+    [filters, serverPaged, tab, tasks]
   );
 
   const teamTabsVisible = useMemo(
-    () => ['team-pending', 'team-future', 'team-completed'].some((key) => (tabCountsCache(tasks)[key] || 0) > 0),
-    [tasks]
+    () => ['team-pending', 'team-future', 'team-completed'].some((key) => ((meta.tabCounts || tabCountsCache(tasks))[key] || 0) > 0),
+    [meta.tabCounts, tasks]
   );
 
   const employeeOptions = useMemo(
     () => {
+      if (Array.isArray(meta.employeeOptions)) return meta.employeeOptions;
       const seen = new Map();
       tasks
         .filter((task) => task._isTeamTask)
@@ -221,20 +240,21 @@ export function useFmsData() {
         });
       return Array.from(seen.values());
     },
-    [tasks]
+    [meta.employeeOptions, tasks]
   );
 
   const categoryOptions = useMemo(
-    () =>
-      Array.from(
+    () => Array.isArray(meta.categoryOptions)
+      ? meta.categoryOptions
+      : Array.from(
         new Set(tasks.map((task) => String(task.fmsName || task['Client Name'] || task.Client || '').trim()).filter(Boolean))
       ),
-    [tasks]
+    [meta.categoryOptions, tasks]
   );
 
   const tabCounts = useMemo(
-    () => tabCountsCache(tasks),
-    [tasks]
+    () => meta.tabCounts || tabCountsCache(tasks),
+    [meta.tabCounts, tasks]
   );
 
   useEffect(() => {
@@ -276,12 +296,20 @@ export function useFmsData() {
     error: state.error, clearError: () => setState((current) => ({ ...current, error: null })),
     submitting,
     tab,
-    setTab,
+    setTab: (nextTab) => {
+      setPagination((current) => ({ ...current, page: 1 }));
+      setTab(nextTab);
+    },
     filters,
-    setFilters,
+    setFilters: (updater) => {
+      setPagination((current) => ({ ...current, page: 1 }));
+      setFilters(updater);
+    },
     reload,
     tasks: visibleTasks,
     meta,
+    pagination,
+    setPage: (page) => setPagination((current) => ({ ...current, page: Math.max(1, Number(page) || 1) })),
     canCreateFms,
     assignableUsers,
     assignableLoading,

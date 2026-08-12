@@ -35,7 +35,8 @@ function canSeeTicket(ticket, employeeId, role, users = []) {
   const normalizedRole = safe(role).toLowerCase();
   if (normalizedRole === 'super admin') return true;
   if (ownerId === currentId || reassignedBy === currentId) return true;
-  if (normalizedRole === 'admin' || normalizedRole === 'manager') return teamIds(employeeId, users).includes(ownerId);
+  if (normalizedRole === 'admin') return teamIds(employeeId, users).includes(ownerId);
+  if (normalizedRole === 'manager') return directTeamIds(employeeId, users).includes(ownerId);
   if (normalizedRole === 'hr') {
     const owner = users.find((user) => userId(user).toLowerCase() === ownerId);
     const ownerDepartment = safe(first(owner, ['Department', 'department'])).toLowerCase();
@@ -71,6 +72,119 @@ function assignableIdsFor(employeeId, role, users = []) {
     return [safe(employeeId).toLowerCase(), ...directTeamIds(employeeId, activeUsers)];
   }
   return [safe(employeeId).toLowerCase()];
+}
+
+function parseWorkspaceOptions(options = {}) {
+  const page = Math.max(1, Number(options.page || 1) || 1);
+  const pageSize = Math.min(50, Math.max(10, Number(options.pageSize || 20) || 20));
+  return {
+    page,
+    pageSize,
+    viewMode: safe(options.viewMode || 'my').toLowerCase(),
+    filters: {
+      clientIds: Array.isArray(options.filters?.clientIds) ? options.filters.clientIds.map(safe).filter(Boolean) : [],
+      statuses: Array.isArray(options.filters?.statuses) ? options.filters.statuses.map(safe).filter(Boolean) : [],
+      search: safe(options.filters?.search).toLowerCase(),
+      timePeriod: safe(options.filters?.timePeriod || 'All Time')
+    }
+  };
+}
+
+function ticketDateForPeriod(value) {
+  if (!safe(value)) return null;
+  const raw = safe(value);
+  const ymd = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (ymd) return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+  const dmy = raw.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (dmy) return new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function ticketMatchesPeriod(ticket, timePeriod) {
+  if (!timePeriod || timePeriod === 'All Time') return true;
+  const date = ticketDateForPeriod(first(ticket, ['Plan Date', 'Date', 'Timestamp']));
+  if (!date) return false;
+  const now = new Date();
+  const todayValue = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const value = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const day = todayValue.getDay();
+  const mondayOffset = day === 0 ? 6 : day - 1;
+  const startThisWeek = new Date(todayValue);
+  startThisWeek.setDate(todayValue.getDate() - mondayOffset);
+  const startLastWeek = new Date(startThisWeek);
+  startLastWeek.setDate(startThisWeek.getDate() - 7);
+  const endLastWeek = new Date(startThisWeek);
+  endLastWeek.setDate(startThisWeek.getDate() - 1);
+  const startThisMonth = new Date(todayValue.getFullYear(), todayValue.getMonth(), 1);
+  const startLastMonth = new Date(todayValue.getFullYear(), todayValue.getMonth() - 1, 1);
+  const endLastMonth = new Date(todayValue.getFullYear(), todayValue.getMonth(), 0);
+  if (timePeriod === 'Today') return value.getTime() === todayValue.getTime();
+  if (timePeriod === 'This Week') return value >= startThisWeek && value <= todayValue;
+  if (timePeriod === 'Last Week') return value >= startLastWeek && value <= endLastWeek;
+  if (timePeriod === 'This Month') return value >= startThisMonth && value <= todayValue;
+  if (timePeriod === 'Last Month') return value >= startLastMonth && value <= endLastMonth;
+  return true;
+}
+
+function statusSortWeight(status) {
+  const value = safe(status).toLowerCase();
+  if (value === 'in progress') return 1;
+  if (value === 'open') return 2;
+  if (value === 'approved') return 3;
+  if (value === 'paused') return 4;
+  if (value === 'rework' || value === 'reassigned' || value.includes('rework')) return 5;
+  if (value === 'pending approval' || value.includes('pending')) return 90;
+  if (value === 'completed') return 91;
+  if (value === 'closed' || value === 'approved by client' || value === 'cancelled') return 92;
+  if (value.includes('approved')) return 93;
+  return 10;
+}
+
+function sortWorkspaceTickets(rows = []) {
+  return [...rows].sort((left, right) => {
+    const statusDiff = statusSortWeight(left.Status) - statusSortWeight(right.Status);
+    if (statusDiff) return statusDiff;
+    const leftDate = ticketDateForPeriod(left['Plan Date'])?.getTime() || 0;
+    const rightDate = ticketDateForPeriod(right['Plan Date'])?.getTime() || 0;
+    if (rightDate !== leftDate) return rightDate - leftDate;
+    return safe(right['Start Time']).localeCompare(safe(left['Start Time']));
+  });
+}
+
+function filterWorkspaceTickets(rows = [], filters = {}) {
+  return rows.filter((ticket) => {
+    const clientMatch = !filters.clientIds.length || filters.clientIds.some((clientId) => [ticket.Client_Id, ticket['Client ID']].some((value) => eq(value, clientId)));
+    const status = safe(ticket.Status);
+    const statusMatch = !filters.statuses.length || filters.statuses.some((item) => item === 'Rework / Reassigned' ? /rework|reassigned/i.test(status) : eq(item, status));
+    const searchMatch = !filters.search || [
+      ticket['Ticket ID'],
+      ticket['Task Description'],
+      ticket.Name,
+      ticket['Employee Name'],
+      ticket.Status,
+      ticket.Priority
+    ].join(' ').toLowerCase().includes(filters.search);
+    return clientMatch && statusMatch && searchMatch && ticketMatchesPeriod(ticket, filters.timePeriod);
+  });
+}
+
+function paginateRows(rows = [], page = 1, pageSize = 20) {
+  const total = rows.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * pageSize;
+  return {
+    rows: rows.slice(start, start + pageSize),
+    pagination: {
+      page: safePage,
+      pageSize,
+      total,
+      totalPages,
+      start: total ? start + 1 : 0,
+      end: Math.min(start + pageSize, total)
+    }
+  };
 }
 
 async function getTicketScope(ticketId, employeeId, role) {
@@ -211,14 +325,19 @@ function addTicketSessionDuration(existingDuration, startTime, endTime = referen
   return { sessionMins, totalStr: minutesLabel(totalMins) };
 }
 
-function asTicketRow(row = {}, clients = []) {
+function asTicketRow(row = {}, clients = [], users = []) {
   const ticketId = first(row, ['Ticket ID', 'Task ID', 'ID', 'ticketId', 'taskId']);
   const clientId = first(row, ['Client_Id', 'Client ID', 'CustomerID', 'clientId']);
   const clientNameFromMaster =
     clients.find((item) => eq(item.Client_Id || item['Client ID'], clientId))?.['Client Name'] || '';
   const client = first(row, ['Name', 'Client Name', 'Client', 'clientName'], clientNameFromMaster);
   const employeeId = first(row, ['Employee ID', 'EmpID', 'employeeId']);
-  const employeeName = first(row, ['Employee Name', 'User', 'employeeName', 'name'], employeeId);
+  const userMatch = users.find((user) => eq(first(user, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'EmpID']), employeeId));
+  const employeeName = first(
+    row,
+    ['Employee Name', 'User', 'employeeName', 'name'],
+    first(userMatch || {}, ['Employee Name', 'Name', 'Full Name'], employeeId)
+  );
   const description = first(row, ['Task Description', 'Description', 'description']);
   const planDate = first(row, ['Plan Date', 'Date', 'planDate', 'timestamp']);
   const timestamp = first(row, ['Timestamp', 'timestamp', 'Created At', 'Date'], planDate);
@@ -256,6 +375,52 @@ function asTicketRow(row = {}, clients = []) {
     'Task Approver': first(row, ['Task Approver', 'taskApprover', 'Approver ID']),
     'Reassigned By': first(row, ['Reassigned By', 'reassignedBy']),
     _isClientOrigin: isClientOriginTicket(row)
+  };
+}
+
+function compactTicketRow(row = {}) {
+  return {
+    'Ticket ID': row['Ticket ID'],
+    ID: row.ID,
+    Client_Id: row.Client_Id,
+    'Client ID': row['Client ID'],
+    Client: row.Client,
+    Name: row.Name,
+    'Client Name': row['Client Name'],
+    'Employee ID': row['Employee ID'],
+    EmpID: row.EmpID,
+    'Employee Name': row['Employee Name'],
+    User: row.User,
+    'Task Category': row['Task Category'],
+    Category: row.Category,
+    Priority: row.Priority,
+    'Task Description': row['Task Description'],
+    Description: row.Description,
+    Status: row.Status,
+    Timestamp: row.Timestamp,
+    Date: row.Date,
+    'Plan Date': row['Plan Date'],
+    'Last Update Date': row['Last Update Date'],
+    'Start Time': row['Start Time'],
+    'End Time': row['End Time'],
+    'Total Duration': row['Total Duration'],
+    Duration: row.Duration,
+    Remarks: row.Remarks,
+    TAT: row.TAT,
+    When: row.When,
+    'Task Approver': row['Task Approver'],
+    'Reassigned By': row['Reassigned By'],
+    Attachment: row.Attachment,
+    Attachments: row.Attachments,
+    'Closing Attachment': row['Closing Attachment'],
+    HasUnreadAdminMessages: row.HasUnreadAdminMessages,
+    HasUnreadMessages: row.HasUnreadMessages,
+    _isClientOrigin: row._isClientOrigin,
+    _canApprove: row._canApprove,
+    _isActionableByMe: row._isActionableByMe,
+    _canTransferApproval: row._canTransferApproval,
+    _canSeeTeam: row._canSeeTeam,
+    _isBuddyTicket: row._isBuddyTicket
   };
 }
 
@@ -327,7 +492,8 @@ async function saveTicket(row) {
   return upsertRow('Ticket', 'Ticket ID', row['Ticket ID'], row);
 }
 
-export async function getTicketSystemData(employeeId, role) {
+export async function getTicketSystemData(employeeId, role, options = {}) {
+  const workspaceOptions = parseWorkspaceOptions(options);
   const data = await getRows();
   const tickets = data.tickets.filter((ticket) => canSeeTicket(ticket, employeeId, role, data.users));
   const categories = [...new Set([
@@ -367,7 +533,7 @@ export async function getTicketSystemData(employeeId, role) {
     return safe(approver).split(',')[0].trim();
   };
   const visibleTickets = tickets.map((ticket) => {
-    const row = asTicketRow(ticket, data.clients);
+    const row = asTicketRow(ticket, data.clients, data.users);
     const isPending = eq(row.Status, 'Pending Approval');
     const isOwner = eq(row['Employee ID'], employeeId);
     const designated = eq(approvalFor(ticket), employeeId);
@@ -376,16 +542,16 @@ export async function getTicketSystemData(employeeId, role) {
     const superAdminAction = normalizedRole === 'super admin' && !isOwner;
     const hrAction = normalizedRole === 'hr' && (ownerDepartment === 'hr' || ownerDepartment.includes('human resource'));
     const actionable = isPending && !isOwner && (superAdminAction || designated || hrAction);
-    return {
+    return compactTicketRow({
       ...row,
       _canApprove: actionable,
       _isActionableByMe: actionable,
       _canTransferApproval: actionable,
       _canSeeTeam: elevated
-    };
+    });
   });
   const clientOriginTickets = clientOriginScope.map((ticket) => {
-    const row = asTicketRow(ticket, data.clients);
+    const row = asTicketRow(ticket, data.clients, data.users);
     const isPending = eq(row.Status, 'Pending Approval');
     const isOwner = eq(row['Employee ID'], employeeId);
     const designated = eq(approvalFor(ticket), employeeId);
@@ -394,13 +560,13 @@ export async function getTicketSystemData(employeeId, role) {
     const superAdminAction = normalizedRole === 'super admin' && !isOwner;
     const hrAction = normalizedRole === 'hr' && (ownerDepartment === 'hr' || ownerDepartment.includes('human resource'));
     const actionable = isPending && !isOwner && (superAdminAction || designated || hrAction);
-    return {
+    return compactTicketRow({
       ...row,
       _canApprove: actionable,
       _isActionableByMe: actionable,
       _canTransferApproval: actionable,
       _canSeeTeam: elevated
-    };
+    });
   });
   const todayDate = new Date().toISOString().split('T')[0];
   const isApprovedStatus = (status) => ['approved', 'approve', 'accepted'].includes(String(status || '').toLowerCase().trim());
@@ -467,7 +633,7 @@ export async function getTicketSystemData(employeeId, role) {
 
     const userTickets = data.tickets.filter(t => userId(t).toLowerCase() === uId);
     userTickets.forEach(ticket => {
-      const row = asTicketRow(ticket, data.clients);
+      const row = asTicketRow(ticket, data.clients, data.users);
       buddyTickets.push({
         ...row,
         'Employee Name': `${row['Employee Name'] || row['Employee ID']} (On Leave) ➔ Buddy: ${buddyName}`,
@@ -480,18 +646,43 @@ export async function getTicketSystemData(employeeId, role) {
     });
   });
 
+  const currentEmployeeId = safe(employeeId).toLowerCase();
+  const myRows = visibleTickets.filter((ticket) => safe(ticket['Employee ID']).toLowerCase() === currentEmployeeId);
+  const teamRows = visibleTickets.filter((ticket) => !ticket._isClientOrigin && safe(ticket['Employee ID']).toLowerCase() !== currentEmployeeId);
+  const clientRows = clientOriginTickets;
+  const buddyRows = buddyTickets;
+  const scopedRows = workspaceOptions.viewMode === 'team' && elevated
+    ? teamRows
+    : workspaceOptions.viewMode === 'client' && (elevated || clientRows.length > 0)
+      ? clientRows
+      : workspaceOptions.viewMode === 'buddy'
+        ? buddyRows
+        : myRows;
+  const filteredRows = sortWorkspaceTickets(filterWorkspaceTickets(scopedRows, workspaceOptions.filters));
+  const paged = paginateRows(filteredRows, workspaceOptions.page, workspaceOptions.pageSize);
+
   return ok({
     clients,
     users: assignableUsers,
     allUsers: activeUsers,
     employees: assignableUsers,
-    tickets: visibleTickets,
-    buddyTickets,
-    teamTickets: elevated ? visibleTickets : [],
-    clientOriginTickets,
+    tickets: workspaceOptions.viewMode === 'client' || workspaceOptions.viewMode === 'buddy' ? [] : paged.rows,
+    buddyTickets: workspaceOptions.viewMode === 'buddy' ? paged.rows : [],
+    teamTickets: [],
+    clientOriginTickets: workspaceOptions.viewMode === 'client' ? paged.rows : [],
     canViewTeamTickets: elevated,
     canViewClientTickets: elevated || clientOriginTickets.length > 0,
     categories,
+    counts: {
+      my: filterWorkspaceTickets(myRows, workspaceOptions.filters).length,
+      team: filterWorkspaceTickets(teamRows, workspaceOptions.filters).length,
+      client: filterWorkspaceTickets(clientRows, workspaceOptions.filters).length,
+      buddy: filterWorkspaceTickets(buddyRows, workspaceOptions.filters).length
+    },
+    pagination: {
+      ...paged.pagination,
+      viewMode: workspaceOptions.viewMode
+    },
     dropdowns
   });
 }
@@ -507,6 +698,12 @@ function approvalDecision(data, ticket, actorId) {
   const designated = safe(reassignedTo || first(owner, ['Task Approver', 'Manager ID', 'Manager'])).split(',')[0].trim();
   if (role === 'super admin') {
     return { allowed: true, actor, owner };
+  }
+  if (role === 'manager') {
+    const directReports = directTeamIds(actorId, data.users);
+    return directReports.includes(userId(owner).toLowerCase())
+      ? { allowed: true, actor, owner }
+      : { allowed: false, message: 'You can only approve tickets for your direct team members.' };
   }
   const allowed = eq(designated, actorId) || (role === 'hr' && (ownerDepartment === 'hr' || ownerDepartment.includes('human resource')));
   return allowed ? { allowed: true, actor, owner } : { allowed: false, message: 'You are not the designated approver for this ticket.' };

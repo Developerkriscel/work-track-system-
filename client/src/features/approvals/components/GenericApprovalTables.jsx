@@ -1,5 +1,38 @@
+import { useEffect, useMemo, useState } from 'react';
 import { StatusPill } from '@/components/common/StatusPill';
 import { formatApprovalDate, toneForApprovalStatus } from '@/features/approvals/services/approvalsPresentation';
+
+function usePagedRows(rows = [], pageSize = 20) {
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  useEffect(() => {
+    setPage(1);
+  }, [rows, pageSize]);
+  const safePage = Math.min(page, pageCount);
+  const pageRows = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [pageSize, rows, safePage]);
+  return { page: safePage, pageCount, pageRows, setPage };
+}
+
+function ApprovalPager({ page, pageCount, total, onPageChange }) {
+  if (total <= 20) return null;
+  const first = total ? (page - 1) * 20 + 1 : 0;
+  const last = Math.min(page * 20, total);
+  return (
+    <div className="react-data-table__footer">
+      <span className="react-data-table__info">Showing {first} to {last} of {total} entries</span>
+      <div className="react-data-table__pager">
+        <button type="button" disabled={page <= 1} onClick={() => onPageChange(1)} aria-label="First page">«</button>
+        <button type="button" disabled={page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))} aria-label="Previous page">‹</button>
+        <span className="react-data-table__pager-current">{page}</span>
+        <button type="button" disabled={page >= pageCount} onClick={() => onPageChange(Math.min(pageCount, page + 1))} aria-label="Next page">›</button>
+        <button type="button" disabled={page >= pageCount} onClick={() => onPageChange(pageCount)} aria-label="Last page">»</button>
+      </div>
+    </div>
+  );
+}
 
 function GenericActions({ row, type, id, submitting, onRequestAction }) {
   if (!row?._isActionableByMe) {
@@ -28,7 +61,9 @@ function GenericActions({ row, type, id, submitting, onRequestAction }) {
 }
 
 export function LeaveApprovalTable({ rows, submitting, onRequestAction }) {
+  const { page, pageCount, pageRows, setPage } = usePagedRows(rows, 20);
   return (
+    <>
     <div className="dashboard-table-wrap">
       <table className="dashboard-table approval-table">
         <thead>
@@ -45,7 +80,7 @@ export function LeaveApprovalTable({ rows, submitting, onRequestAction }) {
         </thead>
         <tbody>
           {rows.length ? (
-            rows.map((row) => (
+            pageRows.map((row) => (
               <tr key={row['Leave ID'] || row.LeaveID || row.leaveId}>
                 <td data-label="Employee">
                   <div className="approval-user-cell">
@@ -78,11 +113,15 @@ export function LeaveApprovalTable({ rows, submitting, onRequestAction }) {
         </tbody>
       </table>
     </div>
+    <ApprovalPager page={page} pageCount={pageCount} total={rows.length} onPageChange={setPage} />
+    </>
   );
 }
 
 export function IntimationApprovalTable({ rows, submitting, onRequestAction }) {
+  const { page, pageCount, pageRows, setPage } = usePagedRows(rows, 20);
   return (
+    <>
     <div className="dashboard-table-wrap">
       <table className="dashboard-table approval-table">
         <thead>
@@ -97,7 +136,7 @@ export function IntimationApprovalTable({ rows, submitting, onRequestAction }) {
         </thead>
         <tbody>
           {rows.length ? (
-            rows.map((row) => (
+            pageRows.map((row) => (
               <tr key={row['Intimation ID'] || row.IntimationID || row.intimationId}>
                 <td data-label="Employee">
                   <div className="approval-user-cell">
@@ -128,11 +167,15 @@ export function IntimationApprovalTable({ rows, submitting, onRequestAction }) {
         </tbody>
       </table>
     </div>
+    <ApprovalPager page={page} pageCount={pageCount} total={rows.length} onPageChange={setPage} />
+    </>
   );
 }
 
 export function AttendanceApprovalTable({ rows, submitting, onRequestAction }) {
+  const { page, pageCount, pageRows, setPage } = usePagedRows(rows, 20);
   return (
+    <>
     <div className="dashboard-table-wrap">
       <table className="dashboard-table approval-table">
         <thead>
@@ -148,7 +191,7 @@ export function AttendanceApprovalTable({ rows, submitting, onRequestAction }) {
         </thead>
         <tbody>
           {rows.length ? (
-            rows.map((row) => (
+            pageRows.map((row) => (
               <tr key={row.AttendanceID || row['AttendanceID']}>
                 <td data-label="Employee">
                   <div className="approval-user-cell">
@@ -180,5 +223,7 @@ export function AttendanceApprovalTable({ rows, submitting, onRequestAction }) {
         </tbody>
       </table>
     </div>
+    <ApprovalPager page={page} pageCount={pageCount} total={rows.length} onPageChange={setPage} />
+    </>
   );
 }

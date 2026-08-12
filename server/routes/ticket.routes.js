@@ -33,7 +33,7 @@ router.get('/debug-buddy', async (req, res) => {
 
 router.post('/workspace', async (req, res) => {
   try {
-    res.json(await getTicketSystemData(req.auth.sub, req.auth.role));
+    res.json(await getTicketSystemData(req.auth.sub, req.auth.role, req.body || {}));
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

@@ -10,11 +10,14 @@ export function MyApprovalStatusPage() {
     employeeId,
     currentUser,
     loading,
+    rowsLoading,
     error, clearError,
     activeTab,
     rows,
     counts,
     summary,
+    totalRows,
+    hasMoreRows,
     filters,
     updateFilters,
     setActiveTab,
@@ -47,7 +50,7 @@ export function MyApprovalStatusPage() {
         onChange={(patch) => updateFilters(activeTab, patch)}
         onReset={() => resetFilters(activeTab)}
       />
-      <MyApprovalStatusTable rows={rows} loading={loading} />
+      <MyApprovalStatusTable rows={rows} loading={rowsLoading} totalRows={totalRows} hasMoreRows={hasMoreRows} />
     </section>
   );
 }

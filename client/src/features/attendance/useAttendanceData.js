@@ -92,7 +92,7 @@ function parseTimeToDate(ymd, displayTime) {
 
 function normalizeDateKey(value) {
   const raw = String(value || '').trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
   const dmy = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
   if (dmy) return `${dmy[3]}-${String(dmy[2]).padStart(2, '0')}-${String(dmy[1]).padStart(2, '0')}`;
   const parsed = new Date(raw);
@@ -134,6 +134,20 @@ function durationLabel(start, end) {
   return `${hours}h ${minutes}m`;
 }
 
+function normalizeAttendanceAction(value = '') {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function isPunchInRow(row = {}) {
+  const action = normalizeAttendanceAction(row.Action || row.action);
+  return /punch in/.test(action) || Boolean(row['Punch In'] || row.InTime || row.inTime);
+}
+
+function isPunchOutRow(row = {}) {
+  const action = normalizeAttendanceAction(row.Action || row.action);
+  return /punch out/.test(action) || Boolean(row['Punch Out'] || row.OutTime || row.outTime);
+}
+
 function rangeIncludesDate(startDate, endDate, dateValue) {
   const start = normalizeDateKey(startDate);
   const end = normalizeDateKey(endDate);
@@ -155,8 +169,8 @@ export function groupAttendanceRows(rows, bounds) {
       });
     }
     const group = groups.get(key);
-    if (row.Action === 'Punch In') group.punchesIn.push(row);
-    if (row.Action === 'Punch Out') group.punchesOut.push(row);
+    if (isPunchInRow(row)) group.punchesIn.push(row);
+    if (isPunchOutRow(row)) group.punchesOut.push(row);
   });
 
   let grouped = Array.from(groups.values()).map((group) => {
@@ -239,7 +253,8 @@ export function useAttendanceData() {
   const employeeId = user?.['Employee ID'] || '';
   const employeeName = user?.['Employee Name'] || user?.Name || employeeId;
   const role = String(user?.Role || user?.role || '');
-  const canManageTeamAttendance = /^(admin|super admin|hr)$/i.test(role.trim());
+  const canManageTeamAttendance = /^(admin|super admin|hr|manager)$/i.test(role.trim());
+  const canEditLocationPolicy = /^(admin|super admin|hr)$/i.test(role.trim());
   const [range, setRange] = useState('today');
   const [customStart, setCustomStart] = useState(toYmd(new Date()));
   const [customEnd, setCustomEnd] = useState(toYmd(new Date()));
@@ -437,7 +452,7 @@ export function useAttendanceData() {
 
   async function saveTeamAttendance(payload) {
     if (!canManageTeamAttendance) {
-      return { success: false, message: 'Only Admin or HR can edit team attendance.' };
+      return { success: false, message: 'Only Admin, HR, or Manager can edit team attendance.' };
     }
     setSubmitting(true);
     try {
@@ -453,7 +468,7 @@ export function useAttendanceData() {
   }
 
   async function saveLocationPolicy(payload) {
-    if (!canManageTeamAttendance) {
+    if (!canEditLocationPolicy) {
       return { success: false, message: 'Only Admin, Super Admin, or HR can update the attendance location policy.' };
     }
     setLocationPolicyState((current) => ({ ...current, saving: true, error: null }));
@@ -486,6 +501,7 @@ export function useAttendanceData() {
     currentUser: user || null,
     role,
     canManageTeamAttendance,
+    canEditLocationPolicy,
     range,
     setRange,
     customStart,

@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
+import zlib from 'zlib';
 import { fileURLToPath } from 'url';
 import { connectDatabase } from './server/config/database.js';
 import authRoutes from './server/routes/auth.routes.js';
@@ -39,6 +40,34 @@ assertAuthConfiguration();
 
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || true, credentials: true }));
 app.use(express.json({ limit: '25mb' }));
+
+app.use((req, res, next) => {
+  const acceptsGzip = /\bgzip\b/i.test(String(req.headers['accept-encoding'] || ''));
+  if (!acceptsGzip) return next();
+
+  const originalJson = res.json.bind(res);
+  res.json = (payload) => {
+    if (res.headersSent || res.getHeader('Content-Encoding')) return originalJson(payload);
+    const body = Buffer.from(JSON.stringify(payload));
+    if (body.length < 1024) {
+      res.type('application/json');
+      return res.send(body);
+    }
+    zlib.gzip(body, (error, compressed) => {
+      if (error) {
+        originalJson(payload);
+        return;
+      }
+      res.vary('Accept-Encoding');
+      res.set('Content-Encoding', 'gzip');
+      res.set('Content-Type', 'application/json; charset=utf-8');
+      res.set('Content-Length', String(compressed.length));
+      res.send(compressed);
+    });
+    return res;
+  };
+  return next();
+});
 
 app.use((req, res, next) => {
   const isExactUiPath =

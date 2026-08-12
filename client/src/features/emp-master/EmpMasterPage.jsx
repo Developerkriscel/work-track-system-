@@ -21,9 +21,11 @@ const categories = [
   ['Documents', 'Documents'],
   ['Hierarchy', 'Hierarchy']
 ];
+const formCategories = categories.filter(([value]) => value !== 'Documents' && value !== 'Hierarchy');
 
 const statuses = ['Active', 'Pending', 'Inactive', 'Resigned', 'Terminated'];
 const roleOptions = ['User', 'Manager', 'Admin', 'HR', 'Super Admin'];
+const editableCategories = new Set(['Master', 'EMP', 'Freelancer', 'Intern']);
 
 const emptyForm = () => ({
   Category: 'EMP',
@@ -361,12 +363,21 @@ function EmpEditor({ mode, category, initialRow, managerOptions, allUsers, onClo
     };
   }, [category, initialRow]);
 
+  function clearError() {
+    setError('');
+  }
+
   function update(patch) {
     setForm((current) => ({ ...current, ...patch }));
   }
 
   async function submit(event) {
     event.preventDefault();
+    if (!editableCategories.has(category)) {
+      setError('Please choose a valid employee category before saving.');
+      return;
+    }
+
     setSaving(true);
     setError('');
 
@@ -437,9 +448,23 @@ function EmpEditor({ mode, category, initialRow, managerOptions, allUsers, onClo
           <section className="emp-editor__section emp-editor__section--official">
             <h3>Access & Workflow</h3>
             <div className="emp-editor__grid">
-              <Field label="Category" name="Category" form={form} onChange={update} options={categories.map(([value, label]) => ({ value, label }))} disabled={readOnly || Boolean(initialRow)} />
-              <Field label="EMP Code" name="EMP Code" form={form} onChange={update} required disabled={readOnly || !initialRow} />
-              <Field label="User ID" name="User ID" form={form} onChange={update} required disabled={readOnly || !initialRow} />
+              <Field label="Category" name="Category" form={form} onChange={update} options={formCategories.map(([value, label]) => ({ value, label }))} disabled={readOnly || Boolean(initialRow)} />
+              <Field
+                label="EMP Code"
+                name="EMP Code"
+                form={form}
+                onChange={update}
+                required
+                disabled={readOnly || (!initialRow && (loadingCode || Boolean(form['EMP Code'])))}
+              />
+              <Field
+                label="User ID"
+                name="User ID"
+                form={form}
+                onChange={update}
+                required
+                disabled={readOnly || (!initialRow && (loadingCode || Boolean(form['EMP Code'])))}
+              />
               <Field label="Role" name="Role" form={form} onChange={update} options={roleOptions} disabled={readOnly} />
               <Field label="Reporting Manager" name="Manager ID" form={form} onChange={update} options={managerSelectOptions} disabled={readOnly} />
               <Field label="Task Approver" name="Task Approver" form={form} onChange={update} options={approverSelectOptions} disabled={readOnly} />
@@ -742,7 +767,7 @@ export function EmpMasterPage() {
         </label>
 
         {category === 'Hierarchy' ? (
-          <EmpHierarchyView data={visibleRows} />
+          <EmpHierarchyView data={visibleRows} allData={mergedRows} />
         ) : category === 'Documents' ? (
           <div className="dashboard-table-wrap">
             <table className="dashboard-table emp-master-table emp-master-table--documents">

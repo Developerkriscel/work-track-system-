@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppModal, ConfirmDialog } from '@/components/modals';
 import { StatusPill } from '@/components/common/StatusPill';
 import { CustomSelect } from '@/components/common/CustomSelect';
@@ -13,9 +13,9 @@ import {
 } from '@/features/attendance/components/AttendanceTables';
 import { AttendanceCalendar } from '@/features/attendance/components/AttendanceCalendar';
 import { AttendanceLocationPolicyCard } from '@/features/attendance/components';
-import { fetchAttendanceForUser } from '@/features/attendance/api';
+import { fetchAttendanceForUser, fetchTeamAttendanceCalendar } from '@/features/attendance/api';
 import { formatElapsed, todayYmd } from '@/features/attendance/services/attendancePresentation';
-import { useAttendanceData, toYmd, groupAttendanceRows } from '@/features/attendance/useAttendanceData';
+import { useAttendanceData, toYmd } from '@/features/attendance/useAttendanceData';
 
 export function AttendancePage() {
   const today = todayYmd();
@@ -23,6 +23,7 @@ export function AttendancePage() {
     employeeId,
     currentUser,
     canManageTeamAttendance,
+    canEditLocationPolicy,
     range,
     setRange,
     customStart,
@@ -54,10 +55,14 @@ export function AttendancePage() {
     saveLocationPolicy
   } = useAttendanceData();
 
-  const [activeTab, setActiveTab] = useState('punch');
   const [activeView, setActiveView] = useState('self');
   const [showCalendar, setShowCalendar] = useState(false);
+  const [selfCalendarRows, setSelfCalendarRows] = useState([]);
+  const [selfCalendarLoading, setSelfCalendarLoading] = useState(false);
+  const [selfCalendarRange, setSelfCalendarRange] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [showIntimationModal, setShowIntimationModal] = useState(false);
   const [showLocationPolicy, setShowLocationPolicy] = useState(false);
   const [timer, setTimer] = useState('00:00:00');
   const [message, setMessage] = useState(null);
@@ -71,6 +76,7 @@ export function AttendancePage() {
   const [teamCalendarUser, setTeamCalendarUser] = useState('');
   const [teamCalendarRows, setTeamCalendarRows] = useState([]);
   const [teamCalendarLoading, setTeamCalendarLoading] = useState(false);
+  const [teamCalendarRange, setTeamCalendarRange] = useState(null);
   const [teamEditor, setTeamEditor] = useState(null);
   const [teamEditorForm, setTeamEditorForm] = useState({ punchInTime: '', punchOutTime: '' });
   const [leaveForm, setLeaveForm] = useState({
@@ -91,9 +97,47 @@ export function AttendancePage() {
 
   const clearMessage = () => setMessage(null);
 
+  const handleSelfCalendarMonthChange = useCallback(({ startDate, endDate }) => {
+    setSelfCalendarRange((current) => (
+      current?.startDate === startDate && current?.endDate === endDate
+        ? current
+        : { startDate, endDate }
+    ));
+  }, []);
+
+  const handleTeamCalendarMonthChange = useCallback(({ startDate, endDate }) => {
+    setTeamCalendarRange((current) => (
+      current?.startDate === startDate && current?.endDate === endDate
+        ? current
+        : { startDate, endDate }
+    ));
+  }, []);
+
+  useEffect(() => {
+    if (!showCalendar || !employeeId || !selfCalendarRange?.startDate || !selfCalendarRange?.endDate) {
+      return undefined;
+    }
+
+    let active = true;
+    async function loadSelfCalendar() {
+      setSelfCalendarLoading(true);
+      try {
+        const payload = await fetchAttendanceForUser(employeeId, selfCalendarRange.startDate, selfCalendarRange.endDate);
+        if (active) setSelfCalendarRows(payload?.data || []);
+      } catch {
+        if (active) setSelfCalendarRows([]);
+      }
+      if (active) setSelfCalendarLoading(false);
+    }
+
+    loadSelfCalendar();
+    return () => { active = false; };
+  }, [showCalendar, employeeId, selfCalendarRange?.startDate, selfCalendarRange?.endDate]);
+
   useEffect(() => {
     if (!teamCalendarUser) {
       setTeamCalendarRows([]);
+      setTeamCalendarRange(null);
       return undefined;
     }
 
@@ -101,30 +145,22 @@ export function AttendancePage() {
     async function loadTeamCalendar() {
       setTeamCalendarLoading(true);
       try {
-        const date = new Date(teamFilterDate ? `${teamFilterDate}T00:00:00` : Date.now());
-        const y = date.getFullYear();
-        const m = date.getMonth();
-        const start = new Date(y, m, 1);
-        const end = new Date(y, m + 1, 0);
+        const fallbackDate = new Date(teamFilterDate ? `${teamFilterDate}T00:00:00` : Date.now());
+        const fallbackYear = fallbackDate.getFullYear();
+        const fallbackMonth = fallbackDate.getMonth();
+        const startStr = teamCalendarRange?.startDate || toYmd(new Date(fallbackYear, fallbackMonth, 1));
+        const endStr = teamCalendarRange?.endDate || toYmd(new Date(fallbackYear, fallbackMonth + 1, 0));
         
-        const startStr = toYmd(start);
-        const endStr = toYmd(end);
-        
-        const payload = await fetchAttendanceForUser(teamCalendarUser, startStr, endStr);
-        if (active && payload?.data) {
-          const rawRows = payload.data || [];
-          const bounds = { startDate: startStr, endDate: endStr };
-          const processed = groupAttendanceRows(rawRows, bounds);
-          setTeamCalendarRows(processed);
-        }
+        const payload = await fetchTeamAttendanceCalendar(teamCalendarUser, startStr, endStr);
+        if (active) setTeamCalendarRows(payload?.data || []);
       } catch (err) {
-        // ignore
+        if (active) setTeamCalendarRows([]);
       }
       if (active) setTeamCalendarLoading(false);
     }
     loadTeamCalendar();
     return () => { active = false; };
-  }, [teamCalendarUser, teamFilterDate]);
+  }, [teamCalendarUser, teamFilterDate, teamCalendarRange?.startDate, teamCalendarRange?.endDate]);
 
   useEffect(() => {
     if (!session.isPunchedIn) {
@@ -149,7 +185,7 @@ export function AttendancePage() {
   }, [submitNotice]);
 
   useEffect(() => {
-    if (!showForm || activeTab !== 'punch') return undefined;
+    if (!showForm) return undefined;
 
     let cancelled = false;
     async function startCamera() {
@@ -182,7 +218,7 @@ export function AttendancePage() {
       }
       setCameraReady(false);
     };
-  }, [showForm, activeTab, cameraCycle]);
+  }, [showForm, cameraCycle]);
 
   const visibleTeamRows = (teamAttendanceRows || []).filter((row) => {
     const query = teamSearch.trim().toLowerCase();
@@ -200,11 +236,18 @@ export function AttendancePage() {
   });
 
   const openForm = (tab) => {
-    setActiveTab(tab);
-    setShowForm(true);
     setMessage(null);
     setPunchAction(null);
     setPhotoBase64('');
+    if (tab === 'punch') {
+      setShowLeaveModal(false);
+      setShowIntimationModal(false);
+      setShowForm(true);
+      return;
+    }
+    setShowForm(false);
+    setShowLeaveModal(tab === 'leave');
+    setShowIntimationModal(tab === 'intimation');
   };
 
   const capturePhoto = () => {
@@ -303,6 +346,7 @@ export function AttendancePage() {
         tone: 'success'
       });
       setLeaveForm((current) => ({ ...current, reason: '', startDate: current.startDate, endDate: current.endDate }));
+      setShowLeaveModal(false);
     } else {
       setSubmitNotice({
         title: 'Leave Submission Failed',
@@ -323,6 +367,7 @@ export function AttendancePage() {
         tone: 'success'
       });
       setIntimationForm((current) => ({ ...current, reason: '', date: today }));
+      setShowIntimationModal(false);
     } else {
       setSubmitNotice({
         title: 'Intimation Submission Failed',
@@ -380,6 +425,7 @@ export function AttendancePage() {
           <AttendanceActionRow
             onOpenForm={openForm}
             canManageTeamAttendance={canManageTeamAttendance}
+            canEditLocationPolicy={canEditLocationPolicy}
             onOpenLocationPolicy={() => setShowLocationPolicy(true)}
           />
         }
@@ -401,7 +447,7 @@ export function AttendancePage() {
         >
           <AttendanceLocationPolicyCard
             policy={locationPolicy}
-            canEdit={canManageTeamAttendance}
+            canEdit={canEditLocationPolicy}
             loading={locationPolicyLoading}
             saving={locationPolicySaving}
             onSave={async (payload) => {
@@ -448,31 +494,133 @@ export function AttendancePage() {
       )}
 
       <AttendanceEntryPanel
-        activeTab={activeTab}
         showForm={showForm}
         isPunchedIn={session.isPunchedIn}
         cameraReady={cameraReady}
         videoRef={videoRef}
         canvasRef={canvasRef}
         photoBase64={photoBase64}
-        leaveForm={leaveForm}
-        intimationForm={intimationForm}
         submitting={submitting}
         punchAction={punchAction}
         onClose={() => setShowForm(false)}
-        onTabChange={setActiveTab}
         onCapturePhoto={capturePhoto}
         onRetakePhoto={retakePhoto}
         onPunch={handlePunch}
-        onLeaveFormChange={(field, value) => setLeaveForm((current) => (
-          field === 'dayType' && /half\s*day/i.test(value)
-            ? { ...current, dayType: value, endDate: current.startDate }
-            : { ...current, [field]: value }
-        ))}
-        onIntimationFormChange={(field, value) => setIntimationForm((current) => ({ ...current, [field]: value }))}
-        onLeaveSubmit={handleLeaveSubmit}
-        onIntimationSubmit={handleIntimationSubmit}
       />
+
+      {showLeaveModal ? (
+        <AppModal
+          title="Leave Request"
+          onClose={() => setShowLeaveModal(false)}
+          width="960px"
+        >
+          <form className="attendance-form-grid attendance-popup-form" onSubmit={handleLeaveSubmit}>
+            <label className="dashboard-control">
+              <span>Leave Type</span>
+              <select value={leaveForm.leaveType} onChange={(event) => setLeaveForm((current) => ({ ...current, leaveType: event.target.value }))}>
+                <option>Sick Leave</option>
+                <option>Casual Leave</option>
+                <option>Leave Without Pay (LWP)</option>
+              </select>
+            </label>
+            <label className="dashboard-control">
+              <span>Day Type</span>
+              <select
+                value={leaveForm.dayType}
+                onChange={(event) => setLeaveForm((current) => (
+                  /half\s*day/i.test(event.target.value)
+                    ? { ...current, dayType: event.target.value, endDate: current.startDate }
+                    : { ...current, dayType: event.target.value }
+                ))}
+              >
+                <option>Full Day</option>
+                <option>Half Day - First Half</option>
+                <option>Half Day - Second Half</option>
+              </select>
+            </label>
+            <label className="dashboard-control">
+              <span>Start Date</span>
+              <input
+                type="date"
+                value={leaveForm.startDate}
+                onChange={(event) => setLeaveForm((current) => ({ ...current, startDate: event.target.value }))}
+              />
+            </label>
+            <label className={`dashboard-control${/half\s*day/i.test(leaveForm.dayType) ? ' attendance-field--hidden' : ''}`}>
+              <span>End Date</span>
+              <input
+                type="date"
+                required={!/half\s*day/i.test(leaveForm.dayType)}
+                value={leaveForm.endDate}
+                onChange={(event) => setLeaveForm((current) => ({ ...current, endDate: event.target.value }))}
+              />
+            </label>
+            <label className="dashboard-control attendance-form-grid__full">
+              <span>Reason</span>
+              <textarea
+                required
+                value={leaveForm.reason}
+                onChange={(event) => setLeaveForm((current) => ({ ...current, reason: event.target.value }))}
+                rows="4"
+              />
+            </label>
+            <div className="attendance-popup-form__actions attendance-form-grid__full">
+              <button type="button" className="attendance-cta attendance-cta--gray" onClick={() => setShowLeaveModal(false)}>
+                Cancel
+              </button>
+              <button type="submit" className="attendance-cta attendance-cta--blue" disabled={submitting}>
+                Submit Leave Request
+              </button>
+            </div>
+          </form>
+        </AppModal>
+      ) : null}
+
+      {showIntimationModal ? (
+        <AppModal
+          title="Work Intimation"
+          onClose={() => setShowIntimationModal(false)}
+          width="840px"
+        >
+          <form className="attendance-form-grid attendance-popup-form" onSubmit={handleIntimationSubmit}>
+            <label className="dashboard-control">
+              <span>Date</span>
+              <input
+                type="date"
+                required
+                value={intimationForm.date}
+                onChange={(event) => setIntimationForm((current) => ({ ...current, date: event.target.value }))}
+              />
+            </label>
+            <label className="dashboard-control">
+              <span>Intimation Type</span>
+              <select value={intimationForm.type} onChange={(event) => setIntimationForm((current) => ({ ...current, type: event.target.value }))}>
+                <option>Work from Home</option>
+                <option>On-site Client Visit</option>
+                <option>Late Arrival</option>
+                <option>Early Departure</option>
+              </select>
+            </label>
+            <label className="dashboard-control attendance-form-grid__full">
+              <span>Reason / Details</span>
+              <textarea
+                required
+                value={intimationForm.reason}
+                onChange={(event) => setIntimationForm((current) => ({ ...current, reason: event.target.value }))}
+                rows="4"
+              />
+            </label>
+            <div className="attendance-popup-form__actions attendance-form-grid__full">
+              <button type="button" className="attendance-cta attendance-cta--gray" onClick={() => setShowIntimationModal(false)}>
+                Cancel
+              </button>
+              <button type="submit" className="attendance-cta attendance-cta--blue" disabled={submitting}>
+                Submit Intimation
+              </button>
+            </div>
+          </form>
+        </AppModal>
+      ) : null}
 
       <AttendanceRangeToolbar
         activeView={activeView}
@@ -564,7 +712,14 @@ export function AttendancePage() {
 
             {showCalendar && (
               <div style={{ marginTop: '24px' }}>
-                <AttendanceCalendar rows={attendanceRows || []} />
+                {selfCalendarLoading && !(selfCalendarRows || []).length ? (
+                  <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', fontWeight: '500' }}>Loading Calendar...</div>
+                ) : (
+                  <AttendanceCalendar
+                    rows={(selfCalendarRows || []).length ? selfCalendarRows : (attendanceRows || [])}
+                    onMonthChange={handleSelfCalendarMonthChange}
+                  />
+                )}
               </div>
             )}
           </article>
@@ -574,7 +729,7 @@ export function AttendancePage() {
           {teamAttendanceError ? <div className="dashboard-banner dashboard-banner--error"><span>{teamAttendanceError}</span><button type="button" className="dashboard-banner__close" onClick={clearTeamAttendanceError}>OK</button></div> : null}
           <article className="migration-panel migration-panel--full">
             <div className="migration-panel__row">
-              <h2>My Team Attendance</h2>
+              <h2>Team Attendance</h2>
               <StatusPill tone={teamAttendanceLoading ? 'neutral' : 'info'}>
                 {teamAttendanceLoading ? 'Refreshing' : `${visibleTeamRows.length} rows`}
               </StatusPill>
@@ -614,7 +769,7 @@ export function AttendancePage() {
                 {teamCalendarLoading ? (
                   <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', fontWeight: '500' }}>Loading Calendar...</div>
                 ) : (
-                  <AttendanceCalendar rows={teamCalendarRows} />
+                  <AttendanceCalendar rows={teamCalendarRows} onMonthChange={handleTeamCalendarMonthChange} />
                 )}
               </div>
             )}

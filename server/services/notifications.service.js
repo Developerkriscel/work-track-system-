@@ -258,8 +258,8 @@ export async function getEmployeeNotifications(employeeId, lastCheckTimestamp = 
   });
 
   notifications.sort((left, right) => (Date.parse(right.Timestamp || right['Last Update Date']) || 0) - (Date.parse(left.Timestamp || left['Last Update Date']) || 0));
-  const items = notifications.slice(0, 20);
-  return ok({ notifications: items, updates: items, serverTime: Date.now() });
+  const items = notifications.slice(0, 100);
+  return ok({ notifications: items, updates: items, serverTime: Date.now(), hasMore: notifications.length > items.length, total: notifications.length });
 }
 
 export async function getClientNotifications(clientId, lastCheckTimestamp = new Date(0).toISOString()) {
@@ -267,7 +267,7 @@ export async function getClientNotifications(clientId, lastCheckTimestamp = new 
   const cutoff = Date.parse(lastCheckTimestamp) || 0;
 
   const ticketUpdates = data.tickets
-    .filter((ticket) => eq(first(ticket, ['Client_Id', 'Client ID', 'clientId']), clientId) && !ticket.IsNotified)
+    .filter((ticket) => eq(first(ticket, ['Client_Id', 'Client ID', 'clientId']), clientId))
     .filter((ticket) => {
       const updateTime = Date.parse(first(ticket, ['Last Update Date', 'Timestamp', 'Date']));
       return !cutoff || Number.isNaN(updateTime) || updateTime >= cutoff;
@@ -283,7 +283,7 @@ export async function getClientNotifications(clientId, lastCheckTimestamp = new 
     }));
 
   const checklistUpdates = data.fms
-    .filter((task) => eq(first(task, ['Client_Id', 'Client ID']), clientId) && !task.IsNotified)
+    .filter((task) => eq(first(task, ['Client_Id', 'Client ID']), clientId))
     .filter((task) => {
       const updateTime = Date.parse(notificationTimestamp(task, first(task, ['Done Date', 'Plan Date', 'Date'])));
       return !cutoff || Number.isNaN(updateTime) || updateTime >= cutoff;
@@ -299,7 +299,7 @@ export async function getClientNotifications(clientId, lastCheckTimestamp = new 
     }));
 
   const socialUpdates = data.social
-    .filter((post) => eq(first(post, ['Client_Id', 'Client ID', 'clientId']), clientId) && !post.IsNotified)
+    .filter((post) => eq(first(post, ['Client_Id', 'Client ID', 'clientId']), clientId))
     .filter((post) => {
       const updateTime = Date.parse(first(post, ['Latest Update Date', 'Planned Post Date', 'Date']));
       return !cutoff || Number.isNaN(updateTime) || updateTime >= cutoff;
@@ -316,7 +316,7 @@ export async function getClientNotifications(clientId, lastCheckTimestamp = new 
 
   const updates = [...ticketUpdates, ...checklistUpdates, ...socialUpdates]
     .sort((left, right) => (Date.parse(right.Timestamp) || 0) - (Date.parse(left.Timestamp) || 0))
-    .slice(0, 20);
+    .slice(0, 100);
 
-  return ok({ updates, notifications: updates, serverTime: new Date().toISOString() });
+  return ok({ updates, notifications: updates, serverTime: new Date().toISOString(), hasMore: updates.length < ticketUpdates.length + checklistUpdates.length + socialUpdates.length, total: ticketUpdates.length + checklistUpdates.length + socialUpdates.length });
 }

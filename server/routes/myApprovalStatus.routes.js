@@ -5,7 +5,7 @@ const router = express.Router();
 
 router.post('/list', async (req, res) => {
   try {
-    const result = await getMyApprovalStatus(req.auth.sub);
+    const result = await getMyApprovalStatus(req.auth.sub, req.body || {});
     if (!result.success) {
       return res.status(400).json(result);
     }

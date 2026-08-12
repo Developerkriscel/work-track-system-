@@ -146,6 +146,8 @@ export function useTicketSystemData() {
   const [appliedFilters, setAppliedFilters] = useState(filters);
   const [submitting, setSubmitting] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [activeTab, setActiveTab] = useState('my');
+  const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0, totalPages: 1, start: 0, end: 0 });
 
   const reload = () => {
     setRefreshKey((current) => current + 1);
@@ -166,13 +168,28 @@ export function useTicketSystemData() {
     async function load() {
       setState((current) => ({ ...current, loading: true, error: null }));
       try {
-        const payload = await fetchTicketSystemData(employeeId);
+        const payload = await fetchTicketSystemData(employeeId, {
+          page: pagination.page,
+          pageSize: pagination.pageSize,
+          viewMode: activeTab,
+          filters: appliedFilters
+        });
         if (!alive) return;
+        const nextPagination = payload.pagination || {};
         setState({
           loading: false,
           error: null,
           payload
         });
+        setPagination((current) => ({
+          ...current,
+          page: nextPagination.page || current.page,
+          pageSize: nextPagination.pageSize || current.pageSize,
+          total: nextPagination.total || 0,
+          totalPages: nextPagination.totalPages || 1,
+          start: nextPagination.start || 0,
+          end: nextPagination.end || 0
+        }));
       } catch (error) {
         if (!alive) return;
         setState({
@@ -187,13 +204,14 @@ export function useTicketSystemData() {
     return () => {
       alive = false;
     };
-  }, [employeeId, refreshKey]);
+  }, [employeeId, refreshKey, activeTab, appliedFilters, pagination.page, pagination.pageSize]);
 
   const rawTickets = state.payload?.tickets || [];
   const clients = state.payload?.clients?.length
     ? state.payload.clients
     : state.payload?.dropdowns?.clients || [];
   const users = state.payload?.users || [];
+  const allUsers = state.payload?.allUsers || state.payload?.dropdowns?.allUsers || users;
   const categories = state.payload?.categories || [];
   const clientOriginRawTickets = state.payload?.clientOriginTickets || [];
   const rawBuddyTickets = state.payload?.buddyTickets || [];
@@ -212,13 +230,28 @@ export function useTicketSystemData() {
   );
 
   function applyFilters() {
+    setPagination((current) => ({ ...current, page: 1 }));
     setAppliedFilters(filters);
   }
 
   function resetFilters() {
     const next = { clientIds: [], statuses: [], search: '', timePeriod: 'All Time' };
     setFilters(next);
+    setPagination((current) => ({ ...current, page: 1 }));
     setAppliedFilters(next);
+  }
+
+  function changeActiveTab(nextTab) {
+    setPagination((current) => ({ ...current, page: 1 }));
+    setActiveTab(nextTab);
+  }
+
+  function changeTicketPage(nextPage) {
+    setPagination((current) => ({ ...current, page: Math.max(1, Number(nextPage) || 1) }));
+  }
+
+  function changeTicketPageSize(nextPageSize) {
+    setPagination((current) => ({ ...current, page: 1, pageSize: Number(nextPageSize) || 20 }));
   }
 
   async function submitNewTicket(payload) {
@@ -344,13 +377,20 @@ export function useTicketSystemData() {
     loading: state.loading,
     error: state.error, clearError: () => setState((current) => ({ ...current, error: null })),
     submitting,
+    activeTab,
+    setActiveTab: changeActiveTab,
     clients,
     users,
+    allUsers,
     categories,
     tickets: filteredTickets,
     buddyTickets: filteredBuddyTickets,
     clientOriginTickets: filteredClientOriginTickets,
     canViewClientTickets: Boolean(state.payload?.canViewClientTickets),
+    counts: state.payload?.counts || { my: 0, team: 0, client: 0, buddy: 0 },
+    pagination,
+    setTicketPage: changeTicketPage,
+    setTicketPageSize: changeTicketPageSize,
     filters,
     setFilters,
     applyFilters,

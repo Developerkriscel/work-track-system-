@@ -11,7 +11,7 @@ const router = express.Router();
 
 router.post('/queue', async (req, res) => {
   try {
-    res.json(await getPendingApprovals(req.auth.sub));
+    res.json(await getPendingApprovals(req.auth.sub, req.body || {}));
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

@@ -5,7 +5,7 @@ const router = express.Router();
 
 router.post('/data', async (req, res) => {
   try {
-    res.json(await getDashboardData(req.auth.sub, req.body.filterRange));
+    res.json(await getDashboardData(req.auth.sub, req.body.filterRange, req.body.viewMode, req.body || {}));
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

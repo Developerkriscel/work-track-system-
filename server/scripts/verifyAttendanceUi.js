@@ -17,6 +17,8 @@ assert(Boolean(rawUser), 'No active employee is available for Attendance UI veri
 
 if (rawUser) {
   const user = normalizeEmployee(rawUser);
+  const role = String(user?.Role || user?.role || '').trim().toLowerCase();
+  const canManageTeamAttendance = /^(admin|super admin|hr|manager)$/.test(role);
   const browser = await chromium.launch({
     headless: true,
     executablePath: process.env.PLAYWRIGHT_CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -37,12 +39,29 @@ if (rawUser) {
       localStorage.setItem('worktrack.mern.employeeSession', JSON.stringify(session));
     }, { user, token: employeeToken(user) });
     await page.goto(`${baseUrl}/attendance`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+
+    assert(await page.getByRole('button', { name: 'Attendance Log', exact: true }).isVisible(), 'Attendance Log tab is missing.');
+    if (canManageTeamAttendance) {
+      assert(await page.getByRole('button', { name: 'Team Attendance', exact: true }).isVisible(), 'Team Attendance tab is missing for privileged role.');
+      if (/^(admin|super admin|hr)$/.test(role)) {
+        assert(await page.getByRole('button', { name: 'Location Policy', exact: true }).isVisible(), 'Location Policy button is missing for privileged role.');
+        await page.getByRole('button', { name: 'Location Policy', exact: true }).click();
+        await page.getByRole('dialog', { name: 'Attendance Location Policy' }).waitFor({ state: 'visible', timeout: 5000 });
+        await page.getByRole('dialog', { name: 'Attendance Location Policy' }).getByRole('button', { name: 'Close dialog', exact: true }).click();
+      } else {
+        assert(await page.getByRole('button', { name: 'Location Policy', exact: true }).count() === 0, 'Location Policy should stay hidden for manager.');
+      }
+      await page.getByRole('button', { name: 'Team Attendance', exact: true }).click();
+      await page.getByRole('heading', { name: 'Team Attendance' }).waitFor({ state: 'visible', timeout: 5000 });
+    } else {
+      assert(await page.getByRole('button', { name: 'Team Attendance', exact: true }).count() === 0, 'Team Attendance tab should stay hidden for a non-privileged role.');
+      assert(await page.getByRole('button', { name: 'Location Policy', exact: true }).count() === 0, 'Location Policy button should stay hidden for a non-privileged role.');
+    }
+
     await page.getByRole('button', { name: 'Punch', exact: true }).click();
     await page.getByRole('heading', { name: 'New Attendance Entry' }).waitFor({ state: 'visible' });
 
     assert(await page.getByRole('button', { name: 'Attendance Punch' }).isVisible(), 'Attendance Punch tab is missing.');
-    assert(await page.getByRole('button', { name: 'Leave Request' }).isVisible(), 'Leave Request tab is missing.');
-    assert(await page.getByRole('button', { name: 'Work Intimation' }).isVisible(), 'Work Intimation tab is missing.');
     assert(await page.getByRole('button', { name: 'Capture', exact: true }).isVisible(), 'Capture button is missing.');
     assert(await page.getByRole('button', { name: 'Retake', exact: true }).count() === 0, 'Retake is visible before photo capture.');
     assert(await page.getByRole('button', { name: 'Punch In', exact: true }).isDisabled() || await page.getByRole('button', { name: 'Punch Out', exact: true }).isDisabled(), 'Both punch buttons are enabled before photo capture.');

@@ -17,6 +17,13 @@ function first(row = {}, keys = [], fallback = '') {
 const ok = (payload = {}) => ({ success: true, ...payload });
 const inactiveStatuses = new Set(['inactive', 'resigned', 'terminated']);
 const elevatedRoles = new Set(['admin', 'super admin']);
+const editableCategories = new Map([
+  ['master', 'Master'],
+  ['emp', 'EMP'],
+  ['employee', 'EMP'],
+  ['freelancer', 'Freelancer'],
+  ['intern', 'Intern']
+]);
 
 export const empCategories = ['Master', 'EMP', 'Freelancer', 'Intern'];
 export const empStatuses = ['Active', 'Pending', 'Inactive', 'Resigned', 'Terminated'];
@@ -28,6 +35,10 @@ function normalizeCategory(value) {
   if (raw === 'intern') return 'Intern';
   if (raw === 'inactive') return 'Inactive';
   return 'Master';
+}
+
+function normalizeEditableCategory(value) {
+  return editableCategories.get(safe(value).toLowerCase()) || '';
 }
 
 function empCode(row = {}) {
@@ -204,7 +215,10 @@ export async function getEmpMasterData(category = 'Master', adminRole = '') {
 }
 
 export async function getNextEmpCode(category = 'EMP') {
-  const targetCategory = normalizeCategory(category);
+  const targetCategory = normalizeEditableCategory(category);
+  if (!targetCategory) {
+    return { success: false, message: 'Please choose a valid employee category.' };
+  }
   const boundaries = {
     Master: [1, 100],
     EMP: [1, 100],
@@ -234,7 +248,10 @@ export async function getNextEmpCode(category = 'EMP') {
 }
 
 export async function saveEmpMasterData(category, formData = {}, filePayloads = {}, adminId = '', actorRole = '') {
-  const targetCategory = normalizeCategory(category || formData.Category);
+  const targetCategory = normalizeEditableCategory(category || formData.Category);
+  if (!targetCategory) {
+    return { success: false, message: 'Please choose a valid employee category.' };
+  }
   const records = await listRows('EmpMaster');
   const users = await listRows('User');
   const requestedCode = safe(first(formData, ['EMP Code', 'Employee ID', 'User ID', 'empCode', 'employeeId', 'userId']));

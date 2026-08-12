@@ -48,6 +48,17 @@ export async function fetchTeamAttendance(startDate, endDate) {
   });
 }
 
+export async function fetchTeamAttendanceCalendar(employeeId, startDate, endDate) {
+  return httpClient('/api/attendance/team/calendar', {
+    method: 'POST',
+    body: JSON.stringify({
+      employeeId,
+      startDate,
+      endDate
+    })
+  });
+}
+
 export async function updateTeamAttendance(payload) {
   return httpClient('/api/attendance/team/update', {
     method: 'POST',

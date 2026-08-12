@@ -941,6 +941,42 @@
   flex-shrink: 0;
 }
 
+.notification-card__read-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+}
+
+.notification-card__read-state--new {
+  background: rgba(52, 99, 235, 0.12);
+  color: #3459eb;
+}
+
+.notification-card__read-state--seen {
+  background: rgba(148, 163, 184, 0.14);
+  color: #64748b;
+}
+
+.notification-card--seen {
+  opacity: 0.82;
+}
+
+.notification-card--seen .notification-card__message {
+  font-weight: 500;
+}
+
+.notification-card--new {
+  border-color: rgba(52, 99, 235, 0.32);
+  box-shadow: 0 8px 20px rgba(52, 99, 235, 0.06), 0 1px 3px rgba(17, 24, 39, 0.02);
+}
+
 .notification-card__message {
   margin: 0;
   font-size: 13.5px;

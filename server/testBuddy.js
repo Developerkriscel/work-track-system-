@@ -1,7 +1,12 @@
+import 'dotenv/config';
 import { MongoClient } from 'mongodb';
 
-const url = 'mongodb+srv://devloper1_db_user:FcljdKvErYmD8gIB@work-track-system.tyyoknh.mongodb.net/?appName=work-track-system';
-const dbName = 'worktrack';
+const url = process.env.MONGO_URI;
+const dbName = process.env.MONGO_DB || 'worktrack';
+
+if (!url) {
+  throw new Error('MONGO_URI is required for testBuddy.js.');
+}
 
 async function testBuddy() {
   const client = new MongoClient(url);

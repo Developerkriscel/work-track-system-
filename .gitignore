@@ -1,9 +1,11 @@
 .env
 .env.*
 !.env.example
+token.txt
 
 node_modules/
 uploads/
+server/backups/
 
 *.log
 npm-debug.log*

@@ -1,6 +1,11 @@
-import { insertRow, listRows, sheetAttendance, upsertRow } from './legacyStore.service.js';
+import { insertRow, listRows, registerStoreMutationListener, sheetAttendance, upsertRow } from './legacyStore.service.js';
 import { checkUserAttendanceActive } from './attendance.service.js';
+import { LegacyModels } from '../models/legacyModels.js';
+import { stripInternalMetadata } from './legacyStore.service.js';
 
+const APPROVAL_QUEUE_CACHE_TTL_MS = Number(process.env.WORKTRACK_APPROVAL_QUEUE_CACHE_TTL_MS || 10000);
+const approvalQueueCache = new Map();
+let taskApproversCache = null;
 const safe = (value = '') => String(value ?? '').trim();
 const eq = (left, right) => safe(left).toLowerCase() === safe(right).toLowerCase();
 const first = (row, keys, fallback = '') => keys.map((key) => row?.[key]).find((value) => safe(value)) ?? fallback;
@@ -45,6 +50,15 @@ function normalizedDate(value) {
 }
 
 const elevatedRoles = new Set(['admin', 'super admin', 'hr', 'manager']);
+
+function clearApprovalQueueCache() {
+  approvalQueueCache.clear();
+  taskApproversCache = null;
+}
+
+registerStoreMutationListener(() => {
+  clearApprovalQueueCache();
+});
 
 function userId(user = {}) {
   return first(user, ['Employee ID', 'employeeId', 'User ID', 'EmpID']);
@@ -220,12 +234,105 @@ function durationBetween(inValue, outValue, dateValue) {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
+function previewText(value, limit = 500) {
+  const text = safe(value);
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit).trim()}...`;
+}
+
 function attendanceEventTime(row) {
   const date = normalizedDate(first(row, ['Date'], today()));
   const time = first(row, ['Time', 'Punch In', 'Punch Out']);
   const parsed = new Date(time || date);
   if (!Number.isNaN(parsed.getTime()) && /T|GMT|UTC|\d{4}-\d{2}-\d{2}/i.test(String(time || date))) return parsed.getTime();
   return new Date(`${date}T00:00:00+05:30`).getTime();
+}
+
+function leaveSignature(row = {}) {
+  return [
+    safe(first(row, ['Employee ID', 'employeeId', 'EmpID'])).toUpperCase(),
+    safe(first(row, ['Leave Type', 'leaveType', 'type'])).toLowerCase(),
+    safe(first(row, ['Day Type', 'dayType'])).toLowerCase(),
+    safe(first(row, ['Reason', 'reason'])).toLowerCase(),
+    safe(first(row, ['Status', 'status'])).toLowerCase(),
+    safe(first(row, ['Timestamp', 'Last Update Date', 'timestamp'])).toLowerCase(),
+    safe(first(row, ['Admin Remarks', 'Admin Approval', 'remarks'])).toLowerCase()
+  ].join('|');
+}
+
+function leaveSortTime(row = {}) {
+  const start = normalizedDate(first(row, ['Start Date', 'startDate']));
+  const end = normalizedDate(first(row, ['End Date', 'endDate', 'Start Date', 'startDate']));
+  const stamp = safe(first(row, ['Timestamp', 'Last Update Date', 'timestamp']));
+  return new Date(`${start || end || '1970-01-01'}T00:00:00Z`).getTime() || new Date(stamp || 0).getTime();
+}
+
+function groupLeaveRows(rows = []) {
+  const sorted = [...rows].sort((left, right) => {
+    const startDiff = leaveSortTime(left) - leaveSortTime(right);
+    if (startDiff) return startDiff;
+    return safe(first(left, ['LeaveID', 'Leave ID', 'ID', 'leaveId'])).localeCompare(safe(first(right, ['LeaveID', 'Leave ID', 'ID', 'leaveId'])));
+  });
+
+  const groups = [];
+  for (const row of sorted) {
+    const startDate = normalizedDate(first(row, ['Start Date', 'startDate']));
+    const endDate = normalizedDate(first(row, ['End Date', 'endDate', 'Start Date', 'startDate'])) || startDate;
+    const key = leaveSignature(row);
+    const last = groups[groups.length - 1];
+    const lastEndDate = last ? normalizedDate(last['End Date'] || last.endDate || last.startDate) : '';
+    const contiguous =
+      last &&
+      last._signature === key &&
+      startDate &&
+      lastEndDate &&
+      new Date(`${startDate}T00:00:00Z`).getTime() <= new Date(`${lastEndDate}T00:00:00Z`).getTime() + 24 * 60 * 60 * 1000;
+
+    if (contiguous) {
+      last['End Date'] = endDate > lastEndDate ? endDate : lastEndDate;
+      last.endDate = last['End Date'];
+      last._leaveIds.push(safe(first(row, ['LeaveID', 'Leave ID', 'ID', 'leaveId'])));
+      continue;
+    }
+
+    const leaveId = safe(first(row, ['LeaveID', 'Leave ID', 'ID', 'leaveId']));
+    groups.push({
+      ...row,
+      LeaveID: leaveId,
+      'Leave ID': leaveId,
+      startDate,
+      endDate,
+      'Start Date': startDate,
+      'End Date': endDate,
+      _signature: key,
+      _leaveIds: leaveId ? [leaveId] : []
+    });
+  }
+
+  return groups.map((row) => {
+    const groupedLeaveIds = row._leaveIds || [];
+    const firstLeaveId = groupedLeaveIds[0] || safe(first(row, ['LeaveID', 'Leave ID', 'ID', 'leaveId']));
+    return {
+      ...row,
+      LeaveID: firstLeaveId,
+      'Leave ID': firstLeaveId,
+      LeaveIDs: groupedLeaveIds,
+      _groupedLeaveIds: groupedLeaveIds
+    };
+  });
+}
+
+function leaveApprovalMatchKey(row = {}) {
+  return leaveSignature(row);
+}
+
+function findLeaveRowsForAction(leaveRows = [], targetRow = {}) {
+  const targetId = safe(first(targetRow, ['LeaveID', 'Leave ID', 'ID', 'leaveId']));
+  const targetKey = leaveApprovalMatchKey(targetRow);
+  return leaveRows.filter((row) => {
+    const rowId = safe(first(row, ['LeaveID', 'Leave ID', 'ID', 'leaveId']));
+    return rowId === targetId || leaveApprovalMatchKey(row) === targetKey;
+  });
 }
 
 function isAttendanceActive(rowsList, employeeId) {
@@ -260,7 +367,6 @@ function asTicketRow(row = {}, clients = []) {
   const timestamp = first(row, ['Timestamp', 'timestamp', 'Created At', 'Date'], planDate);
   const totalDuration = first(row, ['Total Duration', 'Duration', 'totalDuration', 'duration']);
   return {
-    ...row,
     'Ticket ID': ticketId,
     ID: first(row, ['ID', 'Ticket ID', 'ticketId'], ticketId),
     Client_Id: clientId,
@@ -286,12 +392,219 @@ function asTicketRow(row = {}, clients = []) {
     'End Time': first(row, ['End Time', 'endTime']),
     'Total Duration': totalDuration,
     Duration: totalDuration,
-    Remarks: first(row, ['Remarks', 'remarks']),
+    Remarks: previewText(first(row, ['Remarks', 'remarks'])),
     TAT: first(row, ['TAT', 'When', 'tatMinutes']),
     When: first(row, ['When', 'TAT', 'tatMinutes']),
     'Task Approver': first(row, ['Task Approver', 'taskApprover', 'Approver ID']),
-    'Reassigned By': first(row, ['Reassigned By', 'reassignedBy'])
+    'Reassigned By': first(row, ['Reassigned By', 'reassignedBy']),
+    _remarksTruncated: safe(first(row, ['Remarks', 'remarks'])).length > 500
   };
+}
+
+function fromLegacyDocs(docs = []) {
+  return docs.map((doc) => ({
+    ...stripInternalMetadata(doc.data || {}),
+    _id: String(doc._id),
+    _legacyId: doc.legacyId
+  }));
+}
+
+async function listDataRows(modelName, query = {}, projection = { data: 1, legacyId: 1 }) {
+  const docs = await LegacyModels[modelName].collection.find(query, { projection }).toArray();
+  return fromLegacyDocs(docs);
+}
+
+async function getApprovalQueueRows(adminId, options = {}) {
+  const requestedTabs = Array.isArray(options.tabs) && options.tabs.length
+    ? new Set(options.tabs.map((value) => safe(value).toLowerCase()))
+    : new Set(['tickets', 'leaves', 'intimations', 'attendance']);
+  const includeClients = options.includeClients !== false;
+  const userProjection = {
+    legacyId: 1,
+    'data.Employee ID': 1,
+    'data.User ID': 1,
+    'data.EmpID': 1,
+    'data.employeeId': 1,
+    'data.Employee Name': 1,
+    'data.Name': 1,
+    'data.name': 1,
+    'data.Role': 1,
+    'data.role': 1,
+    'data.Department': 1,
+    'data.department': 1,
+    'data.Manager ID': 1,
+    'data.Manager': 1,
+    'data.managerId': 1,
+    'data.Reporting Manager': 1,
+    'data.Task Approver': 1,
+    'data.taskApprover': 1,
+    'data.Status': 1
+  };
+  const users = await listDataRows('User', {}, userProjection);
+  const admin = users.find((user) => eq(userId(user), adminId));
+  if (!admin || !elevatedRoles.has(userRole(admin))) return { admin, users, denied: true };
+
+  const ticketProjection = {
+    legacyId: 1,
+    'data.Ticket ID': 1,
+    'data.Task ID': 1,
+    'data.ID': 1,
+    'data.Client_Id': 1,
+    'data.Client ID': 1,
+    'data.CustomerID': 1,
+    'data.Name': 1,
+    'data.Client Name': 1,
+    'data.Client': 1,
+    'data.clientName': 1,
+    'data.Employee ID': 1,
+    'data.EmpID': 1,
+    'data.employeeId': 1,
+    'data.Employee Name': 1,
+    'data.User': 1,
+    'data.employeeName': 1,
+    'data.Task Category': 1,
+    'data.Category': 1,
+    'data.category': 1,
+    'data.Priority': 1,
+    'data.priority': 1,
+    'data.Task Description': 1,
+    'data.Description': 1,
+    'data.description': 1,
+    'data.Status': 1,
+    'data.status': 1,
+    'data.Timestamp': 1,
+    'data.timestamp': 1,
+    'data.Created At': 1,
+    'data.Date': 1,
+    'data.Plan Date': 1,
+    'data.planDate': 1,
+    'data.Last Update Date': 1,
+    'data.lastUpdateDate': 1,
+    'data.Start Time': 1,
+    'data.startTime': 1,
+    'data.End Time': 1,
+    'data.endTime': 1,
+    'data.Total Duration': 1,
+    'data.Duration': 1,
+    'data.totalDuration': 1,
+    'data.duration': 1,
+    'data.Remarks': 1,
+    'data.remarks': 1,
+    'data.TAT': 1,
+    'data.When': 1,
+    'data.tatMinutes': 1,
+    'data.Task Approver': 1,
+    'data.taskApprover': 1,
+    'data.Approver ID': 1,
+    'data.Reassigned By': 1,
+    'data.reassignedBy': 1,
+    'data.Reassigned To': 1,
+    'data.reassignedTo': 1
+  };
+  const leaveProjection = {
+    legacyId: 1,
+    'data.LeaveID': 1,
+    'data.Leave ID': 1,
+    'data.ID': 1,
+    'data.leaveId': 1,
+    'data.Employee ID': 1,
+    'data.employeeId': 1,
+    'data.EmpID': 1,
+    'data.Employee Name': 1,
+    'data.employeeName': 1,
+    'data.Name': 1,
+    'data.Leave Type': 1,
+    'data.leaveType': 1,
+    'data.type': 1,
+    'data.Day Type': 1,
+    'data.dayType': 1,
+    'data.Start Date': 1,
+    'data.startDate': 1,
+    'data.End Date': 1,
+    'data.endDate': 1,
+    'data.Reason': 1,
+    'data.reason': 1,
+    'data.Status': 1,
+    'data.status': 1,
+    'data.Timestamp': 1,
+    'data.timestamp': 1,
+    'data.Last Update Date': 1,
+    'data.Admin Remarks': 1,
+    'data.Admin Approval': 1,
+    'data.remarks': 1
+  };
+  const intimationProjection = {
+    legacyId: 1,
+    'data.IntimationID': 1,
+    'data.Intimation ID': 1,
+    'data.ID': 1,
+    'data.intimationId': 1,
+    'data.Employee ID': 1,
+    'data.employeeId': 1,
+    'data.EmpID': 1,
+    'data.Employee Name': 1,
+    'data.employeeName': 1,
+    'data.Name': 1,
+    'data.Intimation Type': 1,
+    'data.Type': 1,
+    'data.type': 1,
+    'data.Intimation Date': 1,
+    'data.Date': 1,
+    'data.date': 1,
+    'data.Reason': 1,
+    'data.reason': 1,
+    'data.Status': 1,
+    'data.status': 1,
+    'data.Timestamp': 1,
+    'data.Last Update Date': 1,
+    'data.Admin Remarks': 1,
+    'data.Admin Approval': 1,
+    'data.remarks': 1
+  };
+  const attendanceProjection = {
+    legacyId: 1,
+    'data.AttendanceID': 1,
+    'data.ID': 1,
+    'data.attendanceId': 1,
+    'data.Employee ID': 1,
+    'data.employeeId': 1,
+    'data.EmpID': 1,
+    'data.Employee Name': 1,
+    'data.employeeName': 1,
+    'data.Name': 1,
+    'data.Date': 1,
+    'data.date': 1,
+    'data.Action': 1,
+    'data.action': 1,
+    'data.Time': 1,
+    'data.Punch In': 1,
+    'data.InTime': 1,
+    'data.Punch Out': 1,
+    'data.OutTime': 1,
+    'data.Total Working Hours': 1,
+    'data.Duration': 1,
+    'data.Status': 1,
+    'data.status': 1,
+    'data.Remarks': 1,
+    'data.Admin Remarks': 1
+  };
+  const clientProjection = {
+    legacyId: 1,
+    'data.Client_Id': 1,
+    'data.Client ID': 1,
+    'data.CustomerID': 1,
+    'data.Client Name': 1,
+    'data.Name': 1
+  };
+  const ticketStatusQuery = { 'data.Status': /pending approval|hr approved|approved|closed|rework|reject|completed/i };
+  const [leaves, intimations, attendance, tickets, clients] = await Promise.all([
+    requestedTabs.has('leaves') ? listDataRows('Leave', {}, leaveProjection) : Promise.resolve([]),
+    requestedTabs.has('intimations') ? listDataRows('Intimation', {}, intimationProjection) : Promise.resolve([]),
+    requestedTabs.has('attendance') ? listDataRows('Attendance', {}, attendanceProjection) : Promise.resolve([]),
+    requestedTabs.has('tickets') ? listDataRows('Ticket', ticketStatusQuery, ticketProjection) : Promise.resolve([]),
+    requestedTabs.has('tickets') && includeClients ? listDataRows('Client', {}, clientProjection) : Promise.resolve([])
+  ]);
+  return { admin, users, leaves, intimations, attendance, tickets, clients };
 }
 
 async function getRows() {
@@ -306,8 +619,18 @@ async function getRows() {
   return { leaves, intimations, attendance, tickets, users, clients };
 }
 
-export async function getPendingApprovals(adminId) {
-  const data = await getRows();
+export async function getPendingApprovals(adminId, options = {}) {
+  const mode = safe(options.mode).toLowerCase();
+  if (mode === 'summary') return getPendingApprovalsSummary(adminId);
+  if (mode === 'rows') return getPendingApprovalsRows(adminId, options);
+
+  const cacheKey = safe(adminId).toLowerCase();
+  const cached = approvalQueueCache.get(cacheKey);
+  if (cached && Date.now() - cached.createdAt < APPROVAL_QUEUE_CACHE_TTL_MS) {
+    return cached.payload;
+  }
+
+  const data = await getApprovalQueueRows(adminId);
   const admin = data.users.find((user) => eq(userId(user), adminId));
   if (!admin || !elevatedRoles.has(userRole(admin))) return fail('Access Denied');
 
@@ -345,13 +668,15 @@ export async function getPendingApprovals(adminId) {
       attendanceGroups.set(key, group);
     });
 
-  return ok({
-    leaves: data.leaves
-      .map((row) => {
+  const payload = ok({
+    leaves: groupLeaveRows(
+      data.leaves
+        .map((row) => {
         const decision = requestApprovalDecision(admin, row, data.users, 'Leave');
         return decision.visible ? { ...row, _canApprove: decision.canApprove, _isActionableByMe: decision.actionable } : null;
-      })
-      .filter(Boolean),
+        })
+        .filter(Boolean)
+    ),
     intimations: data.intimations
       .map((row) => {
         const decision = requestApprovalDecision(admin, row, data.users, 'Intimation');
@@ -377,9 +702,424 @@ export async function getPendingApprovals(adminId) {
       name: first(user, ['Employee Name', 'name', 'Name'], first(user, ['Employee ID', 'employeeId', 'User ID', 'EmpID']))
     }))
   });
+  approvalQueueCache.set(cacheKey, { createdAt: Date.now(), payload });
+  return payload;
+}
+
+function approvalUserOptions(users = []) {
+  return users.map((user) => ({
+    id: first(user, ['Employee ID', 'employeeId', 'User ID', 'EmpID']),
+    name: first(user, ['Employee Name', 'name', 'Name'], first(user, ['Employee ID', 'employeeId', 'User ID', 'EmpID']))
+  }));
+}
+
+function employeeIdsQuery(employeeIds = []) {
+  const ids = employeeIds.map((value) => safe(value)).filter(Boolean);
+  if (!ids.length) return { $or: [{ legacyId: '__no_match__' }] };
+  return {
+    $or: [
+      { 'data.Employee ID': { $in: ids } },
+      { 'data.employeeId': { $in: ids } },
+      { 'data.EmpID': { $in: ids } },
+      { 'data.User ID': { $in: ids } }
+    ]
+  };
+}
+
+function activeVisibleApprovalUsers(admin, users = []) {
+  const role = userRole(admin);
+  return users.filter((user) => {
+    if (safe(first(user, ['Status', 'status'], 'Active')).toLowerCase() === 'inactive') return false;
+    if (role === 'super admin') return true;
+    if (role === 'admin') return userRole(user) !== 'super admin';
+    if (role === 'hr') return userRole(user) !== 'super admin';
+    if (role === 'manager') return canReviewEmployee(admin, user, users);
+    return false;
+  });
+}
+
+function actionableTicketMatchQuery(admin, users = []) {
+  const role = userRole(admin);
+  const adminId = safe(userId(admin));
+  if (!adminId) return { $or: [{ legacyId: '__no_match__' }] };
+  if (role === 'super admin') {
+    return { 'data.Status': /pending approval|hr approved/i };
+  }
+  if (role === 'admin' || role === 'manager') {
+    return {
+      $and: [
+        { 'data.Status': /pending approval|hr approved/i },
+        {
+          $or: [
+            { 'data.Task Approver': adminId },
+            { 'data.taskApprover': adminId },
+            { 'data.Reassigned To': adminId },
+            { 'data.reassignedTo': adminId }
+          ]
+        },
+        {
+          $nor: [
+            { 'data.Employee ID': adminId },
+            { 'data.employeeId': adminId },
+            { 'data.EmpID': adminId },
+            { 'data.User ID': adminId }
+          ]
+        }
+      ]
+    };
+  }
+  if (role === 'hr') {
+    const hrEmployeeIds = users
+      .filter((user) => {
+        const ownerDepartment = safe(first(user, ['Department', 'department'])).toLowerCase();
+        return ownerDepartment === 'hr' || ownerDepartment.includes('hr intern') || ownerDepartment.includes('human resource');
+      })
+      .map((user) => safe(userId(user)))
+      .filter(Boolean);
+    return {
+      $and: [
+        { 'data.Status': /pending approval|hr approved/i },
+        {
+          $or: [
+            { 'data.Task Approver': adminId },
+            { 'data.taskApprover': adminId },
+            { 'data.Reassigned To': adminId },
+            { 'data.reassignedTo': adminId },
+            employeeIdsQuery(hrEmployeeIds)
+          ]
+        },
+        {
+          $nor: [
+            { 'data.Employee ID': adminId },
+            { 'data.employeeId': adminId },
+            { 'data.EmpID': adminId },
+            { 'data.User ID': adminId }
+          ]
+        }
+      ]
+    };
+  }
+  return { $or: [{ legacyId: '__no_match__' }] };
+}
+
+function buildVisibleLeaveRows(data, admin) {
+  return groupLeaveRows(
+    data.leaves
+      .map((row) => {
+        const decision = requestApprovalDecision(admin, row, data.users, 'Leave');
+        return decision.visible ? { ...row, _canApprove: decision.canApprove, _isActionableByMe: decision.actionable } : null;
+      })
+      .filter(Boolean)
+  );
+}
+
+function buildVisibleIntimationRows(data, admin) {
+  return data.intimations
+    .map((row) => {
+      const decision = requestApprovalDecision(admin, row, data.users, 'Intimation');
+      return decision.visible ? { ...row, _canApprove: decision.canApprove, _isActionableByMe: decision.actionable } : null;
+    })
+    .filter(Boolean);
+}
+
+function buildVisibleAttendanceRows(data, admin) {
+  const attendanceGroups = new Map();
+  data.attendance
+    .filter((row) => requestApprovalDecision(admin, row, data.users, 'Attendance').visible)
+    .forEach((row) => {
+      const employee = first(row, ['Employee ID', 'employeeId', 'EmpID']);
+      const date = normalizedDate(first(row, ['Date', 'date']));
+      const key = `${safe(employee).toUpperCase()}|${date}`;
+      const group = attendanceGroups.get(key) || {
+        'Employee ID': employee,
+        'Employee Name': first(row, ['Employee Name', 'employeeName', 'Name'], employee),
+        DateStr: date,
+        PunchIn: '-',
+        PunchOut: '-',
+        Duration: '-',
+        Status: first(row, ['Status', 'status'], 'Need Approval'),
+        AttendanceID: key,
+        AttendanceIDs: [],
+        _canApprove: false,
+        _isActionableByMe: false
+      };
+      const decision = requestApprovalDecision(admin, row, data.users, 'Attendance');
+      group.AttendanceIDs.push(first(row, ['AttendanceID', 'ID', 'attendanceId']));
+      group._canApprove = group._canApprove || decision.canApprove;
+      group._isActionableByMe = group._isActionableByMe || decision.actionable;
+      if (/punch\s*in/i.test(first(row, ['Action', 'action']))) {
+        group.PunchIn = formatApprovalTime(first(row, ['Time', 'Punch In', 'InTime']));
+      }
+      if (/punch\s*out/i.test(first(row, ['Action', 'action']))) {
+        group.PunchOut = formatApprovalTime(first(row, ['Time', 'Punch Out', 'OutTime']));
+        group.Duration = first(row, ['Total Working Hours', 'Duration'], group.Duration) || group.Duration;
+      }
+      attendanceGroups.set(key, group);
+    });
+  return Array.from(attendanceGroups.values());
+}
+
+function buildVisibleTicketRows(data, admin) {
+  return data.tickets
+    .filter((row) => ticketApprovalDecision(admin, row, data.users).visible && isApprovalRelevantTicketStatus(first(row, ['Status'])))
+    .map((row) => {
+      const decision = ticketApprovalDecision(admin, row, data.users);
+      const isPending = isPendingTicketStatus(first(row, ['Status']));
+      return {
+        ...asTicketRow(row, data.clients),
+        _canApprove: decision.canApprove && isPending,
+        _isActionableByMe: decision.actionable && isPending,
+        _canTransferApproval: decision.actionable && isPending
+      };
+    })
+    .sort((left, right) => Number(right._isActionableByMe) - Number(left._isActionableByMe));
+}
+
+function includesFilter(value, query) {
+  return !safe(query) || safe(value).toLowerCase().includes(safe(query).toLowerCase());
+}
+
+function inDateRange(value, start, end) {
+  if (!start && !end) return true;
+  const normalized = normalizedDate(value);
+  if (!normalized) return false;
+  if (start && normalized < start) return false;
+  if (end && normalized > end) return false;
+  return true;
+}
+
+function sortApprovalRows(rows = [], getDateValue) {
+  return [...rows].sort((left, right) => {
+    const actionableDiff = Number(Boolean(right?._isActionableByMe)) - Number(Boolean(left?._isActionableByMe));
+    if (actionableDiff) return actionableDiff;
+    const rightDate = new Date(getDateValue(right) || right?.['Last Update Date'] || right?.Timestamp || 0).getTime();
+    const leftDate = new Date(getDateValue(left) || left?.['Last Update Date'] || left?.Timestamp || 0).getTime();
+    return rightDate - leftDate;
+  });
+}
+
+function filterApprovalRows(tab, rows = [], filters = {}) {
+  if (tab === 'tickets') {
+    return sortApprovalRows(rows.filter((ticket) => {
+      const employeeText = `${ticket['Employee Name'] || ''} ${ticket['Employee ID'] || ''}`;
+      const searchable = [
+        ticket['Ticket ID'],
+        ticket['Task Description'],
+        ticket.Remarks,
+        ticket.Name,
+        ticket['Client Name'],
+        ticket['Client ID']
+      ].join(' ');
+      const isPending = /pending approval|hr approved/i.test(ticket.Status);
+      const isStatusMatch = !filters.status ||
+        (filters.status === 'pending' && isPending) ||
+        (filters.status === 'approved' && /approved/i.test(ticket.Status) && !isPending) ||
+        (filters.status === 'rejected' && /reject|rework|closed/i.test(ticket.Status));
+      return (
+        isStatusMatch &&
+        includesFilter(employeeText, filters.employee) &&
+        (!filters.category || (ticket['Task Category'] || ticket.Category) === filters.category) &&
+        inDateRange(ticket['Plan Date'], filters.startDate, filters.endDate) &&
+        includesFilter(searchable, filters.search)
+      );
+    }), (item) => item?.['Plan Date']);
+  }
+
+  if (tab === 'leaves') {
+    return sortApprovalRows(rows.filter((item) => {
+      const employeeText = `${item['Employee Name'] || item.employeeName || ''} ${item['Employee ID'] || item.employeeId || ''}`;
+      const searchable = [item['Leave Type'] || item.leaveType || item.type, item.Reason || item.reason, item['Day Type'] || item.dayType].join(' ');
+      const isPending = /pending/i.test(item.Status);
+      const isStatusMatch = !filters.status ||
+        (filters.status === 'pending' && isPending) ||
+        (filters.status === 'approved' && /approved/i.test(item.Status)) ||
+        (filters.status === 'rejected' && /reject/i.test(item.Status));
+      return (
+        isStatusMatch &&
+        includesFilter(employeeText, filters.employee) &&
+        inDateRange(item['Start Date'] || item.startDate, filters.startDate, filters.endDate) &&
+        inDateRange(item['End Date'] || item.endDate, filters.startDate, filters.endDate) &&
+        includesFilter(searchable, filters.search)
+      );
+    }), (item) => item?.['Start Date'] || item?.startDate);
+  }
+
+  if (tab === 'intimations') {
+    return sortApprovalRows(rows.filter((item) => {
+      const employeeText = `${item['Employee Name'] || item.employeeName || ''} ${item['Employee ID'] || item.employeeId || ''}`;
+      const searchable = [item['Intimation Type'] || item.type, item.Reason || item.reason].join(' ');
+      const isPending = /pending|submitted/i.test(item.Status);
+      const isStatusMatch = !filters.status ||
+        (filters.status === 'pending' && isPending) ||
+        (filters.status === 'approved' && /approved/i.test(item.Status)) ||
+        (filters.status === 'rejected' && /reject/i.test(item.Status));
+      return (
+        isStatusMatch &&
+        includesFilter(employeeText, filters.employee) &&
+        inDateRange(item['Intimation Date'] || item.Date || item.date, filters.startDate, filters.endDate) &&
+        includesFilter(searchable, filters.search)
+      );
+    }), (item) => item?.['Intimation Date'] || item?.Date || item?.date);
+  }
+
+  return sortApprovalRows(rows.filter((item) => {
+    const employeeText = `${item['Employee Name'] || ''} ${item['Employee ID'] || ''}`;
+    const searchable = [item.Status, item.Remarks, item['Admin Remarks']].join(' ');
+    const isPending = /pending|need approval/i.test(item.Status);
+    const isStatusMatch = !filters.status ||
+      (filters.status === 'pending' && isPending) ||
+      (filters.status === 'approved' && /present|approved/i.test(item.Status) && !isPending) ||
+      (filters.status === 'rejected' && /reject|absent/i.test(item.Status));
+    return (
+      isStatusMatch &&
+      includesFilter(employeeText, filters.employee) &&
+      inDateRange(item.Date || item.DateStr, filters.startDate, filters.endDate) &&
+      includesFilter(searchable, filters.search)
+    );
+  }), (item) => item?.Date || item?.DateStr);
+}
+
+function approvalSummaryPayload(data, admin) {
+  const tickets = buildVisibleTicketRows({ ...data, clients: [] }, admin);
+  const leaves = buildVisibleLeaveRows(data, admin);
+  const intimations = buildVisibleIntimationRows(data, admin);
+  const attendance = buildVisibleAttendanceRows(data, admin);
+  return ok({
+    counts: {
+      tickets: tickets.filter((row) => row._isActionableByMe === true).length,
+      leaves: leaves.filter((row) => row._isActionableByMe === true).length,
+      intimations: intimations.filter((row) => row._isActionableByMe === true).length,
+      attendance: attendance.filter((row) => row._isActionableByMe === true).length
+    },
+    users: approvalUserOptions(data.users),
+    ticketCategories: Array.from(new Set(tickets.map((ticket) => ticket['Task Category'] || ticket.Category).filter(Boolean))).sort((left, right) => left.localeCompare(right))
+  });
+}
+
+async function getPendingApprovalsSummary(adminId) {
+  const cacheKey = `${safe(adminId).toLowerCase()}::summary`;
+  const cached = approvalQueueCache.get(cacheKey);
+  if (cached && Date.now() - cached.createdAt < APPROVAL_QUEUE_CACHE_TTL_MS) return cached.payload;
+
+  const userProjection = {
+    legacyId: 1,
+    'data.Employee ID': 1,
+    'data.User ID': 1,
+    'data.EmpID': 1,
+    'data.employeeId': 1,
+    'data.Employee Name': 1,
+    'data.Name': 1,
+    'data.name': 1,
+    'data.Role': 1,
+    'data.role': 1,
+    'data.Department': 1,
+    'data.department': 1,
+    'data.Manager ID': 1,
+    'data.Manager': 1,
+    'data.managerId': 1,
+    'data.Reporting Manager': 1,
+    'data.Task Approver': 1,
+    'data.taskApprover': 1,
+    'data.Status': 1,
+    'data.status': 1
+  };
+  const users = await listDataRows('User', {}, userProjection);
+  const admin = users.find((user) => eq(userId(user), adminId));
+  if (!admin || !elevatedRoles.has(userRole(admin))) return fail('Access Denied');
+
+  const visibleUsers = activeVisibleApprovalUsers(admin, users);
+  const visibleUserIds = visibleUsers.map((user) => safe(userId(user))).filter(Boolean);
+  const nonTicketBaseQuery = employeeIdsQuery(visibleUserIds);
+  const ticketPendingQuery = actionableTicketMatchQuery(admin, users);
+
+  const [ticketCount, leaveCount, intimationCount, attendanceCount] = await Promise.all([
+    LegacyModels.Ticket.countDocuments(ticketPendingQuery),
+    LegacyModels.Leave.countDocuments({
+      $and: [
+        nonTicketBaseQuery,
+        { $or: [{ 'data.Status': /pending/i }, { 'data.status': /pending/i }] }
+      ]
+    }),
+    LegacyModels.Intimation.countDocuments({
+      $and: [
+        nonTicketBaseQuery,
+        { $or: [{ 'data.Status': /submitted|pending/i }, { 'data.status': /submitted|pending/i }] }
+      ]
+    }),
+    LegacyModels.Attendance.countDocuments({
+      $and: [
+        nonTicketBaseQuery,
+        { $or: [{ 'data.Status': /need approval|pending/i }, { 'data.status': /need approval|pending/i }, { 'data.Admin Approval': /pending/i }, { 'data.adminApproval': /pending/i }] }
+      ]
+    })
+  ]);
+
+  const payload = ok({
+    counts: {
+      tickets: ticketCount,
+      leaves: leaveCount,
+      intimations: intimationCount,
+      attendance: attendanceCount
+    },
+    users: approvalUserOptions(visibleUsers),
+    ticketCategories: []
+  });
+  approvalQueueCache.set(cacheKey, { createdAt: Date.now(), payload });
+  return payload;
+}
+
+async function getPendingApprovalsRows(adminId, options = {}) {
+  const tab = ['tickets', 'leaves', 'intimations', 'attendance'].includes(safe(options.tab).toLowerCase())
+    ? safe(options.tab).toLowerCase()
+    : 'tickets';
+  const page = Math.max(1, Number(options.page || 1) || 1);
+  const pageSize = Math.min(50, Math.max(20, Number(options.pageSize || 20) || 20));
+  const filters = {
+    employee: safe(options.filters?.employee),
+    category: safe(options.filters?.category),
+    startDate: safe(options.filters?.startDate),
+    endDate: safe(options.filters?.endDate),
+    search: safe(options.filters?.search),
+    status: safe(options.filters?.status)
+  };
+  const cacheKey = `${safe(adminId).toLowerCase()}::rows::${tab}::${JSON.stringify(filters)}::${page}::${pageSize}`;
+  const cached = approvalQueueCache.get(cacheKey);
+  if (cached && Date.now() - cached.createdAt < APPROVAL_QUEUE_CACHE_TTL_MS) return cached.payload;
+
+  const data = await getApprovalQueueRows(adminId, { tabs: [tab], includeClients: tab === 'tickets' });
+  const admin = data.users.find((user) => eq(userId(user), adminId));
+  if (!admin || !elevatedRoles.has(userRole(admin))) return fail('Access Denied');
+
+  const baseRows =
+    tab === 'tickets' ? buildVisibleTicketRows(data, admin)
+      : tab === 'leaves' ? buildVisibleLeaveRows(data, admin)
+        : tab === 'intimations' ? buildVisibleIntimationRows(data, admin)
+          : buildVisibleAttendanceRows(data, admin);
+
+  const filteredRows = filterApprovalRows(tab, baseRows, filters);
+  const startIndex = (page - 1) * pageSize;
+  const rows = filteredRows.slice(startIndex, startIndex + pageSize);
+  const payload = ok({
+    tab,
+    rows,
+    ...(tab === 'tickets'
+      ? {
+          ticketCategories: Array.from(new Set(baseRows.map((ticket) => ticket['Task Category'] || ticket.Category).filter(Boolean))).sort((left, right) => left.localeCompare(right))
+        }
+      : {}),
+    pagination: {
+      page,
+      pageSize,
+      total: filteredRows.length,
+      hasMore: startIndex + rows.length < filteredRows.length
+    }
+  });
+  approvalQueueCache.set(cacheKey, { createdAt: Date.now(), payload });
+  return payload;
 }
 
 export async function processApprovalAction(actionData = {}) {
+  clearApprovalQueueCache();
   const type = actionData.type || actionData.Type;
   const id = actionData.id || actionData.ID;
   const status = actionData.status || actionData.Status || actionData.action;
@@ -412,7 +1152,19 @@ export async function processApprovalAction(actionData = {}) {
     if (!row) return fail('Leave request not found.');
     const decision = requestApprovalDecision(admin, row, users, 'Leave');
     if (!decision.actionable) return fail('Access Denied: You cannot action this leave request.');
-    return ok({ message: `Leave request ${actualAction}.`, item: await upsertRow('Leave', 'LeaveID', id, { ...update, LeaveID: id, 'Leave ID': id, 'Admin Approval': actualAction }) });
+    const targetRows = findLeaveRowsForAction(leaveRows, row);
+    const updatedLeaves = [];
+    for (const current of (targetRows.length ? targetRows : [row])) {
+      const currentId = first(current, ['LeaveID', 'Leave ID', 'ID', 'leaveId']);
+      updatedLeaves.push(await upsertRow('Leave', 'LeaveID', currentId, {
+        ...current,
+        ...update,
+        LeaveID: currentId,
+        'Leave ID': currentId,
+        'Admin Approval': actualAction
+      }));
+    }
+    return ok({ message: `Leave request ${actualAction}.`, item: updatedLeaves[0], data: updatedLeaves });
   }
   if (/intimation/i.test(type)) {
     const intimationRows = await listRows('Intimation');
@@ -530,6 +1282,7 @@ export async function processApprovalAction(actionData = {}) {
 }
 
 export async function adminTicketAction(ticketId, adminId, action, remarks) {
+  clearApprovalQueueCache();
   const gate = await requireAttendanceActive(adminId);
   if (gate) return gate;
   const data = await getRows();
@@ -562,7 +1315,29 @@ export async function adminTicketAction(ticketId, adminId, action, remarks) {
 }
 
 export async function getTaskApproversList() {
-  const users = await listRows('User');
+  if (taskApproversCache && Date.now() - taskApproversCache.createdAt < APPROVAL_QUEUE_CACHE_TTL_MS) {
+    return taskApproversCache.payload;
+  }
+  const users = await listDataRows('User', {}, {
+    legacyId: 1,
+    'data.Employee ID': 1,
+    'data.User ID': 1,
+    'data.EmpID': 1,
+    'data.Employee Name': 1,
+    'data.Name': 1,
+    'data.name': 1,
+    'data.Role': 1,
+    'data.role': 1,
+    'data.Status': 1,
+    'data.status': 1,
+    'data.Task Approver': 1,
+    'data.taskApprover': 1,
+    'data.Approver ID': 1,
+    'data.Manager ID': 1,
+    'data.Manager': 1,
+    'data.managerId': 1,
+    'data.Reporting Manager': 1
+  });
   const referencedIds = new Set();
   users.forEach((user) => {
     [
@@ -570,7 +1345,7 @@ export async function getTaskApproversList() {
       first(user, ['Manager ID', 'Manager', 'managerId', 'Reporting Manager'])
     ].forEach((value) => assignedIds(value).forEach((id) => referencedIds.add(id.toUpperCase())));
   });
-  return users
+  const payload = users
     .filter((user) => {
       const id = userId(user).toUpperCase();
       const role = userRole(user);
@@ -578,9 +1353,12 @@ export async function getTaskApproversList() {
       return active && (referencedIds.has(id) || elevatedRoles.has(role));
     })
     .map((user) => ({ id: userId(user), name: first(user, ['Employee Name', 'Name', 'name'], userId(user)), role: first(user, ['Role', 'role'], 'User') }));
+  taskApproversCache = { createdAt: Date.now(), payload };
+  return payload;
 }
 
 export async function transferTicketApproval(ticketId, targetManagerId, currentManagerId, remarks) {
+  clearApprovalQueueCache();
   const gate = await requireAttendanceActive(currentManagerId);
   if (gate) return gate;
   const tickets = await listRows('Ticket');

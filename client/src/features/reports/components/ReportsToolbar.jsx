@@ -11,6 +11,7 @@ function ReportTab({ active, children, onClick }) {
 }
 
 export function ReportsToolbar({
+  isManagerOnly,
   activeTab,
   onTabChange,
   range,
@@ -26,15 +27,36 @@ export function ReportsToolbar({
   return (
     <>
       <div className="reports-main-tabs" style={{ marginBottom: '12px' }}>
-        <button type="button" className={`reports-main-tab-btn${activeTab === 'management' ? ' reports-main-tab-btn--active' : ''}`} onClick={() => onTabChange('management')}>
-          Management Dashboard
-        </button>
-        <button type="button" className={`reports-main-tab-btn${activeTab === 'tickets' ? ' reports-main-tab-btn--active' : ''}`} onClick={() => onTabChange('tickets')}>
-          Tickets Report
-        </button>
+        {isManagerOnly ? (
+          <>
+            <button
+              type="button"
+              className={`reports-main-tab-btn${activeTab === 'tickets' ? ' reports-main-tab-btn--active' : ''}`}
+              onClick={() => onTabChange('tickets')}
+            >
+              Team Tickets
+            </button>
+            <button
+              type="button"
+              className={`reports-main-tab-btn${activeTab === 'fms' ? ' reports-main-tab-btn--active' : ''}`}
+              onClick={() => onTabChange('fms')}
+            >
+              Team FMS
+            </button>
+          </>
+        ) : (
+          <>
+            <button type="button" className={`reports-main-tab-btn${activeTab === 'management' ? ' reports-main-tab-btn--active' : ''}`} onClick={() => onTabChange('management')}>
+              Management Dashboard
+            </button>
+            <button type="button" className={`reports-main-tab-btn${activeTab === 'tickets' ? ' reports-main-tab-btn--active' : ''}`} onClick={() => onTabChange('tickets')}>
+              Tickets Report
+            </button>
+          </>
+        )}
       </div>
 
-      {activeTab === 'management' ? null : (
+      {!isManagerOnly && activeTab === 'management' ? null : (
       <article className="migration-panel migration-panel--full" style={{ marginTop: 0, marginBottom: '12px' }}>
         <div className="reports-toolbar">
         {activeTab !== 'tickets' ? (

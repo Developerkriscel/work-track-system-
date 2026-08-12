@@ -29,7 +29,7 @@ export function ClientShell() {
   useEffect(() => {
     setLastViewed(prev => {
       const updated = { ...prev, [location.pathname]: Date.now() };
-      localStorage.setItem('wt_lastViewed', JSON.stringify(updated));
+      localStorage.setItem('wt_lastViewed_client', JSON.stringify(updated));
       return updated;
     });
   }, [location.pathname]);

@@ -1,5 +1,6 @@
 import { saveBase64File } from './fileStorage.service.js';
-import { getLegacyId, insertRow, listRows, sheetAttendance, upsertRow } from './legacyStore.service.js';
+import { getLegacyId, insertRow, listRows, sheetAttendance, stripInternalMetadata, upsertRow } from './legacyStore.service.js';
+import { LegacyModels } from '../models/legacyModels.js';
 
 const safe = (value) => String(value ?? '').trim();
 const eq = (left, right) => safe(left).toLowerCase() === safe(right).toLowerCase();
@@ -8,6 +9,10 @@ const num = (value) => Number(String(value ?? 0).replace(/[^0-9.-]/g, '')) || 0;
 const ok = (payload = {}) => ({ success: true, ...payload });
 const fail = (message) => ({ success: false, message });
 const ATTENDANCE_POLICY_ID = 'ATTENDANCE_LOCATION_POLICY';
+
+function identityKey(value = '') {
+  return safe(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+}
 
 function parseReferenceNow(value) {
   if (!value) return new Date();
@@ -40,11 +45,11 @@ function nowIso() {
 function normalizedDate(value) {
   if (!value) return today();
   const raw = safe(value);
-  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
   const dmy = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
   if (dmy) return `${dmy[3]}-${String(dmy[2]).padStart(2, '0')}-${String(dmy[1]).padStart(2, '0')}`;
   const parsed = new Date(raw);
-  return Number.isNaN(parsed.getTime()) ? raw : parsed.toISOString().slice(0, 10);
+  return Number.isNaN(parsed.getTime()) ? raw : localDate(parsed);
 }
 
 function dateInRange(value, start, end) {
@@ -108,7 +113,19 @@ function isActiveUser(user = {}) {
 }
 
 function canManageTeamAttendance(user = {}) {
-  return /^(admin|super admin|hr)$/i.test(first(user, ['Role', 'role'], ''));
+  return /^(admin|super admin|hr|manager)$/i.test(first(user, ['Role', 'role'], ''));
+}
+
+function directReportIds(reviewerId, users = []) {
+  const target = safe(reviewerId).toUpperCase();
+  return users
+    .filter((user) => {
+      if (!isActiveUser(user)) return false;
+      const managers = safe(first(user, ['Manager ID', 'Manager', 'managerId', 'Reporting Manager']));
+      return managers.split(/[,;|]/).map((item) => item.trim().toUpperCase()).includes(target);
+    })
+    .map((user) => safe(userId(user)).toUpperCase())
+    .filter(Boolean);
 }
 
 function isApprovedStatus(value = '') {
@@ -322,11 +339,17 @@ function computeDepartureStatus(dateValue, punchOutRow) {
 
 function teamAttendanceAccessSet(reviewer = {}, users = []) {
   if (!canManageTeamAttendance(reviewer)) return new Set();
+  const role = safe(first(reviewer, ['Role', 'role'], ''));
+  if (/^(admin|super admin|hr)$/i.test(role)) {
+    return new Set(
+      users
+        .filter((user) => isActiveUser(user))
+        .map((user) => safe(userId(user)).toUpperCase())
+        .filter(Boolean)
+    );
+  }
   return new Set(
-    users
-      .filter((user) => isActiveUser(user))
-      .map((user) => safe(userId(user)).toUpperCase())
-      .filter(Boolean)
+    directReportIds(userId(reviewer), users)
   );
 }
 
@@ -487,7 +510,15 @@ function editKey(employeeId, date, action) {
 }
 
 function requireTeamAttendanceReviewer(reviewerId, users) {
-  const reviewer = users.find((user) => eq(userId(user), reviewerId));
+  const target = identityKey(reviewerId);
+  const reviewer = users.find((user) => {
+    const candidates = [
+      userId(user),
+      first(user, ['User ID', 'Employee ID', 'EMP Code', 'employeeId', 'EmpID']),
+      first(user, ['Employee Name', 'Name'], '')
+    ];
+    return candidates.some((value) => identityKey(value) === target);
+  });
   if (!reviewer || !canManageTeamAttendance(reviewer)) return null;
   return reviewer;
 }
@@ -496,6 +527,9 @@ function attendanceRowsForApp(row = {}) {
   const base = sheetAttendance(row);
   const date = normalizedDate(base.Date);
   const photo = first(base, ['Photo Url', 'Photo URL', 'Photo']);
+  const actionValue = safe(first(base, ['Action', 'action'], ''));
+  const inferredPunchIn = /punch\s*in/i.test(actionValue) || Boolean(first(base, ['Punch In', 'InTime']));
+  const inferredPunchOut = /punch\s*out/i.test(actionValue) || Boolean(first(base, ['Punch Out', 'OutTime']));
   const common = {
     ...base,
     Date: date,
@@ -510,29 +544,42 @@ function attendanceRowsForApp(row = {}) {
   const punchIn = first(base, ['Punch In', 'InTime']);
   const punchOut = first(base, ['Punch Out', 'OutTime']);
 
-  if (punchIn) {
+  if (punchIn || inferredPunchIn) {
     const elapsedTime = timestampFromElapsedMinutes(base['Timer Elapsed Minutes']);
     rows.push({
       ...common,
       Action: 'Punch In',
-      Time: elapsedTime || timestampForAttendance(date, first(base, ['Time'], punchIn), 'Punch In'),
-      'Punch In': punchIn,
+      Time: elapsedTime || timestampForAttendance(date, first(base, ['Time'], punchIn || base.Time), 'Punch In'),
+      'Punch In': punchIn || first(base, ['Time']),
       'Punch Out': ''
     });
   }
 
-  if (punchOut) {
+  if (punchOut || inferredPunchOut) {
     rows.push({
       ...common,
       Action: 'Punch Out',
-      Time: timestampForAttendance(date, punchOut, 'Punch Out'),
+      Time: timestampForAttendance(date, punchOut || first(base, ['Time']), 'Punch Out'),
       'Punch In': '',
-      'Punch Out': punchOut
+      'Punch Out': punchOut || first(base, ['Time'])
     });
   }
 
-  if (!rows.length) rows.push({ ...common, Time: timestampForAttendance(date, base.Time, common.Action) });
+  if (!rows.length) rows.push({ ...common, Action: actionValue || 'Record', Time: timestampForAttendance(date, base.Time, actionValue) });
   return rows;
+}
+
+function fromLegacyDocs(docs = []) {
+  return docs.map((doc) => ({
+    ...stripInternalMetadata(doc.data || {}),
+    _id: String(doc._id),
+    _legacyId: doc.legacyId
+  }));
+}
+
+async function findAttendanceRows(query = {}, projection = { data: 1, legacyId: 1 }) {
+  const docs = await LegacyModels.Attendance.collection.find(query, { projection }).toArray();
+  return fromLegacyDocs(docs);
 }
 
 function attendanceEventTime(row) {
@@ -761,6 +808,80 @@ export async function getTeamAttendanceForReviewer(reviewerId, startDate, endDat
   });
 }
 
+export async function getTeamAttendanceCalendarForReviewer(reviewerId, employeeId, startDate, endDate) {
+  const targetEmployeeId = safe(employeeId).toUpperCase();
+  if (!targetEmployeeId) return fail('Employee ID is required.');
+
+  const users = await listRows('User');
+  const reviewer = requireTeamAttendanceReviewer(reviewerId, users);
+  if (!reviewer) return fail('Only Admin, Super Admin, or HR can view team attendance.');
+
+  const visibleIds = teamAttendanceAccessSet(reviewer, users);
+  if (!visibleIds.has(targetEmployeeId)) {
+    return fail('You cannot view this employee attendance.');
+  }
+
+  const targetUser = users.find((user) => eq(userId(user), targetEmployeeId));
+  const joiningDateStr = targetUser ? first(targetUser, ['Date of Joining', 'Joining Date', 'Date Of Joining']) : '';
+  const normalizedStart = normalizedDate(startDate || today());
+  const normalizedEnd = normalizedDate(endDate || normalizedStart);
+  const effectiveStart = joiningDateStr
+    ? [normalizedStart, normalizedDate(joiningDateStr)].sort().reverse()[0]
+    : normalizedStart;
+
+  const attendance = await findAttendanceRows(
+    {
+      $and: [
+        {
+          $or: [
+            { 'data.Employee ID': targetEmployeeId },
+            { 'data.employeeId': targetEmployeeId },
+            { 'data.EmpID': targetEmployeeId },
+            { 'data.User ID': targetEmployeeId }
+          ]
+        },
+        {
+          $or: [
+            { 'data.Date': { $gte: effectiveStart, $lte: `${normalizedEnd}T23:59:59.999Z` } },
+            { 'data.date': { $gte: effectiveStart, $lte: `${normalizedEnd}T23:59:59.999Z` } }
+          ]
+        }
+      ]
+    },
+    {
+      legacyId: 1,
+      'data.AttendanceID': 1,
+      'data.Employee ID': 1,
+      'data.employeeId': 1,
+      'data.EmpID': 1,
+      'data.User ID': 1,
+      'data.Employee Name': 1,
+      'data.Name': 1,
+      'data.Date': 1,
+      'data.date': 1,
+      'data.Action': 1,
+      'data.action': 1,
+      'data.Time': 1,
+      'data.Punch In': 1,
+      'data.Punch Out': 1,
+      'data.InTime': 1,
+      'data.OutTime': 1,
+      'data.Status': 1,
+      'data.Duration': 1,
+      'data.Total Duration': 1,
+      'data.Photo': 1,
+      'data.Photo Url': 1,
+      'data.Photo URL': 1,
+      'data.Latitude': 1,
+      'data.Lattitude': 1,
+      'data.Longitude': 1
+    }
+  );
+
+  const rows = buildTeamAttendanceGroups(attendance, users, new Set([targetEmployeeId]), effectiveStart, normalizedEnd);
+  return ok({ data: rows });
+}
+
 export async function updateTeamAttendanceEntry(reviewerId, payload = {}) {
   const employeeId = safe(payload.employeeId);
   const date = normalizedDate(payload.date);
@@ -900,35 +1021,26 @@ export async function submitLeaveRequest(leaveData = {}) {
     return { success: false, message: 'Leave dates are invalid.' };
   }
 
-  const lastDate = /half\s*day/i.test(safe(leaveData['Day Type'] || leaveData.dayType)) ? start : end;
-  const rows = [];
-  let cursor = new Date(`${start}T00:00:00Z`);
-  const limit = new Date(`${lastDate}T00:00:00Z`);
-  let index = 0;
-  while (cursor <= limit) {
-    const date = cursor.toISOString().slice(0, 10);
-    const id = leaveData.LeaveID || `LEAVE_${Date.now()}_${index}_${Math.floor(Math.random() * 1000)}`;
-    const row = {
-      LeaveID: id,
-      'Leave ID': id,
-      Timestamp: nowIso(),
-      'Employee ID': employeeId,
-      EmpID: employeeId,
-      'Employee Name': leaveData['Employee Name'] || leaveData.employeeName || employeeId,
-      'Leave Type': leaveData['Leave Type'] || leaveData.leaveType || '',
-      'Day Type': leaveData['Day Type'] || leaveData.dayType || 'Full Day',
-      'Start Date': date,
-      'End Date': date,
-      Reason: leaveData.Reason || leaveData.reason || '',
-      Status: 'Pending',
-      'Admin Remarks': '',
-      'Last Update Date': nowIso()
-    };
-    rows.push(await insertRow('Leave', row));
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-    index += 1;
-  }
-  return ok({ message: `Leave request for ${rows.length} day(s) submitted successfully.`, item: rows[0], data: rows });
+  const dayType = safe(leaveData['Day Type'] || leaveData.dayType || 'Full Day');
+  const id = leaveData.LeaveID || `LEAVE_${Date.now()}`;
+  const row = {
+    LeaveID: id,
+    'Leave ID': id,
+    Timestamp: nowIso(),
+    'Employee ID': employeeId,
+    EmpID: employeeId,
+    'Employee Name': leaveData['Employee Name'] || leaveData.employeeName || employeeId,
+    'Leave Type': leaveData['Leave Type'] || leaveData.leaveType || '',
+    'Day Type': dayType,
+    'Start Date': start,
+    'End Date': /half\s*day/i.test(dayType) ? start : end,
+    Reason: leaveData.Reason || leaveData.reason || '',
+    Status: 'Pending',
+    'Admin Remarks': '',
+    'Last Update Date': nowIso()
+  };
+  const saved = await insertRow('Leave', row);
+  return ok({ message: `Leave request for ${start}${start !== end ? ` to ${end}` : ''} submitted successfully.`, item: saved, data: [saved] });
 }
 
 export async function submitIntimation(intimationData = {}) {
