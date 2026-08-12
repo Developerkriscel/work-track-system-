@@ -472,9 +472,16 @@ export function TeamAttendanceTable({ rows = [], onEdit }) {
                 </td>
                 <td data-label="Duration">{row.duration || '-'}</td>
                 <td data-label="Action">
-                  <button type="button" className="attendance-cta attendance-cta--blue attendance-team-table__edit" onClick={() => onEdit(row)}>
-                    Edit Times
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                    <button type="button" className="attendance-cta attendance-cta--blue attendance-team-table__edit" onClick={() => onEdit(row)}>
+                      Edit Times
+                    </button>
+                    {row.adminRemarks && (
+                      <small style={{ fontSize: '10px', color: '#64748b', textAlign: 'center', lineHeight: '1.2' }}>
+                        {row.adminRemarks}
+                      </small>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))

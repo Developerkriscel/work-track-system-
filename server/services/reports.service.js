@@ -1,5 +1,6 @@
 import XLSX from 'xlsx';
 import PDFDocument from 'pdfkit-table';
+import { LegacyModels } from '../models/legacyModels.js';
 import { listRows } from './legacyStore.service.js';
 
 const closedTerms = ['closed', 'approved', 'cancelled', 'completed', 'done', 'resolved', 'paid'];
@@ -7,12 +8,15 @@ const safe = (value = '') => String(value ?? '').trim();
 const eq = (left, right) => safe(left).toLowerCase() === safe(right).toLowerCase();
 const first = (row, keys, fallback = '') => keys.map((key) => row?.[key]).find((value) => safe(value)) ?? fallback;
 const ok = (payload = {}) => ({ success: true, ...payload });
-const num = (value) => Number(String(value ?? 0).replace(/[^0-9.-]/g, '')) || 0;
 const isClosedStatus = (status = '') => closedTerms.some((term) => safe(status).toLowerCase().includes(term));
 const csvEscape = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
 const cleanFileName = (value, fallback = 'report') =>
   String(value || fallback).replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_');
 const normalizedContains = (value, query) => safe(value).toLowerCase().includes(safe(query).toLowerCase());
+
+const REPORT_CACHE_TTL_MS = Number(process.env.WORKTRACK_REPORT_CACHE_TTL_MS || 120_000);
+const reportMemoryCache = new Map();
+const reportInflight = new Map();
 
 function parseReferenceNow(value) {
   if (!value) return new Date();
@@ -21,6 +25,33 @@ function parseReferenceNow(value) {
 }
 
 const referenceNow = () => parseReferenceNow(process.env.WORKTRACK_REFERENCE_DATE);
+
+function reportCacheKey(scope, parts = []) {
+  return [scope, ...parts.map((part) => safe(part).toLowerCase()).filter(Boolean)].join(':');
+}
+
+async function getCachedReport(scope, parts, loader) {
+  const key = reportCacheKey(scope, parts);
+  const memoryEntry = reportMemoryCache.get(key);
+  if (memoryEntry && memoryEntry.expiresAt > Date.now()) {
+    return memoryEntry.value;
+  }
+
+  if (reportInflight.has(key)) {
+    return reportInflight.get(key);
+  }
+
+  const promise = (async () => {
+    const value = await loader();
+    reportMemoryCache.set(key, { value, expiresAt: Date.now() + REPORT_CACHE_TTL_MS });
+    return value;
+  })().finally(() => {
+    reportInflight.delete(key);
+  });
+
+  reportInflight.set(key, promise);
+  return promise;
+}
 
 function normalizedDate(value) {
   if (!value) return '';
@@ -90,10 +121,6 @@ function teamMemberIds(users, managerId) {
     .filter(Boolean);
 }
 
-function pdfEscape(value) {
-  return String(value ?? '').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-}
-
 function matchesTicketFilters(ticket = {}, filters = {}) {
   const priority = safe(filters.priority);
   const category = safe(filters.category);
@@ -141,7 +168,7 @@ async function buildTabularPdf(title, headers, sourceRows) {
     try {
       const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
       const buffers = [];
-      
+
       doc.on('data', buffers.push.bind(buffers));
       doc.on('end', () => {
         resolve(Buffer.concat(buffers));
@@ -152,22 +179,21 @@ async function buildTabularPdf(title, headers, sourceRows) {
       doc.fontSize(10).text(`Generated: ${referenceNow().toLocaleString('en-IN')}`, { align: 'center' });
       doc.moveDown();
 
-      // Ensure headers aren't too large if there are too many columns
-      // PDFKit-Table will automatically resize columns but huge amounts of columns might clip
-      const safeHeaders = headers.slice(0, 15); // limit columns if necessary to avoid breaking bounds
-      const tableRows = sourceRows.map(row => safeHeaders.map(h => String(row[h] ?? '')));
+      const safeHeaders = headers.slice(0, 15);
+      const tableRows = sourceRows.map((row) => safeHeaders.map((header) => String(row[header] ?? '')));
 
-      const tableData = {
-        headers: safeHeaders,
-        rows: tableRows
-      };
-
-      doc.table(tableData, {
-        prepareHeader: () => doc.font('Helvetica-Bold').fontSize(8),
-        prepareRow: (row, indexColumn, indexRow, rectRow, rectCell) => {
-          doc.font('Helvetica').fontSize(8);
+      doc.table(
+        {
+          headers: safeHeaders,
+          rows: tableRows
         },
-      });
+        {
+          prepareHeader: () => doc.font('Helvetica-Bold').fontSize(8),
+          prepareRow: () => {
+            doc.font('Helvetica').fontSize(8);
+          }
+        }
+      );
 
       doc.end();
     } catch (err) {
@@ -274,7 +300,7 @@ function asFmsRow(row = {}, userIndex = new Map()) {
   };
 }
 
-async function getRows() {
+async function loadRows() {
   const [tickets, fms, attendance, expenses, todos, leaves, intimations, users, clients, forms] = await Promise.all([
     listRows('Ticket'),
     listRows('FmsTask'),
@@ -290,118 +316,165 @@ async function getRows() {
   return { tickets, fms, attendance, expenses, todos, leaves, intimations, users, clients, forms };
 }
 
+async function loadTicketRows() {
+  const [tickets, users, clients] = await Promise.all([
+    listRows('Ticket'),
+    listRows('User'),
+    listRows('Client')
+  ]);
+  return { tickets, users, clients };
+}
+
+async function loadFmsRows() {
+  const [fms, users] = await Promise.all([
+    listRows('FmsTask'),
+    listRows('User')
+  ]);
+  return { fms, users };
+}
+
+async function collectionStamp(modelName) {
+  const latest = await LegacyModels[modelName]
+    .findOne({})
+    .sort({ updatedAt: -1, createdAt: -1 })
+    .select({ updatedAt: 1, createdAt: 1, legacyId: 1 })
+    .lean();
+  return String(latest?.updatedAt || latest?.createdAt || latest?.legacyId || '0');
+}
+
+async function getSignature(modelNames = []) {
+  const stamps = await Promise.all(modelNames.map((name) => collectionStamp(name).catch(() => '0')));
+  return stamps.join('|');
+}
+
+async function getRows(signature) {
+  return getCachedReport('collections', [signature], loadRows);
+}
+
 export async function getTicketReportData(employeeId, role, startDate, endDate) {
-  const data = await getRows();
-  const normalizedRole = safe(role).toLowerCase();
-  const canSeeAll = normalizedRole === 'super admin';
-  const teamIds = canSeeAll ? [] : teamMemberIds(data.users, employeeId);
-  const items = data.tickets
-    .filter((ticket) => {
-      const ownerId = first(ticket, ['Employee ID', 'EmpID', 'employeeId']).toLowerCase();
-      const visible = canSeeAll || ownerId === safe(employeeId).toLowerCase() || (['admin', 'manager', 'hr'].includes(normalizedRole) && teamIds.includes(ownerId));
-      return visible && dateInRange(first(ticket, ['Plan Date', 'Date', 'Timestamp', 'Close Date']), startDate, endDate);
-    })
-    .map((ticket) => asTicketRow(ticket, data.clients));
-  return ok({
-    data: items,
-    summary: {
-      total: items.length,
-      open: items.filter((item) => !isClosedStatus(item.Status)).length,
-      closed: items.filter((item) => isClosedStatus(item.Status)).length
-    }
+  const signature = await getSignature(['Ticket', 'User', 'Client']);
+  return getCachedReport('tickets', [signature, employeeId, role, startDate, endDate], async () => {
+    const data = await getCachedReport('ticket-source', [signature], loadTicketRows);
+    const normalizedRole = safe(role).toLowerCase();
+    const canSeeAll = normalizedRole === 'super admin';
+    const teamIds = canSeeAll ? [] : teamMemberIds(data.users, employeeId);
+    const items = data.tickets
+      .filter((ticket) => {
+        const ownerId = first(ticket, ['Employee ID', 'EmpID', 'employeeId']).toLowerCase();
+        const visible = canSeeAll || ownerId === safe(employeeId).toLowerCase() || (['admin', 'manager', 'hr'].includes(normalizedRole) && teamIds.includes(ownerId));
+        return visible && dateInRange(first(ticket, ['Plan Date', 'Date', 'Timestamp', 'Close Date']), startDate, endDate);
+      })
+      .map((ticket) => asTicketRow(ticket, data.clients));
+    return ok({
+      data: items,
+      summary: {
+        total: items.length,
+        open: items.filter((item) => !isClosedStatus(item.Status)).length,
+        closed: items.filter((item) => isClosedStatus(item.Status)).length
+      }
+    });
   });
 }
 
 export async function getFmsReportData(employeeId, role, startDate, endDate) {
-  const data = await getRows();
-  const userIndex = buildUserNameIndex(data.users);
-  const normalizedRole = safe(role).toLowerCase();
-  const canSeeAll = ['super admin', 'hr'].includes(normalizedRole);
-  const teamIds = canSeeAll ? [] : teamMemberIds(data.users, employeeId);
-  const items = data.fms
-    .filter((task) => {
-      const ownerId = safe(first(task, ['Employee ID', 'EmpID', 'empId'])).toLowerCase();
-      const visible = canSeeAll || ownerId === safe(employeeId).toLowerCase() || (['admin', 'manager'].includes(normalizedRole) && teamIds.includes(ownerId));
-      return visible && dateInRange(first(task, ['Plan Date', 'Date']), startDate, endDate);
-    })
-    .map((task) => asFmsRow(task, userIndex));
-  return ok({
-    data: items,
-    summary: {
-      total: items.length,
-      completed: items.filter((item) => isClosedStatus(item.Status)).length
-    }
+  const signature = await getSignature(['FmsTask', 'User']);
+  return getCachedReport('fms', [signature, employeeId, role, startDate, endDate], async () => {
+    const data = await getCachedReport('fms-source', [signature], loadFmsRows);
+    const userIndex = buildUserNameIndex(data.users);
+    const normalizedRole = safe(role).toLowerCase();
+    const canSeeAll = ['super admin', 'hr'].includes(normalizedRole);
+    const teamIds = canSeeAll ? [] : teamMemberIds(data.users, employeeId);
+    const items = data.fms
+      .filter((task) => {
+        const ownerId = safe(first(task, ['Employee ID', 'EmpID', 'empId'])).toLowerCase();
+        const visible = canSeeAll || ownerId === safe(employeeId).toLowerCase() || (['admin', 'manager'].includes(normalizedRole) && teamIds.includes(ownerId));
+        return visible && dateInRange(first(task, ['Plan Date', 'Date']), startDate, endDate);
+      })
+      .map((task) => asFmsRow(task, userIndex));
+    return ok({
+      data: items,
+      summary: {
+        total: items.length,
+        completed: items.filter((item) => isClosedStatus(item.Status)).length
+      }
+    });
   });
 }
 
 export async function exportReportForWeb(format = 'csv', sheetName = 'Report', employeeId = '', role = '', startDate = '', endDate = '', filters = {}) {
-  const data = await getRows();
-  const userIndex = buildUserNameIndex(data.users);
-  const normalizedRole = safe(role).toLowerCase();
-  const ticketTeamIds = teamMemberIds(data.users, employeeId);
-  const fmsTeamIds = teamMemberIds(data.users, employeeId);
-  const canSeeAllTickets = normalizedRole === 'super admin';
-  const canSeeAllFms = ['super admin', 'hr'].includes(normalizedRole);
-  const tickets = data.tickets
-    .filter((ticket) => {
-      const ownerId = safe(first(ticket, ['Employee ID', 'EmpID', 'employeeId'])).toLowerCase();
-      const visible =
-        canSeeAllTickets ||
-        ownerId === safe(employeeId).toLowerCase() ||
-        (['admin', 'manager', 'hr'].includes(normalizedRole) && ticketTeamIds.includes(ownerId));
-      return visible && dateInRange(first(ticket, ['Plan Date', 'Date', 'Timestamp']), startDate, endDate);
-    })
-    .map((ticket) => asTicketRow(ticket, data.clients))
-    .filter((ticket) => matchesTicketFilters(ticket, filters));
-  const fms = data.fms
-    .filter((task) => {
-      const ownerId = safe(first(task, ['Employee ID', 'EmpID', 'empId'])).toLowerCase();
-      const visible =
-        canSeeAllFms ||
-        ownerId === safe(employeeId).toLowerCase() ||
-        (['admin', 'manager'].includes(normalizedRole) && fmsTeamIds.includes(ownerId));
-      return visible && dateInRange(first(task, ['Plan Date', 'Date']), startDate, endDate);
-    })
-    .map((task) => asFmsRow(task, userIndex))
-    .filter((task) => matchesFmsFilters(task, filters));
-  const sheetKey = safe(sheetName).toLowerCase();
-  const source =
-    /ticket/.test(sheetKey) ? tickets :
-    /fms/.test(sheetKey) ? fms :
-    /attendance/.test(sheetKey) ? data.attendance :
-    /expense/.test(sheetKey) ? data.expenses :
-    /todo|to-do|to do/.test(sheetKey) ? data.todos :
-    /leave/.test(sheetKey) ? data.leaves :
-    /intimation/.test(sheetKey) ? data.intimations :
-    /user|employee/.test(sheetKey) ? data.users :
-    /client/.test(sheetKey) ? data.clients :
-    /form/.test(sheetKey) ? data.forms :
-    tickets;
-  const headers = [...new Set(source.flatMap((row) => Object.keys(row)))];
-  const normalizedFormat = safe(format).toLowerCase();
-  const fileBase = cleanFileName(sheetName, 'report');
+  const signature = await getSignature(['Ticket', 'FmsTask', 'Attendance', 'Expense', 'Todo', 'Leave', 'Intimation', 'User', 'Client', 'FormsPortal']);
+  return getCachedReport('export', [signature, format, sheetName, employeeId, role, startDate, endDate, JSON.stringify(filters || {})], async () => {
+    const data = await getRows(signature);
+    const userIndex = buildUserNameIndex(data.users);
+    const normalizedRole = safe(role).toLowerCase();
+    const ticketTeamIds = teamMemberIds(data.users, employeeId);
+    const fmsTeamIds = teamMemberIds(data.users, employeeId);
+    const canSeeAllTickets = normalizedRole === 'super admin';
+    const canSeeAllFms = ['super admin', 'hr'].includes(normalizedRole);
 
-  if (normalizedFormat === 'xlsx') {
-    const worksheet = XLSX.utils.json_to_sheet(source, { header: headers });
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, fileBase.slice(0, 31) || 'Report');
-    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-    return ok({
-      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      fileName: `${fileBase}.xlsx`,
-      base64Data: buffer.toString('base64')
-    });
-  }
+    const tickets = data.tickets
+      .filter((ticket) => {
+        const ownerId = safe(first(ticket, ['Employee ID', 'EmpID', 'employeeId'])).toLowerCase();
+        const visible =
+          canSeeAllTickets ||
+          ownerId === safe(employeeId).toLowerCase() ||
+          (['admin', 'manager', 'hr'].includes(normalizedRole) && ticketTeamIds.includes(ownerId));
+        return visible && dateInRange(first(ticket, ['Plan Date', 'Date', 'Timestamp']), startDate, endDate);
+      })
+      .map((ticket) => asTicketRow(ticket, data.clients))
+      .filter((ticket) => matchesTicketFilters(ticket, filters));
 
-  if (normalizedFormat === 'pdf') {
-    const buffer = await buildTabularPdf(String(sheetName || 'Report'), headers, source);
-    return ok({
-      mimeType: 'application/pdf',
-      fileName: `${fileBase}.pdf`,
-      base64Data: buffer.toString('base64')
-    });
-  }
+    const fms = data.fms
+      .filter((task) => {
+        const ownerId = safe(first(task, ['Employee ID', 'EmpID', 'empId'])).toLowerCase();
+        const visible =
+          canSeeAllFms ||
+          ownerId === safe(employeeId).toLowerCase() ||
+          (['admin', 'manager'].includes(normalizedRole) && fmsTeamIds.includes(ownerId));
+        return visible && dateInRange(first(task, ['Plan Date', 'Date']), startDate, endDate);
+      })
+      .map((task) => asFmsRow(task, userIndex))
+      .filter((task) => matchesFmsFilters(task, filters));
 
-  const csv = [headers.map(csvEscape).join(','), ...source.map((row) => headers.map((header) => csvEscape(row[header])).join(','))].join('\n');
-  return ok({ mimeType: 'text/csv', fileName: `${fileBase}.csv`, base64Data: Buffer.from(csv).toString('base64') });
+    const sheetKey = safe(sheetName).toLowerCase();
+    const source =
+      /ticket/.test(sheetKey) ? tickets :
+      /fms/.test(sheetKey) ? fms :
+      /attendance/.test(sheetKey) ? data.attendance :
+      /expense/.test(sheetKey) ? data.expenses :
+      /todo|to-do|to do/.test(sheetKey) ? data.todos :
+      /leave/.test(sheetKey) ? data.leaves :
+      /intimation/.test(sheetKey) ? data.intimations :
+      /user|employee/.test(sheetKey) ? data.users :
+      /client/.test(sheetKey) ? data.clients :
+      /form/.test(sheetKey) ? data.forms :
+      tickets;
+    const headers = [...new Set(source.flatMap((row) => Object.keys(row)))];
+    const normalizedFormat = safe(format).toLowerCase();
+    const fileBase = cleanFileName(sheetName, 'report');
+
+    if (normalizedFormat === 'xlsx') {
+      const worksheet = XLSX.utils.json_to_sheet(source, { header: headers });
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, fileBase.slice(0, 31) || 'Report');
+      const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+      return ok({
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        fileName: `${fileBase}.xlsx`,
+        base64Data: buffer.toString('base64')
+      });
+    }
+
+    if (normalizedFormat === 'pdf') {
+      const buffer = await buildTabularPdf(String(sheetName || 'Report'), headers, source);
+      return ok({
+        mimeType: 'application/pdf',
+        fileName: `${fileBase}.pdf`,
+        base64Data: buffer.toString('base64')
+      });
+    }
+
+    const csv = [headers.map(csvEscape).join(','), ...source.map((row) => headers.map((header) => csvEscape(row[header])).join(','))].join('\n');
+    return ok({ mimeType: 'text/csv', fileName: `${fileBase}.csv`, base64Data: Buffer.from(csv).toString('base64') });
+  });
 }

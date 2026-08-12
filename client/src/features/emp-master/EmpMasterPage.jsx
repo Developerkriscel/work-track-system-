@@ -4,6 +4,7 @@ import { AlertDialog } from '@/components/modals/AlertDialog';
 import { RefreshCw } from '@/components/common/icons';
 import { StatusPill } from '@/components/common/StatusPill';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { CustomMultiSelect } from '@/components/common/CustomMultiSelect';
 import { fetchAllManagersList, fetchAllUsersForAdmin } from '@/features/admin/api';
 import { AdminSummaryCards } from '@/features/admin/components/AdminSummaryCards';
 import { openProtectedFile, toPreviewUrl } from '@/lib/fileLinks';
@@ -174,7 +175,8 @@ function Field({
   full = false,
   required = false,
   disabled = false,
-  placeholder = ''
+  placeholder = '',
+  multiple = false
 }) {
   const common = {
     value: form[name] || '',
@@ -183,10 +185,23 @@ function Field({
     disabled
   };
 
+  const normalizedOptions = options ? options.map((option) => ({
+    value: typeof option === 'string' ? option : option.value,
+    label: typeof option === 'string' ? option : option.label
+  })) : null;
+
   return (
     <label className={`dashboard-control${full ? ' emp-editor__full' : ''}`}>
       <span>{label}{required ? ' *' : ''}</span>
       {options ? (
+        multiple ? (
+          <CustomMultiSelect 
+            value={form[name] || ''} 
+            onChange={(selectedArray) => onChange({ [name]: selectedArray.join(',') })} 
+            options={normalizedOptions}
+            defaultLabel={`Select ${label}`}
+          />
+        ) : (
         <select {...common}>
           {options.map((option) => {
             const value = typeof option === 'string' ? option : option.value;
@@ -198,6 +213,7 @@ function Field({
             );
           })}
         </select>
+        )
       ) : type === 'textarea' ? (
         <textarea rows="3" placeholder={placeholder} {...common} />
       ) : (
@@ -466,8 +482,8 @@ function EmpEditor({ mode, category, initialRow, managerOptions, allUsers, onClo
                 disabled={readOnly || (!initialRow && (loadingCode || Boolean(form['EMP Code'])))}
               />
               <Field label="Role" name="Role" form={form} onChange={update} options={roleOptions} disabled={readOnly} />
-              <Field label="Reporting Manager" name="Manager ID" form={form} onChange={update} options={managerSelectOptions} disabled={readOnly} />
-              <Field label="Task Approver" name="Task Approver" form={form} onChange={update} options={approverSelectOptions} disabled={readOnly} />
+              <Field label="Reporting Manager" name="Manager ID" form={form} onChange={update} options={managerSelectOptions} disabled={readOnly} multiple />
+              <Field label="Task Approver" name="Task Approver" form={form} onChange={update} options={approverSelectOptions} disabled={readOnly} multiple />
               <Field label="Assign Buddy" name="Assign Buddy" form={form} onChange={update} options={buddySelectOptions} disabled={readOnly} />
               <Field label="Status" name="Status" form={form} onChange={update} options={statuses} disabled={readOnly} />
               <Field label="Portal Password" name="Password" form={form} onChange={update} type="password" required={!initialRow} disabled={readOnly} />

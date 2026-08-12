@@ -2734,19 +2734,24 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
 }
 
 .approval-filter-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: flex;
   gap: 14px;
+  flex-wrap: wrap;
+}
+
+.approval-filter-grid > * {
+  flex: 1;
 }
 
 .approval-filter-grid__wide {
-  grid-column: span 2;
+  flex: 2;
 }
 
 .approval-filter-actions {
-  margin-top: 14px;
   display: flex;
-  justify-content: flex-end;
+  align-items: flex-end;
+  flex: 0 0 auto;
+  margin-top: 0;
 }
 
 .approval-table__copy {

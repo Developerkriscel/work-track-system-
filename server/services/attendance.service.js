@@ -326,13 +326,25 @@ function computeAttendanceStatus(dateValue, punchInRow) {
   return 'Very Late';
 }
 
-function computeDepartureStatus(dateValue, punchOutRow) {
+function computeDepartureStatus(dateValue, punchInRow, punchOutRow) {
   if (!punchOutRow) return null;
   const punchTime = new Date(timestampForAttendance(dateValue, first(punchOutRow, ['Punch Out', 'Time']), 'Punch Out'));
   if (Number.isNaN(punchTime.getTime())) return null;
+
+  let completedFullShift = false;
+  if (punchInRow) {
+    const inTime = new Date(timestampForAttendance(dateValue, first(punchInRow, ['Punch In', 'Time']), 'Punch In'));
+    if (!Number.isNaN(inTime.getTime())) {
+      const shiftDurationMinutes = (punchTime.getTime() - inTime.getTime()) / 60000;
+      if (shiftDurationMinutes >= 480) { // 8 hours
+        completedFullShift = true;
+      }
+    }
+  }
+
   const shiftEnd = new Date(`${normalizedDate(dateValue)}T19:00:00+05:30`);
   const difference = (punchTime.getTime() - shiftEnd.getTime()) / 60000;
-  if (difference < -15) return 'Early Departure';
+  if (difference < -15 && !completedFullShift) return 'Early Departure';
   if (difference <= 60) return 'On Time Departure';
   return 'Late Departure';
 }
@@ -465,8 +477,9 @@ function buildTeamAttendanceGroups(attendanceRows, users, allowedIds, startDate,
         punchInSourceId: punchIn?._sourceLegacyId || '',
         punchOutSourceId: punchOut?._sourceLegacyId || '',
         status: computeAttendanceStatus(group.date, punchIn),
-        outStatus: computeDepartureStatus(group.date, punchOut),
-        duration: durationLabel(inDate, outDate) || first(punchOut, ['Duration', 'Total Duration']) || '-'
+        outStatus: computeDepartureStatus(group.date, punchIn, punchOut),
+        duration: durationLabel(inDate, outDate) || first(punchOut, ['Duration', 'Total Duration']) || '-',
+        adminRemarks: first(punchOut, ['Admin Remarks']) || first(punchIn, ['Admin Remarks']) || ''
       };
     })
     .sort((left, right) => {
@@ -991,7 +1004,7 @@ export async function updateTeamAttendanceEntry(reviewerId, payload = {}) {
   ]);
 
   const reviewer = requireTeamAttendanceReviewer(reviewerId, users);
-  if (!reviewer) return fail('Only Admin, Super Admin, or HR can edit team attendance.');
+  if (!reviewer) return fail('Only Admin, Super Admin, HR, or Manager can edit team attendance.');
 
   const visibleIds = teamAttendanceAccessSet(reviewer, users);
   if (!visibleIds.has(employeeId.toUpperCase())) return fail('You cannot edit this employee attendance.');

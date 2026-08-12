@@ -1,4 +1,5 @@
 import { listRows } from './legacyStore.service.js';
+import { buildRedisKey, getJson, setJson } from './redisCache.service.js';
 
 const safe = (value) => String(value ?? '').trim();
 const eq = (left, right) => safe(left).toLowerCase() === safe(right).toLowerCase();
@@ -122,6 +123,10 @@ async function rows() {
 }
 
 export async function getEmployeeNotifications(employeeId, lastCheckTimestamp = 0) {
+  const cacheKey = buildRedisKey('notifs_emp', employeeId, String(lastCheckTimestamp));
+  const cached = await getJson(cacheKey);
+  if (cached) return cached;
+
   const data = await rows();
   const cutoff = Number(lastCheckTimestamp) || Date.parse(lastCheckTimestamp) || 0;
   const scope = employeeNotificationScope(employeeId, data.users);
@@ -259,10 +264,16 @@ export async function getEmployeeNotifications(employeeId, lastCheckTimestamp = 
 
   notifications.sort((left, right) => (Date.parse(right.Timestamp || right['Last Update Date']) || 0) - (Date.parse(left.Timestamp || left['Last Update Date']) || 0));
   const items = notifications.slice(0, 100);
-  return ok({ notifications: items, updates: items, serverTime: Date.now(), hasMore: notifications.length > items.length, total: notifications.length });
+  const result = ok({ notifications: items, updates: items, serverTime: Date.now(), hasMore: notifications.length > items.length, total: notifications.length });
+  await setJson(cacheKey, result, 10000);
+  return result;
 }
 
 export async function getClientNotifications(clientId, lastCheckTimestamp = new Date(0).toISOString()) {
+  const cacheKey = buildRedisKey('notifs_client', clientId, String(lastCheckTimestamp));
+  const cached = await getJson(cacheKey);
+  if (cached) return cached;
+
   const data = await rows();
   const cutoff = Date.parse(lastCheckTimestamp) || 0;
 
@@ -318,5 +329,7 @@ export async function getClientNotifications(clientId, lastCheckTimestamp = new 
     .sort((left, right) => (Date.parse(right.Timestamp) || 0) - (Date.parse(left.Timestamp) || 0))
     .slice(0, 100);
 
-  return ok({ updates, notifications: updates, serverTime: new Date().toISOString(), hasMore: updates.length < ticketUpdates.length + checklistUpdates.length + socialUpdates.length, total: ticketUpdates.length + checklistUpdates.length + socialUpdates.length });
+  const result = ok({ updates, notifications: updates, serverTime: new Date().toISOString(), hasMore: updates.length < ticketUpdates.length + checklistUpdates.length + socialUpdates.length, total: ticketUpdates.length + checklistUpdates.length + socialUpdates.length });
+  await setJson(cacheKey, result, 10000);
+  return result;
 }

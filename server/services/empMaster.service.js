@@ -174,8 +174,10 @@ async function syncToLoginUser(row, adminId, portalPassword = '', existingUser =
 
 export async function getEmpMasterData(category = 'Master', adminRole = '') {
   const targetCategory = normalizeCategory(category);
-  const records = await listRows('EmpMaster');
-  const users = await listRows('User');
+  const [records, users] = await Promise.all([
+    listRows('EmpMaster'),
+    listRows('User')
+  ]);
   const normalized = records.map((row) => normalizeEmpMasterRow(row, row.Category));
 
   let finalData = [];
@@ -226,8 +228,10 @@ export async function getNextEmpCode(category = 'EMP') {
     Freelancer: [201, 300]
   };
   const [min, max] = boundaries[targetCategory] || boundaries.EMP;
-  const records = await listRows('EmpMaster');
-  const users = await listRows('User');
+  const [records, users] = await Promise.all([
+    listRows('EmpMaster'),
+    listRows('User')
+  ]);
   let highest = min - 1;
 
   const processRow = (row, rowCategory) => {
@@ -252,8 +256,10 @@ export async function saveEmpMasterData(category, formData = {}, filePayloads = 
   if (!targetCategory) {
     return { success: false, message: 'Please choose a valid employee category.' };
   }
-  const records = await listRows('EmpMaster');
-  const users = await listRows('User');
+  const [records, users] = await Promise.all([
+    listRows('EmpMaster'),
+    listRows('User')
+  ]);
   const requestedCode = safe(first(formData, ['EMP Code', 'Employee ID', 'User ID', 'empCode', 'employeeId', 'userId']));
   
   let existingEmp = null;
@@ -319,8 +325,10 @@ export async function deleteEmpMasterData(identifier = '', adminId = '', actorRo
   const targetId = safe(identifier);
   if (!targetId) return { success: false, message: 'Employee ID is required.' };
 
-  const records = await listRows('EmpMaster');
-  const users = await listRows('User');
+  const [records, users] = await Promise.all([
+    listRows('EmpMaster'),
+    listRows('User')
+  ]);
   const targetRecord = records.find((row) => safe(empCode(row)).toLowerCase() === targetId.toLowerCase())
     || users.find((row) => safe(first(row, ['Employee ID', 'User ID', 'empCode', 'employeeId', 'userId'])).toLowerCase() === targetId.toLowerCase());
 
@@ -342,4 +350,13 @@ export async function deleteEmpMasterData(identifier = '', adminId = '', actorRo
     message: `Employee ${targetId} deleted successfully.`,
     item: deletedEmp || deletedUser
   });
+}
+
+export function primeEmpMasterCaches(role = '') {
+  const normalizedRole = safe(role).toLowerCase();
+  if (!['admin', 'super admin', 'hr'].includes(normalizedRole)) return Promise.resolve();
+  return Promise.allSettled([
+    listRows('EmpMaster'),
+    listRows('User')
+  ]);
 }

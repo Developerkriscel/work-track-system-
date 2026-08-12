@@ -7,6 +7,7 @@ const isMongoReady = () => mongoose.connection.readyState === 1;
 const appendOnlyModels = new Set(['Attendance', 'Message', 'TicketHistory', 'SocialHistory', 'WhatsAppLog']);
 const READ_CACHE_TTL_MS = Number(process.env.WORKTRACK_READ_CACHE_TTL_MS || 30000);
 const readCache = new Map();
+const readInflight = new Map();
 const storeMutationListeners = new Set();
 let indexesReady = null;
 
@@ -407,6 +408,9 @@ export function stripInternalMetadata(row = {}) {
 export async function listRows(modelName) {
   await assertMongoReady();
   void ensurePerformanceIndexes();
+  const inflight = readInflight.get(modelName);
+  if (inflight) return inflight.then((rows) => cloneRows(rows));
+
   const cached = readCache.get(modelName);
   if (cached && Date.now() - cached.at < READ_CACHE_TTL_MS) {
     return cloneRows(cached.rows);
@@ -418,19 +422,39 @@ export async function listRows(modelName) {
     return cloneRows(redisCached.rows);
   }
   const Model = LegacyModels[modelName];
-  const docs = await Model.find({}).sort({ createdAt: 1 }).lean();
-  const rows = docs.map((doc) => ({ ...stripInternalMetadata(doc.data), _id: String(doc._id), _legacyId: doc.legacyId }));
-  readCache.set(modelName, { at: Date.now(), rows });
-  void setJson(redisKey, { at: Date.now(), rows }, READ_CACHE_TTL_MS);
-  return cloneRows(rows);
+  const fetchPromise = (async () => {
+    const docs = await Model.find({}).sort({ createdAt: 1 }).lean();
+    const rows = docs.map((doc) => ({ ...stripInternalMetadata(doc.data), _id: String(doc._id), _legacyId: doc.legacyId }));
+    const at = Date.now();
+    readCache.set(modelName, { at, rows });
+    void setJson(redisKey, { at, rows }, READ_CACHE_TTL_MS);
+    return rows;
+  })();
+  readInflight.set(modelName, fetchPromise);
+  try {
+    const rows = await fetchPromise;
+    return cloneRows(rows);
+  } finally {
+    readInflight.delete(modelName);
+  }
 }
 
 export async function listMongoRows(modelName) {
   await assertMongoReady();
   void ensurePerformanceIndexes();
+  const inflight = readInflight.get(modelName);
+  if (inflight) return inflight.then((rows) => cloneRows(rows));
   const Model = LegacyModels[modelName];
-  const docs = await Model.find({}).sort({ createdAt: 1 }).lean();
-  return docs.map((doc) => ({ ...stripInternalMetadata(doc.data), _id: String(doc._id), _legacyId: doc.legacyId }));
+  const fetchPromise = (async () => {
+    const docs = await Model.find({}).sort({ createdAt: 1 }).lean();
+    return docs.map((doc) => ({ ...stripInternalMetadata(doc.data), _id: String(doc._id), _legacyId: doc.legacyId }));
+  })();
+  readInflight.set(modelName, fetchPromise);
+  try {
+    return cloneRows(await fetchPromise);
+  } finally {
+    readInflight.delete(modelName);
+  }
 }
 
 export async function insertRow(modelName, row) {

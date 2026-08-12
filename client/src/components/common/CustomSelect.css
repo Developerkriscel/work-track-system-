@@ -80,3 +80,32 @@
   color: var(--wt-primary, #3b82f6);
   font-weight: 600;
 }
+
+/* Multi-Select specific styles */
+.custom-multi-select .custom-select-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.custom-checkbox {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--wt-text-muted, #64748b);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+.custom-multi-select .custom-select-option.selected .custom-checkbox {
+  border-color: var(--wt-primary, #3b82f6);
+  background: var(--wt-primary, #3b82f6);
+}
+.checkbox-inner.checked {
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  margin-bottom: 2px;
+}

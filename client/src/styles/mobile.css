@@ -238,6 +238,7 @@ html,body{max-width:100vw;overflow-x:hidden}
   .my-approval-status-page .approval-filter-grid .dashboard-control:nth-child(4) { order: 2 !important; } /* Search */
   .my-approval-status-page .approval-filter-grid .dashboard-control:nth-child(2) { order: 3 !important; } /* Start Date */
   .my-approval-status-page .approval-filter-grid .dashboard-control:nth-child(3) { order: 4 !important; } /* End Date */
+  .my-approval-status-page .approval-filter-grid .approval-filter-actions { order: 5 !important; grid-column: 1 / -1; }
 
   .forms-editor__grid{grid-template-columns:1fr}
   .forms-editor__full{grid-column:span 1}

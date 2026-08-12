@@ -1,3 +1,5 @@
+import { CustomMultiSelect } from '@/components/common/CustomMultiSelect';
+
 export function AdminEditor({
   editor,
   managerOptions,
@@ -41,26 +43,30 @@ export function AdminEditor({
 
         <label className="dashboard-control">
           <span>Reporting Manager</span>
-          <select disabled={readOnly} value={editor.form['Manager ID'] || ''} onChange={(event) => onUpdate({ 'Manager ID': event.target.value })}>
-            <option value="">None</option>
-            {managerOptions.map((manager) => (
-              <option key={manager.id} value={manager.id}>
-                {manager.name} ({manager.id})
-              </option>
-            ))}
-          </select>
+          {readOnly ? (
+            <input disabled value={editor.form['Manager ID'] || ''} />
+          ) : (
+            <CustomMultiSelect 
+              value={editor.form['Manager ID'] || ''}
+              onChange={(selectedArray) => onUpdate({ 'Manager ID': selectedArray.join(',') })}
+              options={managerOptions.map(m => ({ value: m.id, label: `${m.name} (${m.id})` }))}
+              defaultLabel="None"
+            />
+          )}
         </label>
 
         <label className="dashboard-control">
           <span>Task Approver</span>
-          <select disabled={readOnly} value={editor.form['Task Approver'] || ''} onChange={(event) => onUpdate({ 'Task Approver': event.target.value })}>
-            <option value="">Same as Manager</option>
-            {managerOptions.map((manager) => (
-              <option key={manager.id} value={manager.id}>
-                {manager.name} ({manager.id})
-              </option>
-            ))}
-          </select>
+          {readOnly ? (
+            <input disabled value={editor.form['Task Approver'] || ''} />
+          ) : (
+            <CustomMultiSelect 
+              value={editor.form['Task Approver'] || ''}
+              onChange={(selectedArray) => onUpdate({ 'Task Approver': selectedArray.join(',') })}
+              options={managerOptions.map(m => ({ value: m.id, label: `${m.name} (${m.id})` }))}
+              defaultLabel="Same as Manager"
+            />
+          )}
         </label>
 
         <label className="dashboard-control">
