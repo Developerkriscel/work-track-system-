@@ -1,8 +1,10 @@
 import { LegacyModels } from '../models/legacyModels.js';
 import { registerStoreMutationListener, stripInternalMetadata } from './legacyStore.service.js';
+import { buildRedisKey, deleteByPrefix, getJson, setJson } from './redisCache.service.js';
 
 const MY_APPROVAL_STATUS_CACHE_TTL_MS = Number(process.env.MY_APPROVAL_STATUS_CACHE_TTL_MS || 15000);
 const myApprovalStatusCache = new Map();
+let myApprovalStatusCacheVersion = 0;
 
 function safe(value) {
   return String(value ?? '').trim();
@@ -149,7 +151,27 @@ function getCachedPayload(cacheKey) {
 }
 
 function setCachedPayload(cacheKey, payload) {
-  myApprovalStatusCache.set(cacheKey, { createdAt: Date.now(), payload });
+  const entry = { createdAt: Date.now(), payload };
+  myApprovalStatusCache.set(cacheKey, entry);
+  void setJson(myApprovalRedisKey(cacheKey), entry, MY_APPROVAL_STATUS_CACHE_TTL_MS);
+}
+
+function myApprovalRedisKey(cacheKey) {
+  return buildRedisKey('my-approval-status', `v${myApprovalStatusCacheVersion}`, cacheKey);
+}
+
+async function getCachedPayloadWithRedis(cacheKey) {
+  clearExpiredCache();
+  const entry = myApprovalStatusCache.get(cacheKey);
+  if (entry && Date.now() - entry.createdAt < MY_APPROVAL_STATUS_CACHE_TTL_MS) {
+    return entry.payload;
+  }
+  const redisCached = await getJson(myApprovalRedisKey(cacheKey));
+  if (redisCached && Date.now() - Number(redisCached.createdAt || 0) < MY_APPROVAL_STATUS_CACHE_TTL_MS) {
+    myApprovalStatusCache.set(cacheKey, redisCached);
+    return redisCached.payload;
+  }
+  return null;
 }
 
 export function clearMyApprovalStatusCache(employeeId = '') {
@@ -158,8 +180,10 @@ export function clearMyApprovalStatusCache(employeeId = '') {
     for (const key of myApprovalStatusCache.keys()) {
       if (key.startsWith(prefix)) myApprovalStatusCache.delete(key);
     }
+    void deleteByPrefix(buildRedisKey('my-approval-status', `v${myApprovalStatusCacheVersion}`, prefix));
     return;
   }
+  myApprovalStatusCacheVersion += 1;
   myApprovalStatusCache.clear();
 }
 
@@ -410,7 +434,7 @@ async function countForSpec(employeeId, tab) {
 
 async function getMyApprovalSummary(employeeId) {
   const cacheKey = cacheKeyForSummary(employeeId);
-  const cached = getCachedPayload(cacheKey);
+  const cached = await getCachedPayloadWithRedis(cacheKey);
   if (cached) return cached;
 
   const [tickets, leaves, intimations, attendance] = await Promise.all([
@@ -444,7 +468,7 @@ async function getMyApprovalSummary(employeeId) {
 
 async function getLegacyMyApprovalStatusList(employeeId) {
   const cacheKey = `${safe(employeeId).toLowerCase()}::legacy`;
-  const cached = getCachedPayload(cacheKey);
+  const cached = await getCachedPayloadWithRedis(cacheKey);
   if (cached) return cached;
 
   const tabs = ['tickets', 'leaves', 'intimations', 'attendance'];
@@ -488,7 +512,7 @@ async function getMyApprovalRows(employeeId, options = {}) {
   };
 
   const cacheKey = cacheKeyForRows(employeeId, tab, filters, page, pageSize);
-  const cached = getCachedPayload(cacheKey);
+  const cached = await getCachedPayloadWithRedis(cacheKey);
   if (cached) return cached;
 
   const spec = tabSpecs[tab];

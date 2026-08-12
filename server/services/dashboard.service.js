@@ -1,5 +1,6 @@
 import { LegacyModels } from '../models/legacyModels.js';
 import { listRows, registerStoreMutationListener, stripInternalMetadata } from './legacyStore.service.js';
+import { buildRedisKey, getJson, setJson } from './redisCache.service.js';
 
 const closedTerms = ['closed', 'approved', 'cancelled', 'completed', 'done', 'resolved', 'paid'];
 const DASHBOARD_CACHE_TTL_MS = Number(process.env.WORKTRACK_DASHBOARD_CACHE_TTL_MS || 10000);
@@ -321,6 +322,42 @@ function paginateDashboardTasks(rows = [], page = 1, pageSize = DEFAULT_DASHBOAR
 
 function buildDashboardSnapshotKey(employeeId = '', filterRange = 'today', viewMode = 'my') {
   return `${safe(employeeId).toLowerCase()}::${safe(filterRange || 'today').toLowerCase()}::${safe(viewMode || 'my').toLowerCase()}`;
+}
+
+function dashboardPayloadRedisKey(cacheKey) {
+  return buildRedisKey('dashboard', `v${dashboardCacheVersion}`, 'payload', cacheKey);
+}
+
+function dashboardSnapshotRedisKey(snapshotKey) {
+  return buildRedisKey('dashboard', `v${dashboardCacheVersion}`, 'snapshot', snapshotKey);
+}
+
+async function readRedisDashboardPayload(cacheKey) {
+  const cached = await getJson(dashboardPayloadRedisKey(cacheKey));
+  if (cached && Date.now() - Number(cached.createdAt || 0) < DASHBOARD_CACHE_TTL_MS) {
+    return cached;
+  }
+  return null;
+}
+
+async function readRedisDashboardSnapshot(snapshotKey) {
+  const cached = await getJson(dashboardSnapshotRedisKey(snapshotKey));
+  if (cached && Date.now() - Number(cached.createdAt || 0) < DASHBOARD_SNAPSHOT_TTL_MS) {
+    return cached;
+  }
+  return null;
+}
+
+function writeDashboardPayload(cacheKey, payload) {
+  const entry = { createdAt: Date.now(), payload };
+  dashboardCache.set(cacheKey, entry);
+  void setJson(dashboardPayloadRedisKey(cacheKey), entry, DASHBOARD_CACHE_TTL_MS);
+}
+
+function writeDashboardSnapshot(snapshotKey, snapshot) {
+  const entry = { createdAt: Date.now(), snapshot };
+  dashboardSnapshotCache.set(snapshotKey, entry);
+  void setJson(dashboardSnapshotRedisKey(snapshotKey), entry, DASHBOARD_SNAPSHOT_TTL_MS);
 }
 
 function buildDashboardSnapshotData({
@@ -671,7 +708,7 @@ function scheduleSnapshotRefresh(snapshotKey, employeeId, filterRange, normalize
     .then(async () => {
       const snapshot = await computeDashboardSnapshot(employeeId, filterRange, normalizedViewMode);
       if (cacheVersion === dashboardCacheVersion) {
-        dashboardSnapshotCache.set(snapshotKey, { createdAt: Date.now(), snapshot });
+        writeDashboardSnapshot(snapshotKey, snapshot);
       }
     })
     .catch(() => null)
@@ -705,6 +742,12 @@ export async function getDashboardData(employeeId, filterRange, viewMode = 'my',
     return cached.payload;
   }
 
+  const redisPayload = await readRedisDashboardPayload(cacheKey);
+  if (redisPayload) {
+    dashboardCache.set(cacheKey, redisPayload);
+    return redisPayload.payload;
+  }
+
   const snapshotKey = buildDashboardSnapshotKey(employeeId, filterRange, normalizedViewMode);
   const primeJob = dashboardPrimeJobs.get(snapshotKey);
   if (primeJob) {
@@ -717,7 +760,7 @@ export async function getDashboardData(employeeId, filterRange, viewMode = 'my',
         taskPage,
         taskPageSize
       });
-      dashboardCache.set(cacheKey, { createdAt: Date.now(), payload: primedPayload });
+      writeDashboardPayload(cacheKey, primedPayload);
       return primedPayload;
     }
   }
@@ -732,13 +775,26 @@ export async function getDashboardData(employeeId, filterRange, viewMode = 'my',
       taskPage,
       taskPageSize
     });
-    dashboardCache.set(cacheKey, { createdAt: Date.now(), payload });
+    writeDashboardPayload(cacheKey, payload);
+    return payload;
+  }
+
+  const redisSnapshot = await readRedisDashboardSnapshot(snapshotKey);
+  if (redisSnapshot) {
+    const payload = materializeDashboardPayload(redisSnapshot.snapshot, {
+      includeTasks,
+      includeCollections,
+      taskPage,
+      taskPageSize
+    });
+    writeDashboardSnapshot(snapshotKey, redisSnapshot.snapshot);
+    writeDashboardPayload(cacheKey, payload);
     return payload;
   }
 
   const snapshot = await computeDashboardSnapshot(employeeId, filterRange, normalizedViewMode);
   if (cacheVersion === dashboardCacheVersion) {
-    dashboardSnapshotCache.set(snapshotKey, { createdAt: Date.now(), snapshot });
+    writeDashboardSnapshot(snapshotKey, snapshot);
   }
   const payload = materializeDashboardPayload(snapshot, {
     includeTasks,
@@ -746,7 +802,7 @@ export async function getDashboardData(employeeId, filterRange, viewMode = 'my',
     taskPage,
     taskPageSize
   });
-  dashboardCache.set(cacheKey, { createdAt: Date.now(), payload });
+  writeDashboardPayload(cacheKey, payload);
   return payload;
 }
 
@@ -759,18 +815,16 @@ export function primeDashboardSnapshots(employeeId, role) {
       buildDashboardSnapshotKey(employeeId, 'today', 'my'),
       computeDashboardSnapshot(employeeId, 'today', 'my').then((snapshot) => {
         if (cacheVersion !== dashboardCacheVersion) return;
-        dashboardSnapshotCache.set(buildDashboardSnapshotKey(employeeId, 'today', 'my'), { createdAt: Date.now(), snapshot });
-        dashboardCache.set(
-          `${buildDashboardSnapshotKey(employeeId, 'today', 'my')}::summary::compact::1::${DEFAULT_DASHBOARD_TASKS_PAGE_SIZE}`,
-          {
-            createdAt: Date.now(),
-            payload: materializeDashboardPayload(snapshot, {
-              includeTasks: false,
-              includeCollections: false,
-              taskPage: 1,
-              taskPageSize: DEFAULT_DASHBOARD_TASKS_PAGE_SIZE
-            })
-          }
+        const snapshotKey = buildDashboardSnapshotKey(employeeId, 'today', 'my');
+        writeDashboardSnapshot(snapshotKey, snapshot);
+        writeDashboardPayload(
+          `${snapshotKey}::summary::compact::1::${DEFAULT_DASHBOARD_TASKS_PAGE_SIZE}`,
+          materializeDashboardPayload(snapshot, {
+            includeTasks: false,
+            includeCollections: false,
+            taskPage: 1,
+            taskPageSize: DEFAULT_DASHBOARD_TASKS_PAGE_SIZE
+          })
         );
       })
     )
@@ -781,18 +835,16 @@ export function primeDashboardSnapshots(employeeId, role) {
         buildDashboardSnapshotKey(employeeId, 'today', 'team'),
         computeDashboardSnapshot(employeeId, 'today', 'team').then((snapshot) => {
           if (cacheVersion !== dashboardCacheVersion) return;
-          dashboardSnapshotCache.set(buildDashboardSnapshotKey(employeeId, 'today', 'team'), { createdAt: Date.now(), snapshot });
-          dashboardCache.set(
-            `${buildDashboardSnapshotKey(employeeId, 'today', 'team')}::tasks::compact::1::${tasksPageSize}`,
-            {
-              createdAt: Date.now(),
-              payload: materializeDashboardPayload(snapshot, {
-                includeTasks: true,
-                includeCollections: false,
-                taskPage: 1,
-                taskPageSize: tasksPageSize
-              })
-            }
+          const snapshotKey = buildDashboardSnapshotKey(employeeId, 'today', 'team');
+          writeDashboardSnapshot(snapshotKey, snapshot);
+          writeDashboardPayload(
+            `${snapshotKey}::tasks::compact::1::${tasksPageSize}`,
+            materializeDashboardPayload(snapshot, {
+              includeTasks: true,
+              includeCollections: false,
+              taskPage: 1,
+              taskPageSize: tasksPageSize
+            })
           );
         })
       )

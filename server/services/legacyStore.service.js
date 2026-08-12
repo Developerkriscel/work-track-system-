@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { LegacyModels } from '../models/legacyModels.js';
+import { buildRedisKey, deleteByPrefix, deleteKey, getJson, setJson } from './redisCache.service.js';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const isMongoReady = () => mongoose.connection.readyState === 1;
@@ -265,9 +266,11 @@ function cloneRows(rows = []) {
 function clearReadCache(modelName = '') {
   if (modelName) {
     readCache.delete(modelName);
+    void deleteKey(buildRedisKey('legacy', modelName));
     return;
   }
   readCache.clear();
+  void deleteByPrefix(buildRedisKey('legacy'));
 }
 
 export function registerStoreMutationListener(listener) {
@@ -408,10 +411,17 @@ export async function listRows(modelName) {
   if (cached && Date.now() - cached.at < READ_CACHE_TTL_MS) {
     return cloneRows(cached.rows);
   }
+  const redisKey = buildRedisKey('legacy', modelName);
+  const redisCached = await getJson(redisKey);
+  if (redisCached?.rows && Date.now() - Number(redisCached.at || 0) < READ_CACHE_TTL_MS) {
+    readCache.set(modelName, { at: Number(redisCached.at) || Date.now(), rows: redisCached.rows });
+    return cloneRows(redisCached.rows);
+  }
   const Model = LegacyModels[modelName];
   const docs = await Model.find({}).sort({ createdAt: 1 }).lean();
   const rows = docs.map((doc) => ({ ...stripInternalMetadata(doc.data), _id: String(doc._id), _legacyId: doc.legacyId }));
   readCache.set(modelName, { at: Date.now(), rows });
+  void setJson(redisKey, { at: Date.now(), rows }, READ_CACHE_TTL_MS);
   return cloneRows(rows);
 }
 

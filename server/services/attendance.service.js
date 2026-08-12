@@ -582,6 +582,59 @@ async function findAttendanceRows(query = {}, projection = { data: 1, legacyId: 
   return fromLegacyDocs(docs);
 }
 
+async function findUserRows(query = {}, projection = { data: 1, legacyId: 1 }) {
+  const docs = await LegacyModels.User.collection.find(query, { projection }).toArray();
+  return fromLegacyDocs(docs);
+}
+
+async function findLeaveRows(query = {}, projection = { data: 1, legacyId: 1 }) {
+  const docs = await LegacyModels.Leave.collection.find(query, { projection }).toArray();
+  return fromLegacyDocs(docs);
+}
+
+async function findIntimationRows(query = {}, projection = { data: 1, legacyId: 1 }) {
+  const docs = await LegacyModels.Intimation.collection.find(query, { projection }).toArray();
+  return fromLegacyDocs(docs);
+}
+
+function employeeIdQuery(value = '') {
+  const employeeId = safe(value).toUpperCase();
+  return {
+    $or: [
+      { 'data.Employee ID': employeeId },
+      { 'data.employeeId': employeeId },
+      { 'data.EmpID': employeeId },
+      { 'data.User ID': employeeId }
+    ]
+  };
+}
+
+function employeeIdsQuery(values = []) {
+  const ids = Array.from(new Set(values.map((value) => safe(value).toUpperCase()).filter(Boolean)));
+  if (!ids.length) return null;
+  return {
+    $or: [
+      { 'data.Employee ID': { $in: ids } },
+      { 'data.employeeId': { $in: ids } },
+      { 'data.EmpID': { $in: ids } },
+      { 'data.User ID': { $in: ids } }
+    ]
+  };
+}
+
+function userDateRangeQuery(startDate, endDate, keys = ['data.Date', 'data.date']) {
+  const start = normalizedDate(startDate || today());
+  const end = normalizedDate(endDate || startDate || today());
+  return {
+    $or: keys.map((key) => ({
+      [key]: {
+        $gte: start,
+        $lte: end
+      }
+    }))
+  };
+}
+
 function attendanceEventTime(row) {
   const date = normalizedDate(first(row, ['Date'], today()));
   const time = first(row, ['Time', 'Punch In', 'Punch Out']);
@@ -748,14 +801,51 @@ export async function updateAttendanceLocationPolicy(editorId, editorRole, polic
 }
 
 export async function getAttendanceForUser(employeeId, startDate, endDate) {
-  const [attendance, leaves, intimations, users] = await Promise.all([
-    listRows('Attendance'),
-    listRows('Leave'),
-    listRows('Intimation'),
-    listRows('User')
+  const targetEmployeeId = safe(employeeId).toUpperCase();
+  const [users, attendance, leaves, intimations] = await Promise.all([
+    findUserRows(employeeIdQuery(targetEmployeeId), {
+      legacyId: 1,
+      'data.Employee ID': 1,
+      'data.User ID': 1,
+      'data.EMP Code': 1,
+      'data.employeeId': 1,
+      'data.EmpID': 1,
+      'data.Employee Name': 1,
+      'data.Name': 1,
+      'data.Role': 1,
+      'data.Department': 1,
+      'data.Status': 1,
+      'data.Joining Date': 1,
+      'data.Date of Joining': 1,
+      'data.Date Of Joining': 1
+    }),
+    findAttendanceRows(
+      {
+        $and: [
+          employeeIdQuery(targetEmployeeId),
+          userDateRangeQuery(startDate, endDate)
+        ]
+      }
+    ),
+    findLeaveRows(
+      {
+        $and: [
+          employeeIdQuery(targetEmployeeId),
+          userDateRangeQuery(startDate, endDate, ['data.Start Date', 'data.startDate'])
+        ]
+      }
+    ),
+    findIntimationRows(
+      {
+        $and: [
+          employeeIdQuery(targetEmployeeId),
+          userDateRangeQuery(startDate, endDate, ['data.Intimation Date', 'data.Date', 'data.date'])
+        ]
+      }
+    )
   ]);
-  
-  const user = users.find(u => eq(userId(u), employeeId));
+
+  const user = users.find((item) => eq(userId(item), targetEmployeeId));
   const joiningDateStr = user ? first(user, ['Date of Joining', 'Joining Date', 'Date Of Joining']) : '';
   const joiningDate = joiningDateStr ? normalizedDate(joiningDateStr) : '';
 
@@ -763,7 +853,7 @@ export async function getAttendanceForUser(employeeId, startDate, endDate) {
     data: attendance
       .filter((row) => {
           const rowDate = normalizedDate(first(row, ['Date', 'date']));
-          return eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), employeeId) && 
+          return eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), targetEmployeeId) && 
                  dateInRange(rowDate, startDate, endDate) &&
                  (!joiningDate || rowDate >= joiningDate);
       })
@@ -771,13 +861,13 @@ export async function getAttendanceForUser(employeeId, startDate, endDate) {
       .flat(),
     leaves: leaves.filter((row) => {
         const rowDate = normalizedDate(first(row, ['Start Date', 'Start Date']));
-        return eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), employeeId) && 
+        return eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), targetEmployeeId) && 
                dateInRange(rowDate, startDate, endDate) &&
                (!joiningDate || rowDate >= joiningDate);
     }),
     intimations: intimations.filter((row) => {
         const rowDate = normalizedDate(first(row, ['Intimation Date', 'Intimation Date']));
-        return eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), employeeId) && 
+        return eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), targetEmployeeId) && 
                dateInRange(rowDate, startDate, endDate) &&
                (!joiningDate || rowDate >= joiningDate);
     })
@@ -785,14 +875,19 @@ export async function getAttendanceForUser(employeeId, startDate, endDate) {
 }
 
 export async function getTeamAttendanceForReviewer(reviewerId, startDate, endDate) {
-  const [users, attendance] = await Promise.all([
-    listRows('User'),
-    listRows('Attendance')
-  ]);
+  const users = await listRows('User');
   const reviewer = requireTeamAttendanceReviewer(reviewerId, users);
   if (!reviewer) return fail('Only Admin, Super Admin, or HR can view team attendance.');
 
   const visibleIds = teamAttendanceAccessSet(reviewer, users);
+  const attendance = visibleIds.size
+    ? await findAttendanceRows({
+        $and: [
+          employeeIdsQuery(Array.from(visibleIds)),
+          userDateRangeQuery(startDate, endDate)
+        ]
+      })
+    : [];
   const rows = buildTeamAttendanceGroups(attendance, users, visibleIds, startDate, endDate);
   return ok({
     data: rows,

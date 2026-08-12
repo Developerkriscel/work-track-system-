@@ -2,9 +2,11 @@ import { insertRow, listRows, registerStoreMutationListener, sheetAttendance, up
 import { checkUserAttendanceActive } from './attendance.service.js';
 import { LegacyModels } from '../models/legacyModels.js';
 import { stripInternalMetadata } from './legacyStore.service.js';
+import { buildRedisKey, getJson, setJson } from './redisCache.service.js';
 
 const APPROVAL_QUEUE_CACHE_TTL_MS = Number(process.env.WORKTRACK_APPROVAL_QUEUE_CACHE_TTL_MS || 10000);
 const approvalQueueCache = new Map();
+let approvalQueueCacheVersion = 0;
 let taskApproversCache = null;
 const safe = (value = '') => String(value ?? '').trim();
 const eq = (left, right) => safe(left).toLowerCase() === safe(right).toLowerCase();
@@ -52,6 +54,7 @@ function normalizedDate(value) {
 const elevatedRoles = new Set(['admin', 'super admin', 'hr', 'manager']);
 
 function clearApprovalQueueCache() {
+  approvalQueueCacheVersion += 1;
   approvalQueueCache.clear();
   taskApproversCache = null;
 }
@@ -59,6 +62,39 @@ function clearApprovalQueueCache() {
 registerStoreMutationListener(() => {
   clearApprovalQueueCache();
 });
+
+function approvalQueueRedisKey(cacheKey) {
+  return buildRedisKey('approvals', `v${approvalQueueCacheVersion}`, cacheKey);
+}
+
+function clearExpiredApprovalCache() {
+  const now = Date.now();
+  for (const [cacheKey, entry] of approvalQueueCache.entries()) {
+    if (now - entry.createdAt >= APPROVAL_QUEUE_CACHE_TTL_MS) {
+      approvalQueueCache.delete(cacheKey);
+    }
+  }
+}
+
+async function getCachedApprovalPayload(cacheKey) {
+  clearExpiredApprovalCache();
+  const entry = approvalQueueCache.get(cacheKey);
+  if (entry && Date.now() - entry.createdAt < APPROVAL_QUEUE_CACHE_TTL_MS) {
+    return entry.payload;
+  }
+  const redisCached = await getJson(approvalQueueRedisKey(cacheKey));
+  if (redisCached && Date.now() - Number(redisCached.createdAt || 0) < APPROVAL_QUEUE_CACHE_TTL_MS) {
+    approvalQueueCache.set(cacheKey, redisCached);
+    return redisCached.payload;
+  }
+  return null;
+}
+
+function setCachedApprovalPayload(cacheKey, payload) {
+  const entry = { createdAt: Date.now(), payload };
+  approvalQueueCache.set(cacheKey, entry);
+  void setJson(approvalQueueRedisKey(cacheKey), entry, APPROVAL_QUEUE_CACHE_TTL_MS);
+}
 
 function userId(user = {}) {
   return first(user, ['Employee ID', 'employeeId', 'User ID', 'EmpID']);
@@ -625,9 +661,9 @@ export async function getPendingApprovals(adminId, options = {}) {
   if (mode === 'rows') return getPendingApprovalsRows(adminId, options);
 
   const cacheKey = safe(adminId).toLowerCase();
-  const cached = approvalQueueCache.get(cacheKey);
-  if (cached && Date.now() - cached.createdAt < APPROVAL_QUEUE_CACHE_TTL_MS) {
-    return cached.payload;
+  const cached = await getCachedApprovalPayload(cacheKey);
+  if (cached) {
+    return cached;
   }
 
   const data = await getApprovalQueueRows(adminId);
@@ -702,7 +738,7 @@ export async function getPendingApprovals(adminId, options = {}) {
       name: first(user, ['Employee Name', 'name', 'Name'], first(user, ['Employee ID', 'employeeId', 'User ID', 'EmpID']))
     }))
   });
-  approvalQueueCache.set(cacheKey, { createdAt: Date.now(), payload });
+  setCachedApprovalPayload(cacheKey, payload);
   return payload;
 }
 
@@ -998,8 +1034,8 @@ function approvalSummaryPayload(data, admin) {
 
 async function getPendingApprovalsSummary(adminId) {
   const cacheKey = `${safe(adminId).toLowerCase()}::summary`;
-  const cached = approvalQueueCache.get(cacheKey);
-  if (cached && Date.now() - cached.createdAt < APPROVAL_QUEUE_CACHE_TTL_MS) return cached.payload;
+  const cached = await getCachedApprovalPayload(cacheKey);
+  if (cached) return cached;
 
   const userProjection = {
     legacyId: 1,
@@ -1064,7 +1100,7 @@ async function getPendingApprovalsSummary(adminId) {
     users: approvalUserOptions(visibleUsers),
     ticketCategories: []
   });
-  approvalQueueCache.set(cacheKey, { createdAt: Date.now(), payload });
+  setCachedApprovalPayload(cacheKey, payload);
   return payload;
 }
 
@@ -1083,8 +1119,8 @@ async function getPendingApprovalsRows(adminId, options = {}) {
     status: safe(options.filters?.status)
   };
   const cacheKey = `${safe(adminId).toLowerCase()}::rows::${tab}::${JSON.stringify(filters)}::${page}::${pageSize}`;
-  const cached = approvalQueueCache.get(cacheKey);
-  if (cached && Date.now() - cached.createdAt < APPROVAL_QUEUE_CACHE_TTL_MS) return cached.payload;
+  const cached = await getCachedApprovalPayload(cacheKey);
+  if (cached) return cached;
 
   const data = await getApprovalQueueRows(adminId, { tabs: [tab], includeClients: tab === 'tickets' });
   const admin = data.users.find((user) => eq(userId(user), adminId));
@@ -1114,7 +1150,7 @@ async function getPendingApprovalsRows(adminId, options = {}) {
       hasMore: startIndex + rows.length < filteredRows.length
     }
   });
-  approvalQueueCache.set(cacheKey, { createdAt: Date.now(), payload });
+  setCachedApprovalPayload(cacheKey, payload);
   return payload;
 }
 
