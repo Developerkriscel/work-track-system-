@@ -121,7 +121,44 @@ export function ReportsPage() {
 
       {isManagerOnly ? (
         <>
-          <ReportsSummaryCards items={activeTab === 'fms' ? fmsSummaryItems : ticketSummaryItems} />
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <ReportsSummaryCards items={activeTab === 'fms' ? fmsSummaryItems : ticketSummaryItems} />
+            </div>
+            
+            {activeTab === 'fms' && (
+              <div className="reports-date-controls" style={{ 
+                display: 'flex', gap: '12px', background: 'rgba(255, 255, 255, 0.4)', 
+                padding: '12px 16px', borderRadius: '16px', backdropFilter: 'blur(12px)', 
+                border: '1px solid rgba(255, 255, 255, 0.6)', boxShadow: '0 4px 6px rgba(0,0,0,0.02)',
+                alignItems: 'flex-end', flexShrink: 0
+              }}>
+                <label className="dashboard-control" style={{ margin: 0 }}>
+                  <span style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px', display: 'block', fontWeight: 600 }}>Date Range</span>
+                  <select value={range} onChange={(event) => setRange(event.target.value)} style={{ minWidth: '150px' }}>
+                    {rangeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {range === 'custom' ? (
+                  <>
+                    <label className="dashboard-control" style={{ margin: 0 }}>
+                      <span style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px', display: 'block', fontWeight: 600 }}>Start Date</span>
+                      <input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} />
+                    </label>
+                    <label className="dashboard-control" style={{ margin: 0 }}>
+                      <span style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px', display: 'block', fontWeight: 600 }}>End Date</span>
+                      <input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} />
+                    </label>
+                  </>
+                ) : null}
+              </div>
+            )}
+          </div>
           {activeTab === 'fms' ? (
             <FmsReportSection
               fms={fms}

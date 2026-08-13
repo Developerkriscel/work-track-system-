@@ -1,4 +1,6 @@
-import { listRows, insertRow } from './legacyStore.service.js';
+import { LegacyModels } from '../models/legacyModels.js';
+import { insertRow, listRows, registerStoreMutationListener } from './legacyStore.service.js';
+import { buildRedisKey, getJson, setJson } from './redisCache.service.js';
 import { createTicket } from './ticket.service.js';
 
 const safe = (value = '') => String(value ?? '').trim();
@@ -8,6 +10,23 @@ const first = (row, keys, fallback = '') => keys.map((key) => row?.[key]).find((
 const ok = (payload = {}) => ({ success: true, ...payload });
 
 const closedTerms = ['closed', 'approved', 'cancelled', 'completed', 'done', 'resolved', 'paid'];
+const DASHBOARD_CACHE_TTL_MS = Number(process.env.WORKTRACK_MANAGEMENT_DASHBOARD_CACHE_TTL_MS || 120_000);
+const MANAGEMENT_VERSION_KEY = buildRedisKey('management-dashboard', 'version');
+const MANAGEMENT_CACHE_PREFIX = 'management-dashboard-cache';
+const managementRelevantModels = new Set([
+  'User',
+  'Client',
+  'Ticket',
+  'Attendance',
+  'Leave',
+  'Intimation',
+  'FmsTask',
+  'Todo',
+  'Invoice'
+]);
+const memoryCache = new Map();
+const inflightCache = new Map();
+let localDashboardVersion = Date.now();
 
 function isClosedStatus(status = '') {
   return closedTerms.some((term) => safe(status).toLowerCase().includes(term));
@@ -35,10 +54,121 @@ function normalizedDate(value) {
   return Number.isNaN(parsed.getTime()) ? raw : parsed.toISOString().slice(0, 10);
 }
 
+function monthFromLabel(label = '') {
+  const key = safe(label).slice(0, 3).toLowerCase();
+  const months = {
+    jan: '01',
+    feb: '02',
+    mar: '03',
+    apr: '04',
+    may: '05',
+    jun: '06',
+    jul: '07',
+    aug: '08',
+    sep: '09',
+    oct: '10',
+    nov: '11',
+    dec: '12'
+  };
+  return months[key] || '';
+}
+
+function resolveFmsDate(task = {}) {
+  const explicitPlanDate = safe(first(task, ['Plan Date', 'Date']));
+  if (explicitPlanDate && !explicitPlanDate.startsWith('2001-')) {
+    return normalizedDate(explicitPlanDate);
+  }
+
+  const rawPlanDate = safe(first(task, ['rawPlanDate', 'Raw Plan Date']));
+  const match = rawPlanDate.match(/^(\d{1,2})-([A-Za-z]{3})\b/);
+  if (match) {
+    const day = String(match[1]).padStart(2, '0');
+    const month = monthFromLabel(match[2]);
+    const sourceYear = new Date(first(task, ['sourceUpdatedAt'], referenceNow().toISOString())).getFullYear();
+    if (month && Number.isFinite(sourceYear)) {
+      return `${sourceYear}-${month}-${day}`;
+    }
+  }
+
+  return normalizedDate(explicitPlanDate || today());
+}
+
 function dateInRange(value, start, end) {
   if (!start || !end || !value) return true;
   const date = normalizedDate(value);
   return date >= start && date <= end;
+}
+
+function enumerateDates(startDate, endDate, limit = 93) {
+  if (!startDate || !endDate) return [];
+  const start = new Date(`${startDate}T12:00:00+05:30`);
+  const end = new Date(`${endDate}T12:00:00+05:30`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return [];
+
+  const dates = [];
+  const cursor = new Date(start);
+  while (cursor <= end && dates.length < limit) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+
+function cacheKey(scope, parts = []) {
+  return [scope, ...parts.map((part) => safe(part)).filter(Boolean)].join(':').toLowerCase();
+}
+
+async function getCached(scope, parts, loader) {
+  const key = cacheKey(scope, parts);
+  const memory = memoryCache.get(key);
+  if (memory && memory.expiresAt > Date.now()) {
+    return memory.value;
+  }
+
+  if (inflightCache.has(key)) {
+    return inflightCache.get(key);
+  }
+
+  const promise = (async () => {
+    const redisKey = buildRedisKey(MANAGEMENT_CACHE_PREFIX, key);
+    const redisValue = await getJson(redisKey).catch(() => null);
+    if (redisValue) {
+      memoryCache.set(key, { value: redisValue, expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS });
+      return redisValue;
+    }
+
+    const value = await loader();
+    memoryCache.set(key, { value, expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS });
+    void setJson(redisKey, value, DASHBOARD_CACHE_TTL_MS);
+    return value;
+  })().finally(() => {
+    inflightCache.delete(key);
+  });
+
+  inflightCache.set(key, promise);
+  return promise;
+}
+
+function clearManagementDashboardCache() {
+  memoryCache.clear();
+  inflightCache.clear();
+  localDashboardVersion = Date.now();
+}
+
+registerStoreMutationListener((modelName) => {
+  if (modelName && !managementRelevantModels.has(modelName)) return;
+  clearManagementDashboardCache();
+  void setJson(MANAGEMENT_VERSION_KEY, { version: localDashboardVersion }, 0);
+});
+
+async function getDashboardVersion() {
+  const cached = await getJson(MANAGEMENT_VERSION_KEY).catch(() => null);
+  if (cached?.version) {
+    localDashboardVersion = Number(cached.version) || localDashboardVersion;
+    return String(localDashboardVersion);
+  }
+  void setJson(MANAGEMENT_VERSION_KEY, { version: localDashboardVersion }, 0);
+  return String(localDashboardVersion);
 }
 
 function normalizeTicketForDashboard(ticket, users, clients) {
@@ -60,7 +190,7 @@ function normalizeTicketForDashboard(ticket, users, clients) {
 
 function normalizeFmsForDashboard(task, users, clients) {
   const status = first(task, ['Status'], first(task, ['Done Date', 'actualDate']) ? 'Completed' : 'Pending');
-  const date = first(task, ['Plan Date', 'Date'], today());
+  const date = resolveFmsDate(task);
   return {
     ...task,
     ID: first(task, ['Task ID', 'ID', 'rowId']),
@@ -68,7 +198,7 @@ function normalizeFmsForDashboard(task, users, clients) {
     Client: clientName(task, clients),
     User: taskOwnerName(task, users),
     Status: status,
-    Date: normalizedDate(date),
+    Date: date,
     TAT: first(task, ['TAT', 'When'], '0'),
     Duration: first(task, ['Duration', 'Actual Duration'], '0h 0m'),
     Description: first(task, ['Task Description', 'Description', 'Content', 'Task'])
@@ -106,66 +236,126 @@ function clientName(task, clients = []) {
   return client?.['Client Name'] || 'Internal / General';
 }
 
-async function getRows() {
-  const [users, clients, tickets, attendance, leaves, intimations, fms, todos, invoices] = await Promise.all([
-    listRows('User'),
-    listRows('Client'),
-    listRows('Ticket'),
-    listRows('Attendance'),
-    listRows('Leave'),
-    listRows('Intimation'),
-    listRows('FmsTask'),
-    listRows('Todo'),
-    listRows('Invoice')
+function rowsFromDocs(docs = []) {
+  return docs.map((doc) => ({
+    ...(doc?.data || {}),
+    _id: String(doc?._id || ''),
+    _legacyId: doc?.legacyId || ''
+  }));
+}
+
+function rangeQuery(primaryField, startDate, endDate, fallbackFields = []) {
+  if (!startDate || !endDate) return {};
+  const clauses = [
+    { [`data.${primaryField}`]: { $gte: startDate, $lte: endDate } }
+  ];
+
+  fallbackFields.forEach((field) => {
+    clauses.push({ [`data.${field}`]: { $gte: startDate, $lte: endDate } });
+  });
+
+  return clauses.length === 1 ? clauses[0] : { $or: clauses };
+}
+
+async function queryRows(modelName, query = {}) {
+  const docs = await LegacyModels[modelName]
+    .find(query)
+    .select({ data: 1, legacyId: 1 })
+    .lean();
+  return rowsFromDocs(docs);
+}
+
+async function getUsersAndClients(version) {
+  const [users, clients] = await Promise.all([
+    getCached('users', [version], () => queryRows('User')),
+    getCached('clients', [version], () => queryRows('Client'))
   ]);
-  return { users, clients, tickets, attendance, leaves, intimations, fms, todos, invoices };
+  return { users, clients };
+}
+
+async function getScopedCollections(version, startDate, endDate) {
+  const attendanceToday = today();
+  const attendanceDates = enumerateDates(startDate, endDate);
+  const attendanceQuery = attendanceDates.length
+    ? {
+        $or: attendanceDates.map((date) => ({
+          'data.Date': { $regex: `^${date}` }
+        }))
+      }
+    : {};
+
+  const [tickets, fms, todos, attendance, leaves, intimations, invoices] = await Promise.all([
+    getCached('tickets', [version, startDate, endDate], () => queryRows('Ticket', rangeQuery('Plan Date', startDate, endDate, ['Date']))),
+    getCached('fms', [version], () => queryRows('FmsTask')),
+    getCached('todos', [version, startDate, endDate], () => queryRows('Todo', rangeQuery('Due Date', startDate, endDate, ['Date']))),
+    getCached('attendance', [version, startDate, endDate], () => queryRows('Attendance', attendanceQuery)),
+    getCached('leaves', [version], () => queryRows('Leave')),
+    getCached('intimations', [version], () => queryRows('Intimation')),
+    getCached('invoices', [version], () => queryRows('Invoice'))
+  ]);
+
+  const attendanceTodayRows = startDate && endDate
+    ? attendance.filter((row) => normalizedDate(row.Date) === attendanceToday)
+    : await getCached('attendance-today', [version, attendanceToday], () => queryRows('Attendance', { 'data.Date': attendanceToday }));
+
+  return { tickets, fms, todos, attendance, attendanceTodayRows, leaves, intimations, invoices };
 }
 
 export async function getManagementDashboardData(startDate, endDate) {
-  const data = await getRows();
-  const activeUsers = data.users.filter((user) => eq(user.Status, 'Active'));
-  const activeClients = data.clients.filter((client) => !eq(client.Status, 'Inactive'));
-  const tickets = data.tickets
-    .map((ticket) => normalizeTicketForDashboard(ticket, data.users, data.clients))
-    .filter((ticket) => dateInRange(ticket.Date, startDate, endDate));
-  const fms = data.fms
-    .map((task) => normalizeFmsForDashboard(task, data.users, data.clients))
-    .filter((task) => dateInRange(task.Date, startDate, endDate));
-  const todo = data.todos
-    .map((task) => normalizeTodoForDashboard(task, data.users))
-    .filter((task) => dateInRange(task.Date, startDate, endDate));
-  const allTasks = [...tickets, ...fms, ...todo];
-  const checkedIn = new Set(
-    data.attendance
-      .filter((attendance) => safe(attendance.Date).slice(0, 10) === today() && /in|present/i.test(safe(attendance.Action || attendance.Status)))
-      .map((attendance) => attendance.EmpID || attendance['Employee ID'])
-  );
-  const outstanding = data.invoices.reduce((sum, invoice) => sum + num(first(invoice, ['Outstanding', 'Balance', 'Due Amount'])), 0);
-  const completed = allTasks.filter((task) => isClosedStatus(task.Status)).length;
-  const plannedMinutes = allTasks.reduce((sum, task) => sum + num(task.TAT), 0);
+  const version = await getDashboardVersion();
+  return getCached('payload', [version, startDate, endDate], async () => {
+    const [{ users, clients }, scoped] = await Promise.all([
+      getUsersAndClients(version),
+      getScopedCollections(version, startDate, endDate)
+    ]);
 
-  return ok({
-    data: {
-      activeUsers: activeUsers.map((user) => ({ id: user['Employee ID'], name: user['Employee Name'], role: user.Role })),
-      activeClients: activeClients.map((client) => ({ id: client.Client_Id, name: client['Client Name'] })),
-      users: activeUsers,
-      clients: activeClients,
-      tickets,
-      fms,
-      todo,
-      attendance: data.attendance,
-      leaves: data.leaves,
-      intimations: data.intimations,
-      invoices: data.invoices,
-      kpis: {
-        attendancePct: activeUsers.length ? Math.round((checkedIn.size / activeUsers.length) * 100) : 0,
-        attendanceCount: `${checkedIn.size} of ${activeUsers.length}`,
-        plannedTime: `${Math.floor(plannedMinutes / 60)}h ${plannedMinutes % 60}m`,
-        outstanding,
-        completedToday: completed,
-        completedRate: allTasks.length ? Math.round((completed / allTasks.length) * 100) : 0
+    const activeUsers = users.filter((user) => eq(user.Status || user.status || 'Active', 'Active'));
+    const activeClients = clients.filter((client) => !eq(client.Status || client.status || 'Active', 'Inactive'));
+    const tickets = scoped.tickets
+      .map((ticket) => normalizeTicketForDashboard(ticket, users, clients))
+      .filter((ticket) => dateInRange(ticket.Date, startDate, endDate));
+    const fms = scoped.fms
+      .map((task) => normalizeFmsForDashboard(task, users, clients))
+      .filter((task) => dateInRange(task.Date, startDate, endDate));
+    const todo = scoped.todos
+      .map((task) => normalizeTodoForDashboard(task, users))
+      .filter((task) => dateInRange(task.Date, startDate, endDate));
+    const allTasks = [...tickets, ...fms, ...todo];
+
+    const checkedIn = new Set(
+      scoped.attendanceTodayRows
+        .filter((attendance) => /in|present/i.test(safe(attendance.Action || attendance.Status)))
+        .map((attendance) => attendance.EmpID || attendance['Employee ID'])
+        .filter(Boolean)
+    );
+
+    const outstanding = scoped.invoices.reduce((sum, invoice) => sum + num(first(invoice, ['Outstanding', 'Balance', 'Due Amount'])), 0);
+    const completed = allTasks.filter((task) => isClosedStatus(task.Status)).length;
+    const plannedMinutes = allTasks.reduce((sum, task) => sum + num(task.TAT), 0);
+
+    return ok({
+      data: {
+        activeUsers: activeUsers.map((user) => ({ id: user['Employee ID'], name: user['Employee Name'], role: user.Role })),
+        activeClients: activeClients.map((client) => ({ id: client.Client_Id, name: client['Client Name'] })),
+        users: activeUsers,
+        clients: activeClients,
+        tickets,
+        fms,
+        todo,
+        attendance: scoped.attendance,
+        leaves: scoped.leaves,
+        intimations: scoped.intimations,
+        invoices: scoped.invoices,
+        kpis: {
+          attendancePct: activeUsers.length ? Math.round((checkedIn.size / activeUsers.length) * 100) : 0,
+          attendanceCount: `${checkedIn.size} of ${activeUsers.length}`,
+          plannedTime: `${Math.floor(plannedMinutes / 60)}h ${plannedMinutes % 60}m`,
+          outstanding,
+          completedToday: completed,
+          completedRate: allTasks.length ? Math.round((completed / allTasks.length) * 100) : 0
+        }
       }
-    }
+    });
   });
 }
 

@@ -9,6 +9,7 @@ import { RefreshCw } from '@/components/common/icons';
 export function ManagementDashboardReportTab() {
   const {
     currentUser,
+    loading,
     error, clearError,
     range,
     setRange,
@@ -35,6 +36,7 @@ export function ManagementDashboardReportTab() {
   return (
     <>
       {error ? <div className="dashboard-banner dashboard-banner--error"><span>{error}</span><button type="button" className="dashboard-banner__close" onClick={clearError}>OK</button></div> : null}
+      {loading ? <div className="dashboard-banner"><span>Loading report data from MongoDB...</span></div> : null}
 
       <ManagementDashboardTabs activeTab={activeTab} onTabChange={setActiveTab}>
         <div className="reports-toolbar__actions">

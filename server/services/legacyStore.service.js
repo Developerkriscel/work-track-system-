@@ -282,7 +282,10 @@ export function registerStoreMutationListener(listener) {
 }
 
 export function touchStoreMutation(modelName = '') {
+  const mutationVersion = Date.now();
   clearReadCache(modelName);
+  void setJson(buildRedisKey('reports', 'version'), { version: mutationVersion }, 0);
+  void setJson(buildRedisKey('management-dashboard', 'version'), { version: mutationVersion }, 0);
   for (const listener of storeMutationListeners) {
     try {
       listener(modelName);
@@ -333,8 +336,15 @@ export async function ensurePerformanceIndexes() {
       [{ 'data.Status': 1, 'data.Role': 1 }, { background: true }]
     ]
   };
-  indexesReady = Promise.all(Object.entries(LegacyModels).map(async ([name, Model]) => {
+  
+  const modelNames = Object.keys(LegacyModels);
+  indexesReady = Promise.all(modelNames.map(async (name) => {
+    const Model = LegacyModels[name];
+    if (!Model) return;
+    
+    // Core indexes
     await Promise.all([
+      Model.collection.createIndex({ legacyId: 1 }, { unique: true, background: true }).catch(() => null),
       Model.collection.createIndex({ createdAt: 1 }).catch(() => null),
       Model.collection.createIndex({ updatedAt: -1 }).catch(() => null),
       Model.collection.createIndex({ 'data.Employee ID': 1 }).catch(() => null),
@@ -348,7 +358,15 @@ export async function ensurePerformanceIndexes() {
       Model.collection.createIndex({ 'data.Task ID': 1 }).catch(() => null),
       Model.collection.createIndex({ 'data.Client_Id': 1 }).catch(() => null)
     ]);
-    await Promise.all((compoundIndexes[name] || []).map(([keys, options]) => Model.collection.createIndex(keys, options).catch(() => null)));
+    
+    // Build candidate ID indexes dynamically to prevent $or fallback collection scans
+    const idKeys = legacyIdKeyMap[name] || ['ID'];
+    const idIndexes = idKeys.map((k) => [{ [`data.${k}`]: 1 }, { background: true }]);
+    
+    const indexesToCreate = [...(compoundIndexes[name] || []), ...idIndexes];
+    if (!indexesToCreate.length) return;
+    
+    await Promise.all(indexesToCreate.map(([keys, options]) => Model.collection.createIndex(keys, options).catch(() => null)));
   })).catch((error) => {
     indexesReady = null;
     if (process.env.NODE_ENV !== 'production') {

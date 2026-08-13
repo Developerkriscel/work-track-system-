@@ -2791,13 +2791,16 @@ section.page-card:has(.my-approval-status__title) .page-card__header {
 
 .expenses-approval-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   gap: 14px;
+  align-items: end;
 }
 
-.expenses-approval-filter-actions {
-  margin-top: 16px;
+.expenses-approval-grid__action {
+  display: flex;
+  align-items: flex-end;
   justify-content: flex-start;
+  min-width: fit-content;
 }
 
 .approval-table__identity {

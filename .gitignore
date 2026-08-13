@@ -11,6 +11,9 @@ server/backups/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+buddy-debug.log
+temp_*.json
+live_*_response.json
 
 .DS_Store
 Thumbs.db
@@ -25,6 +28,7 @@ tmp-*.jpg
 tmp-*.jpeg
 tmp-*.webp
 tmp-*.gif
+tmp-*.json
 *-header-bar.png
 ref-requests-header-crop.png
 

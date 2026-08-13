@@ -48,12 +48,11 @@ export function ExpenseApprovalsTable({
               onChange={(event) => onFilterChange({ search: event.target.value })}
             />
           </label>
-        </div>
-
-        <div className="approval-filter-actions expenses-approval-filter-actions">
-          <button type="button" className="attendance-cta attendance-cta--gray" onClick={onFilterReset}>
-            Reset
-          </button>
+          <div className="expenses-approval-grid__action">
+            <button type="button" className="attendance-cta attendance-cta--gray" onClick={onFilterReset}>
+              Reset
+            </button>
+          </div>
         </div>
       </div>
 

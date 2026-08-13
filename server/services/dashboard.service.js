@@ -3,6 +3,7 @@ import { listRows, registerStoreMutationListener, stripInternalMetadata } from '
 import { buildRedisKey, getJson, setJson } from './redisCache.service.js';
 
 const closedTerms = ['closed', 'approved', 'cancelled', 'completed', 'done', 'resolved', 'paid'];
+const DASHBOARD_CACHE_SCHEMA_VERSION = 2;
 const DASHBOARD_CACHE_TTL_MS = Number(process.env.WORKTRACK_DASHBOARD_CACHE_TTL_MS || 10000);
 const DASHBOARD_SNAPSHOT_TTL_MS = Number(process.env.WORKTRACK_DASHBOARD_SNAPSHOT_TTL_MS || 60000);
 const dashboardCache = new Map();
@@ -325,11 +326,11 @@ function buildDashboardSnapshotKey(employeeId = '', filterRange = 'today', viewM
 }
 
 function dashboardPayloadRedisKey(cacheKey) {
-  return buildRedisKey('dashboard', `v${dashboardCacheVersion}`, 'payload', cacheKey);
+  return buildRedisKey('dashboard', `schema${DASHBOARD_CACHE_SCHEMA_VERSION}`, `v${dashboardCacheVersion}`, 'payload', cacheKey);
 }
 
 function dashboardSnapshotRedisKey(snapshotKey) {
-  return buildRedisKey('dashboard', `v${dashboardCacheVersion}`, 'snapshot', snapshotKey);
+  return buildRedisKey('dashboard', `schema${DASHBOARD_CACHE_SCHEMA_VERSION}`, `v${dashboardCacheVersion}`, 'snapshot', snapshotKey);
 }
 
 async function readRedisDashboardPayload(cacheKey) {
@@ -384,6 +385,7 @@ function buildDashboardSnapshotData({
   const scopedTickets = allTickets.filter((task) => dateInRange(task.Date, start, end));
   const scopedFms = allFms.filter((task) => dateInRange(task.Date, start, end));
   const scopedTodos = allTodos.filter((task) => dateInRange(task.Date, start, end));
+  const scopedExpenses = expenses.filter((expense) => dateInRange(first(expense, ['Date', 'Created At', 'Timestamp']), start, end));
 
   const allTasks = [...allTickets, ...allFms, ...allTodos];
   const dashboardTickets = scopedTickets;
@@ -476,7 +478,7 @@ function buildDashboardSnapshotData({
       doneFms,
       pendingTodos,
       overdueTasks: upcomingTasks.filter((task) => task.Date && task.Date < today()).length,
-      totalExpenses: expenses.reduce((sum, expense) => sum + num(first(expense, ['Amount', 'Expense Amount'])), 0)
+      totalExpenses: scopedExpenses.reduce((sum, expense) => sum + num(first(expense, ['Amount', 'Expense Amount'])), 0)
         .toFixed(2),
       assumedBandwidthHours: minutesLabel(assumedMinutes),
       plannedBandwidthHours: minutesLabel(plannedMinutes),
@@ -503,8 +505,6 @@ function buildDashboardSnapshotData({
 
 async function computeDashboardSnapshot(employeeId, filterRange, normalizedViewMode) {
   const { start, end } = rangeForFilter(filterRange);
-  const lastSevenEnd = today();
-  const lastSevenStart = normalizedDate(addDays(referenceNow(), -6));
   const userQuery = {
     $or: [
       { 'data.Employee ID': employeeId },
@@ -616,19 +616,15 @@ async function computeDashboardSnapshot(employeeId, filterRange, normalizedViewM
       ]
     };
 
-  const taskRangeClause = scopedDateQuery(['data.Plan Date', 'data.Date', 'data.Timestamp', 'data.Due Date'], start, end);
-  const chartRangeClause = scopedDateQuery(['data.Plan Date', 'data.Date', 'data.Timestamp', 'data.Due Date'], lastSevenStart, lastSevenEnd);
-  const historyRangeClause = scopedDateQuery(['data.Timestamp', 'data.Date', 'createdAt'], start, end);
-  const expenseRangeClause = scopedDateQuery(['data.Date', 'createdAt'], start, end);
   const chartTicketBaseQuery = isTeamMode ? buildEmployeeQuery(scopedEmployeeIds) : selfTicketQuery(employeeId);
   const chartFmsBaseQuery = buildEmployeeQuery(scopedEmployeeIds);
-  const selectedTicketQuery = combineAndQueries(isTeamMode ? buildEmployeeQuery(scopedEmployeeIds) : selfTicketQuery(employeeId), taskRangeClause);
-  const selectedFmsQuery = combineAndQueries(buildEmployeeQuery(scopedEmployeeIds), taskRangeClause);
-  const selectedTodoQuery = combineAndQueries(buildEmployeeQuery(scopedEmployeeIds), taskRangeClause);
-  const selectedExpenseQuery = combineAndQueries(buildEmployeeQuery(scopedEmployeeIds), expenseRangeClause);
-  const selectedHistoryQuery = combineAndQueries(ticketHistoryQuery, historyRangeClause);
-  const chartTicketQuery = combineAndQueries(chartTicketBaseQuery, chartRangeClause);
-  const chartFmsQuery = combineAndQueries(chartFmsBaseQuery, chartRangeClause);
+  const selectedTicketQuery = isTeamMode ? buildEmployeeQuery(scopedEmployeeIds) : selfTicketQuery(employeeId);
+  const selectedFmsQuery = buildEmployeeQuery(scopedEmployeeIds);
+  const selectedTodoQuery = buildEmployeeQuery(scopedEmployeeIds);
+  const selectedExpenseQuery = buildEmployeeQuery(scopedEmployeeIds);
+  const selectedHistoryQuery = ticketHistoryQuery;
+  const chartTicketQuery = chartTicketBaseQuery;
+  const chartFmsQuery = chartFmsBaseQuery;
 
   const [tickets, fms, todos, expenses, pendingLeaveCount, ticketHistory] = await Promise.all([
     listDataRows('Ticket', selectedTicketQuery, dashboardTaskProjection),

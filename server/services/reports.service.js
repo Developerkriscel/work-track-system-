@@ -1,7 +1,8 @@
 import XLSX from 'xlsx';
 import PDFDocument from 'pdfkit-table';
 import { LegacyModels } from '../models/legacyModels.js';
-import { listRows } from './legacyStore.service.js';
+import { listRows, registerStoreMutationListener } from './legacyStore.service.js';
+import { buildRedisKey, getJson, setJson } from './redisCache.service.js';
 
 const closedTerms = ['closed', 'approved', 'cancelled', 'completed', 'done', 'resolved', 'paid'];
 const safe = (value = '') => String(value ?? '').trim();
@@ -17,6 +18,21 @@ const normalizedContains = (value, query) => safe(value).toLowerCase().includes(
 const REPORT_CACHE_TTL_MS = Number(process.env.WORKTRACK_REPORT_CACHE_TTL_MS || 120_000);
 const reportMemoryCache = new Map();
 const reportInflight = new Map();
+const REPORT_VERSION_KEY = buildRedisKey('reports', 'version');
+const REPORT_CACHE_PREFIX = 'reports-cache';
+const reportRelevantModels = new Set([
+  'Ticket',
+  'FmsTask',
+  'Attendance',
+  'Expense',
+  'Todo',
+  'Leave',
+  'Intimation',
+  'User',
+  'Client',
+  'FormsPortal'
+]);
+let localReportVersion = Date.now();
 
 function parseReferenceNow(value) {
   if (!value) return new Date();
@@ -42,8 +58,16 @@ async function getCachedReport(scope, parts, loader) {
   }
 
   const promise = (async () => {
+    const redisKey = buildRedisKey(REPORT_CACHE_PREFIX, key);
+    const redisValue = await getJson(redisKey).catch(() => null);
+    if (redisValue) {
+      reportMemoryCache.set(key, { value: redisValue, expiresAt: Date.now() + REPORT_CACHE_TTL_MS });
+      return redisValue;
+    }
+
     const value = await loader();
     reportMemoryCache.set(key, { value, expiresAt: Date.now() + REPORT_CACHE_TTL_MS });
+    void setJson(redisKey, value, REPORT_CACHE_TTL_MS);
     return value;
   })().finally(() => {
     reportInflight.delete(key);
@@ -51,6 +75,28 @@ async function getCachedReport(scope, parts, loader) {
 
   reportInflight.set(key, promise);
   return promise;
+}
+
+function clearReportCache() {
+  reportMemoryCache.clear();
+  reportInflight.clear();
+  localReportVersion = Date.now();
+}
+
+registerStoreMutationListener((modelName) => {
+  if (modelName && !reportRelevantModels.has(modelName)) return;
+  clearReportCache();
+  void setJson(REPORT_VERSION_KEY, { version: localReportVersion }, 0);
+});
+
+async function getReportVersion() {
+  const cached = await getJson(REPORT_VERSION_KEY).catch(() => null);
+  if (cached?.version) {
+    localReportVersion = Number(cached.version) || localReportVersion;
+    return String(localReportVersion);
+  }
+  void setJson(REPORT_VERSION_KEY, { version: localReportVersion }, 0);
+  return String(localReportVersion);
 }
 
 function normalizedDate(value) {
@@ -109,7 +155,7 @@ function resolveUserName(value, userIndex, fallback = '') {
   return userIndex.get(raw.toLowerCase()) || fallback || raw;
 }
 
-function teamMemberIds(users, managerId) {
+function teamMemberIds(users, managerId, { preserveCase = false } = {}) {
   const target = safe(managerId).toLowerCase();
   return users
     .filter((user) => {
@@ -117,7 +163,10 @@ function teamMemberIds(users, managerId) {
       const approvers = splitIds(first(user, ['Task Approver', 'Approver ID', 'taskApprover']));
       return managers.includes(target) || approvers.includes(target);
     })
-    .map((user) => first(user, ['Employee ID', 'User ID', 'employeeId']).toLowerCase())
+    .map((user) => {
+      const value = first(user, ['Employee ID', 'User ID', 'employeeId']);
+      return preserveCase ? safe(value) : safe(value).toLowerCase();
+    })
     .filter(Boolean);
 }
 
@@ -333,38 +382,78 @@ async function loadFmsRows() {
   return { fms, users };
 }
 
-async function collectionStamp(modelName) {
-  const latest = await LegacyModels[modelName]
-    .findOne({})
-    .sort({ updatedAt: -1, createdAt: -1 })
-    .select({ updatedAt: 1, createdAt: 1, legacyId: 1 })
+function dateClause(field = '', startDate = '', endDate = '') {
+  if (!startDate || !endDate || !field) return null;
+  return {
+    [`data.${field}`]: {
+      $gte: startDate,
+      $lte: endDate
+    }
+  };
+}
+
+function ownerClause(field = '', ownerIds = []) {
+  if (!ownerIds.length || !field) return null;
+  return {
+    [`data.${field}`]: { $in: ownerIds }
+  };
+}
+
+async function queryLegacyRows(modelName, { startDate = '', endDate = '', dateField = '', ownerIds = [], ownerField = 'Employee ID' } = {}) {
+  const clauses = [];
+  const dateFilter = dateClause(dateField, startDate, endDate);
+  if (dateFilter) clauses.push(dateFilter);
+  const ownersFilter = ownerClause(ownerField, ownerIds);
+  if (ownersFilter) clauses.push(ownersFilter);
+
+  const query = clauses.length ? { $and: clauses } : {};
+  const docs = await LegacyModels[modelName]
+    .find(query)
+    .select({ data: 1, legacyId: 1 })
     .lean();
-  return String(latest?.updatedAt || latest?.createdAt || latest?.legacyId || '0');
+
+  return docs.map((doc) => ({
+    ...(doc?.data || {}),
+    _id: String(doc?._id || ''),
+    _legacyId: doc?.legacyId || ''
+  }));
 }
 
-async function getSignature(modelNames = []) {
-  const stamps = await Promise.all(modelNames.map((name) => collectionStamp(name).catch(() => '0')));
-  return stamps.join('|');
-}
-
-async function getRows(signature) {
-  return getCachedReport('collections', [signature], loadRows);
+async function getRows(version) {
+  return getCachedReport('collections', [version], loadRows);
 }
 
 export async function getTicketReportData(employeeId, role, startDate, endDate) {
-  const signature = await getSignature(['Ticket', 'User', 'Client']);
-  return getCachedReport('tickets', [signature, employeeId, role, startDate, endDate], async () => {
-    const data = await getCachedReport('ticket-source', [signature], loadTicketRows);
+  const version = await getReportVersion();
+  return getCachedReport('tickets', [version, employeeId, role, startDate, endDate], async () => {
+    const [users, clients] = await Promise.all([
+      getCachedReport('users-source', [version], () => listRows('User')),
+      getCachedReport('clients-source', [version], () => listRows('Client'))
+    ]);
     const normalizedRole = safe(role).toLowerCase();
     const canSeeAll = normalizedRole === 'super admin';
-    const teamIds = canSeeAll ? [] : teamMemberIds(data.users, employeeId);
-    const items = data.tickets
+    const teamIds = canSeeAll ? [] : teamMemberIds(users, employeeId);
+    const teamIdsRaw = canSeeAll ? [] : teamMemberIds(users, employeeId, { preserveCase: true });
+    const ownerIds = canSeeAll
+      ? []
+      : Array.from(
+          new Set([
+            safe(employeeId),
+            ...(['admin', 'manager', 'hr'].includes(normalizedRole) ? teamIdsRaw : [])
+          ].filter(Boolean))
+        );
+    const tickets = await getCachedReport(
+      'ticket-source',
+      [version, startDate, endDate, canSeeAll ? 'all' : ownerIds.join('|')],
+      () => queryLegacyRows('Ticket', { startDate, endDate, dateField: 'Plan Date', ownerIds, ownerField: 'Employee ID' })
+    );
+    const items = tickets
       .filter((ticket) => {
         const ownerId = first(ticket, ['Employee ID', 'EmpID', 'employeeId']).toLowerCase();
         const visible = canSeeAll || ownerId === safe(employeeId).toLowerCase() || (['admin', 'manager', 'hr'].includes(normalizedRole) && teamIds.includes(ownerId));
         return visible && dateInRange(first(ticket, ['Plan Date', 'Date', 'Timestamp', 'Close Date']), startDate, endDate);
       })
-      .map((ticket) => asTicketRow(ticket, data.clients));
+      .map((ticket) => asTicketRow(ticket, clients));
     return ok({
       data: items,
       summary: {
@@ -377,14 +466,28 @@ export async function getTicketReportData(employeeId, role, startDate, endDate) 
 }
 
 export async function getFmsReportData(employeeId, role, startDate, endDate) {
-  const signature = await getSignature(['FmsTask', 'User']);
-  return getCachedReport('fms', [signature, employeeId, role, startDate, endDate], async () => {
-    const data = await getCachedReport('fms-source', [signature], loadFmsRows);
-    const userIndex = buildUserNameIndex(data.users);
+  const version = await getReportVersion();
+  return getCachedReport('fms', [version, employeeId, role, startDate, endDate], async () => {
+    const users = await getCachedReport('users-source', [version], () => listRows('User'));
+    const userIndex = buildUserNameIndex(users);
     const normalizedRole = safe(role).toLowerCase();
     const canSeeAll = ['super admin', 'hr'].includes(normalizedRole);
-    const teamIds = canSeeAll ? [] : teamMemberIds(data.users, employeeId);
-    const items = data.fms
+    const teamIds = canSeeAll ? [] : teamMemberIds(users, employeeId);
+    const teamIdsRaw = canSeeAll ? [] : teamMemberIds(users, employeeId, { preserveCase: true });
+    const ownerIds = canSeeAll
+      ? []
+      : Array.from(
+          new Set([
+            safe(employeeId),
+            ...(['admin', 'manager'].includes(normalizedRole) ? teamIdsRaw : [])
+          ].filter(Boolean))
+        );
+    const fmsRows = await getCachedReport(
+      'fms-source',
+      [version, startDate, endDate, canSeeAll ? 'all' : ownerIds.join('|')],
+      () => queryLegacyRows('FmsTask', { startDate, endDate, dateField: 'Plan Date', ownerIds, ownerField: 'Employee ID' })
+    );
+    const items = fmsRows
       .filter((task) => {
         const ownerId = safe(first(task, ['Employee ID', 'EmpID', 'empId'])).toLowerCase();
         const visible = canSeeAll || ownerId === safe(employeeId).toLowerCase() || (['admin', 'manager'].includes(normalizedRole) && teamIds.includes(ownerId));
@@ -402,9 +505,9 @@ export async function getFmsReportData(employeeId, role, startDate, endDate) {
 }
 
 export async function exportReportForWeb(format = 'csv', sheetName = 'Report', employeeId = '', role = '', startDate = '', endDate = '', filters = {}) {
-  const signature = await getSignature(['Ticket', 'FmsTask', 'Attendance', 'Expense', 'Todo', 'Leave', 'Intimation', 'User', 'Client', 'FormsPortal']);
-  return getCachedReport('export', [signature, format, sheetName, employeeId, role, startDate, endDate, JSON.stringify(filters || {})], async () => {
-    const data = await getRows(signature);
+  const version = await getReportVersion();
+  return getCachedReport('export', [version, format, sheetName, employeeId, role, startDate, endDate, JSON.stringify(filters || {})], async () => {
+    const data = await getRows(version);
     const userIndex = buildUserNameIndex(data.users);
     const normalizedRole = safe(role).toLowerCase();
     const ticketTeamIds = teamMemberIds(data.users, employeeId);
