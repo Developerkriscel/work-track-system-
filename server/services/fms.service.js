@@ -1,7 +1,17 @@
 import crypto from 'node:crypto';
 import XLSX from 'xlsx';
 import { LegacyModels } from '../models/legacyModels.js';
-import { insertRow, listRows, stripInternalMetadata, touchStoreMutation, upsertRow } from './legacyStore.service.js';
+import {
+  findOneRowByFilter,
+  findRowsByFilter,
+  insertRow,
+  listRows,
+  registerStoreMutationListener,
+  stripInternalMetadata,
+  touchStoreMutation,
+  upsertRow
+} from './legacyStore.service.js';
+import { buildRedisKey, deleteByPrefix, getJson, setJson } from './redisCache.service.js';
 
 const safe = (value = '') => String(value ?? '').trim();
 const eq = (left, right) => safe(left).toLowerCase() === safe(right).toLowerCase();
@@ -15,7 +25,63 @@ const fail = (message) => ({ success: false, message });
 const elevatedFmsRoles = ['super admin', 'admin', 'hr', 'manager'];
 const DEFAULT_FMS_SHEET_ID = '1uiJ9hA7NaxkdbjUwXUxzHt4WgLU6stqFfJhwf0raH9E';
 const DEFAULT_FMS_SHEET_GID = '779912841';
+const FMS_SHEET_SYNC_META_ID = '__FMS_SHEET_SYNC_META__';
+const FMS_CACHE_TTL_MS = Number(process.env.WORKTRACK_FMS_CACHE_TTL_MS || 45_000);
 const fmsSheetSyncState = { promise: null, lastAt: 0, lastError: null, lastCount: 0, lastChanged: 0 };
+const fmsCache = new Map();
+const fmsInflight = new Map();
+
+function fmsCacheKey(scope, ...parts) {
+  return buildRedisKey('fms', scope, ...parts.map((part) => safe(part)));
+}
+
+function readFmsMemoryCache(key) {
+  const cached = fmsCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.at > FMS_CACHE_TTL_MS) {
+    fmsCache.delete(key);
+    return null;
+  }
+  return cached.value;
+}
+
+function writeFmsMemoryCache(key, value) {
+  fmsCache.set(key, { at: Date.now(), value });
+}
+
+async function withFmsCache(key, loader) {
+  const memory = readFmsMemoryCache(key);
+  if (memory) return memory;
+
+  const redis = await getJson(key);
+  if (redis) {
+    writeFmsMemoryCache(key, redis);
+    return redis;
+  }
+
+  const inflight = fmsInflight.get(key);
+  if (inflight) return inflight;
+
+  const promise = (async () => {
+    const value = await loader();
+    writeFmsMemoryCache(key, value);
+    await setJson(key, value, FMS_CACHE_TTL_MS);
+    return value;
+  })();
+
+  fmsInflight.set(key, promise);
+  try {
+    return await promise;
+  } finally {
+    fmsInflight.delete(key);
+  }
+}
+
+async function clearFmsCaches() {
+  fmsCache.clear();
+  fmsInflight.clear();
+  await deleteByPrefix(buildRedisKey('fms'));
+}
 
 function looksLikeTempTask(row = {}) {
   const taskId = first(row, ['Task ID', 'ID', 'rowId', 'taskId', 'FMS ID', 'fmsId']);
@@ -103,6 +169,10 @@ function fmsSheetRowHash(row = {}) {
     .map((key) => `${key}:${safe(row[key])}`)
     .join('|');
   return crypto.createHash('sha1').update(normalized).digest('hex');
+}
+
+function fmsSheetSnapshotHash(entries = []) {
+  return crypto.createHash('sha1').update(entries.join('|')).digest('hex');
 }
 
 function normalizeFmsSheetRow(row = {}, index = 0, existing = {}) {
@@ -198,9 +268,43 @@ async function fetchFmsSheetRows() {
   return parseFmsSheetCsv(await response.text());
 }
 
-async function cleanupDuplicateFmsSheetRows() {
+function fmsStoredTaskQuery(query = {}) {
+  return Object.keys(query || {}).length
+    ? { $and: [{ legacyId: { $ne: FMS_SHEET_SYNC_META_ID } }, query] }
+    : { legacyId: { $ne: FMS_SHEET_SYNC_META_ID } };
+}
+
+async function readFmsSheetSyncMeta() {
+  const doc = await LegacyModels.FmsTask.collection.findOne(
+    { legacyId: FMS_SHEET_SYNC_META_ID },
+    { projection: { data: 1, legacyId: 1 } }
+  );
+  return doc?.data || {};
+}
+
+async function writeFmsSheetSyncMeta(meta = {}) {
+  await LegacyModels.FmsTask.collection.updateOne(
+    { legacyId: FMS_SHEET_SYNC_META_ID },
+    {
+      $set: {
+        legacyId: FMS_SHEET_SYNC_META_ID,
+        data: {
+          metaType: 'FMS_SHEET_SYNC_META',
+          ...meta,
+          updatedAt: nowIso()
+        }
+      }
+    },
+    { upsert: true }
+  );
+}
+
+async function cleanupDuplicateFmsSheetRows(taskIds = []) {
+  const match = { legacyId: /^FMS_SHEET_/ };
+  const scopedTaskIds = uniqueIds(taskIds);
+  if (scopedTaskIds.length) match.legacyId = { $in: scopedTaskIds };
   const duplicates = await LegacyModels.FmsTask.aggregate([
-    { $match: { legacyId: /^FMS_SHEET_/ } },
+    { $match: match },
     { $sort: { updatedAt: -1, createdAt: -1 } },
     { $group: { _id: '$legacyId', ids: { $push: '$_id' }, count: { $sum: 1 } } },
     { $match: { count: { $gt: 1 } } }
@@ -212,14 +316,84 @@ async function cleanupDuplicateFmsSheetRows() {
   return staleIds.length;
 }
 
+function uniqueIds(values = []) {
+  return [...new Set(values.map((value) => safe(value)).filter(Boolean))];
+}
+
+function fmsIdentityProjection() {
+  return {
+    legacyId: 1,
+    'data.Task ID': 1,
+    'data.ID': 1,
+    'data.rowId': 1,
+    'data.sourceHash': 1,
+    'data.Done Date': 1,
+    'data.doneDate': 1,
+    'data.actualDate': 1
+  };
+}
+
+function fmsIdentityKeyCandidates(row = {}) {
+  return uniqueIds([
+    row._legacyId,
+    row.legacyId,
+    first(row, ['Task ID', 'ID', 'rowId'])
+  ]);
+}
+
+async function findExistingFmsSheetRows(taskIds = []) {
+  const scopedTaskIds = uniqueIds(taskIds);
+  if (!scopedTaskIds.length) return [];
+
+  const projection = fmsIdentityProjection();
+  const primaryRows = await findRowsByFilter(
+    'FmsTask',
+    { legacyId: { $in: scopedTaskIds } },
+    { projection, sort: { createdAt: 1 } }
+  );
+  const rowsByKey = new Map();
+  primaryRows.forEach((row) => {
+    fmsIdentityKeyCandidates(row).forEach((key) => {
+      if (!rowsByKey.has(key)) rowsByKey.set(key, row);
+    });
+  });
+
+  const missingTaskIds = scopedTaskIds.filter((taskId) => !rowsByKey.has(taskId));
+  if (!missingTaskIds.length) return [...new Set(primaryRows)];
+
+  const fallbackRows = await findRowsByFilter(
+    'FmsTask',
+    {
+      $or: [
+        { 'data.Task ID': { $in: missingTaskIds } },
+        { 'data.ID': { $in: missingTaskIds } },
+        { 'data.rowId': { $in: missingTaskIds } }
+      ]
+    },
+    { projection, sort: { createdAt: 1 } }
+  );
+  fallbackRows.forEach((row) => {
+    fmsIdentityKeyCandidates(row).forEach((key) => {
+      if (!rowsByKey.has(key)) rowsByKey.set(key, row);
+    });
+  });
+
+  const deduped = [];
+  const seen = new Set();
+  for (const row of rowsByKey.values()) {
+    const identity = safe(row?._id || row?._legacyId || first(row, ['Task ID', 'ID', 'rowId']));
+    if (!identity || seen.has(identity)) continue;
+    seen.add(identity);
+    deduped.push(row);
+  }
+  return deduped;
+}
+
 async function cleanupStaleFmsSheetRows(currentTaskIds = []) {
-  const allowed = new Set(currentTaskIds.filter(Boolean));
-  if (!allowed.size) return 0;
+  const staleIds = uniqueIds(currentTaskIds);
+  if (!staleIds.length) return 0;
   const result = await LegacyModels.FmsTask.deleteMany({
-    $and: [
-      { legacyId: /^FMS_SHEET_/ },
-      { legacyId: { $nin: [...allowed] } }
-    ]
+    legacyId: { $in: staleIds }
   });
   return result.deletedCount || 0;
 }
@@ -227,17 +401,44 @@ async function cleanupStaleFmsSheetRows(currentTaskIds = []) {
 async function syncFmsFromGoogleSheet() {
   if (!fmsSheetSyncEnabled()) return { synced: false, count: 0 };
   const rows = await fetchFmsSheetRows();
-  const existingRows = await listRows('FmsTask');
+  const currentTaskIds = rows.map((row, index) => fmsSheetTaskId(row, index));
+  const sheetEntries = rows.map((row, index) => {
+    const taskId = currentTaskIds[index];
+    return { taskId, sourceHash: fmsSheetRowHash(row) };
+  });
+  const currentTaskHashMap = Object.fromEntries(sheetEntries.map(({ taskId, sourceHash }) => [taskId, sourceHash]));
+  const currentSheetHash = fmsSheetSnapshotHash(sheetEntries.map(({ taskId, sourceHash }) => `${taskId}:${sourceHash}`));
+  const previousMeta = await readFmsSheetSyncMeta();
+  const previousTaskHashMap = previousMeta.taskHashes && typeof previousMeta.taskHashes === 'object' ? previousMeta.taskHashes : {};
+  const removedTaskIds = Object.keys(previousTaskHashMap).filter((taskId) => !currentTaskHashMap[taskId]);
+  const changedTaskIds = sheetEntries
+    .filter(({ taskId, sourceHash }) => previousTaskHashMap[taskId] !== sourceHash)
+    .map(({ taskId }) => taskId);
+
+  if (
+    previousMeta.sheetHash === currentSheetHash
+    && Number(previousMeta.rowCount || 0) === rows.length
+    && !removedTaskIds.length
+    && !changedTaskIds.length
+  ) {
+    fmsSheetSyncState.lastAt = Date.now();
+    fmsSheetSyncState.lastError = null;
+    fmsSheetSyncState.lastCount = rows.length;
+    fmsSheetSyncState.lastChanged = 0;
+    return { synced: true, count: rows.length, changed: 0 };
+  }
+
+  const existingRows = await findExistingFmsSheetRows(changedTaskIds);
   const existingByTaskId = new Map(
-    existingRows.map((row) => [first(row, ['Task ID', 'ID', 'rowId']), row]).filter(([key]) => safe(key))
+    existingRows.flatMap((row) => fmsIdentityKeyCandidates(row).map((key) => [key, row])).filter(([key]) => safe(key))
   );
 
-  const currentTaskIds = rows.map((row, index) => fmsSheetTaskId(row, index));
   const operations = rows
     .map((row, index) => {
       const taskId = fmsSheetTaskId(row, index);
+      if (!changedTaskIds.includes(taskId)) return null;
       const existing = existingByTaskId.get(taskId) || {};
-      const sourceHash = fmsSheetRowHash(row);
+      const sourceHash = currentTaskHashMap[taskId];
       if (first(existing, ['sourceHash']) === sourceHash) return null;
       return {
         updateMany: {
@@ -252,8 +453,13 @@ async function syncFmsFromGoogleSheet() {
   if (operations.length) {
     await LegacyModels.FmsTask.bulkWrite(operations, { ordered: false });
   }
-  const staleRemoved = await cleanupStaleFmsSheetRows(currentTaskIds);
-  const duplicateRemoved = await cleanupDuplicateFmsSheetRows();
+  const staleRemoved = await cleanupStaleFmsSheetRows(removedTaskIds);
+  const duplicateRemoved = await cleanupDuplicateFmsSheetRows(changedTaskIds);
+  await writeFmsSheetSyncMeta({
+    sheetHash: currentSheetHash,
+    rowCount: rows.length,
+    taskHashes: currentTaskHashMap
+  });
   if (operations.length || staleRemoved || duplicateRemoved) {
     touchStoreMutation('FmsTask');
   }
@@ -433,7 +639,7 @@ function parseFmsTaskOptions(options = {}) {
     paginated: options.paginated === true,
     tab: safe(options.tab || 'my-pending'),
     page: Math.max(1, Number(options.page || 1) || 1),
-    pageSize: Math.min(100, Math.max(20, Number(options.pageSize || 60) || 60)),
+    pageSize: Math.min(100, Math.max(20, Number(options.pageSize || 20) || 20)),
     filters: {
       emp: safe(filters.emp),
       name: safe(filters.name),
@@ -734,93 +940,112 @@ function fmsTaskProjection() {
 
 async function getFmsPagedRows(employeeId, options) {
   await ensureFmsSheetSynced();
-  const users = await listDataRows('User', {}, {
-    legacyId: 1,
-    'data.Employee ID': 1,
-    'data.User ID': 1,
-    'data.EmpID': 1,
-    'data.EMP Code': 1,
-    'data.employeeId': 1,
-    'data.Employee Name': 1,
-    'data.employeeName': 1,
-    'data.Name': 1,
-    'data.Full Name': 1,
-    'data.Role': 1,
-    'data.role': 1,
-    'data.Designation': 1,
-    'data.Status': 1,
-    'data.status': 1,
-    'data.Manager ID': 1,
-    'data.managerId': 1,
-    'data.Manager': 1,
-    'data.manager': 1,
-    'data.Task Approver': 1,
-    'data.taskApprover': 1,
-    'data.Department': 1,
-    'data.department': 1
+  const key = fmsCacheKey(
+    'paged',
+    safe(employeeId).toUpperCase(),
+    options.tab,
+    options.page,
+    options.pageSize,
+    options.filters.emp,
+    options.filters.name,
+    options.filters.date,
+    options.filters.search
+  );
+
+  return withFmsCache(key, async () => {
+    const users = await listDataRows('User', {}, {
+      legacyId: 1,
+      'data.Employee ID': 1,
+      'data.User ID': 1,
+      'data.EmpID': 1,
+      'data.EMP Code': 1,
+      'data.employeeId': 1,
+      'data.Employee Name': 1,
+      'data.employeeName': 1,
+      'data.Name': 1,
+      'data.Full Name': 1,
+      'data.Role': 1,
+      'data.role': 1,
+      'data.Designation': 1,
+      'data.Status': 1,
+      'data.status': 1,
+      'data.Manager ID': 1,
+      'data.managerId': 1,
+      'data.Manager': 1,
+      'data.manager': 1,
+      'data.Task Approver': 1,
+      'data.taskApprover': 1,
+      'data.Department': 1,
+      'data.department': 1
+    });
+    const context = buildFmsVisibilityContext(employeeId, users, []);
+    if (!context.valid) return { error: fail('Access denied: user not found.') };
+
+    const baseForTab = (tab) => combineMongoQuery(fmsScopeQuery(tab, context), fmsDateQuery(tab), fmsFilterQuery(options.filters));
+    const activeQuery = baseForTab(options.tab);
+    const skip = (options.page - 1) * options.pageSize;
+    const [docs, total, tabCountEntries, categoryDocs, employeeDocs] = await Promise.all([
+      findRowsByFilter('FmsTask', fmsStoredTaskQuery(activeQuery), {
+        projection: fmsTaskProjection(),
+        sort: { 'data.Plan Date': 1, createdAt: 1 },
+        skip,
+        limit: options.pageSize
+      }),
+      LegacyModels.FmsTask.countDocuments(fmsStoredTaskQuery(activeQuery)),
+      Promise.all(['my-pending', 'my-future', 'my-completed', 'team-pending', 'team-future', 'team-completed'].map(async (tab) => [
+        tab,
+        await LegacyModels.FmsTask.countDocuments(fmsStoredTaskQuery(combineMongoQuery(fmsScopeQuery(tab, context), fmsDateQuery(tab))))
+      ])),
+      LegacyModels.FmsTask.distinct('data.fmsName', fmsStoredTaskQuery(combineMongoQuery(fmsScopeQuery(options.tab, context)))).catch(() => []),
+      findRowsByFilter('FmsTask', fmsStoredTaskQuery(fmsScopeQuery('team-pending', context)), {
+        projection: {
+          'data.Employee ID': 1,
+          'data.empId': 1,
+          'data.Employee Name': 1,
+          'data.who': 1
+        },
+        limit: 500
+      })
+    ]);
+
+    const clients = [];
+    const rows = docs
+      .filter((item) => !looksLikeTempTask(item))
+      .map((item) => {
+        const row = classifyFmsTaskForTab(normalizeFmsForDashboard(item, users, clients));
+        const decision = fmsVisibilityDecision(context, row);
+        return { ...row, _isMyTask: decision.isMyTask, _isTeamTask: decision.isTeamTask, _canSee: decision.canSee, _role: context.role };
+      })
+      .filter((row) => row._canSee);
+
+    const totalPages = Math.max(1, Math.ceil(total / options.pageSize));
+    const safePage = Math.min(options.page, totalPages);
+    const employeeOptions = fmsEmployeeOptions(employeeDocs.map((item) => {
+      const row = normalizeFmsForDashboard(item, users, clients);
+      return { ...row, _isTeamTask: true };
+    }));
+
+    return {
+      users,
+      context,
+      rows,
+      total,
+      meta: {
+        tabCounts: Object.fromEntries(tabCountEntries),
+        categoryOptions: categoryDocs.filter(Boolean).sort(),
+        employeeOptions,
+        pagination: {
+          page: safePage,
+          pageSize: options.pageSize,
+          total,
+          totalPages,
+          start: total ? skip + 1 : 0,
+          end: Math.min(skip + options.pageSize, total),
+          tab: options.tab
+        }
+      }
+    };
   });
-  const context = buildFmsVisibilityContext(employeeId, users, []);
-  if (!context.valid) return { error: fail('Access denied: user not found.') };
-  const baseForTab = (tab) => combineMongoQuery(fmsScopeQuery(tab, context), fmsDateQuery(tab), fmsFilterQuery(options.filters));
-  const activeQuery = baseForTab(options.tab);
-  const skip = (options.page - 1) * options.pageSize;
-  const [docs, total, tabCountEntries, categoryDocs, employeeDocs] = await Promise.all([
-    LegacyModels.FmsTask.collection
-      .find(activeQuery, { projection: fmsTaskProjection() })
-      .sort({ 'data.Plan Date': 1, createdAt: 1 })
-      .skip(skip)
-      .limit(options.pageSize)
-      .toArray(),
-    LegacyModels.FmsTask.collection.countDocuments(activeQuery),
-    Promise.all(['my-pending', 'my-future', 'my-completed', 'team-pending', 'team-future', 'team-completed'].map(async (tab) => [
-      tab,
-      await LegacyModels.FmsTask.collection.countDocuments(combineMongoQuery(fmsScopeQuery(tab, context), fmsDateQuery(tab)))
-    ])),
-    LegacyModels.FmsTask.collection.distinct('data.fmsName', combineMongoQuery(fmsScopeQuery(options.tab, context))).catch(() => []),
-    LegacyModels.FmsTask.collection.find(fmsScopeQuery('team-pending', context), {
-      projection: {
-        'data.Employee ID': 1,
-        'data.empId': 1,
-        'data.Employee Name': 1,
-        'data.who': 1
-      }
-    }).limit(500).toArray()
-  ]);
-  const clients = [];
-  const rows = fromLegacyDocs(docs)
-    .filter((item) => !looksLikeTempTask(item))
-    .map((item) => {
-      const row = classifyFmsTaskForTab(normalizeFmsForDashboard(item, users, clients));
-      const decision = fmsVisibilityDecision(context, row);
-      return { ...row, _isMyTask: decision.isMyTask, _isTeamTask: decision.isTeamTask, _canSee: decision.canSee, _role: context.role };
-    })
-    .filter((row) => row._canSee);
-  const totalPages = Math.max(1, Math.ceil(total / options.pageSize));
-  const safePage = Math.min(options.page, totalPages);
-  const employeeOptions = fmsEmployeeOptions(fromLegacyDocs(employeeDocs).map((item) => {
-    const row = normalizeFmsForDashboard(item, users, clients);
-    return { ...row, _isTeamTask: true };
-  }));
-  return {
-    users,
-    context,
-    rows,
-    total,
-    meta: {
-      tabCounts: Object.fromEntries(tabCountEntries),
-      categoryOptions: categoryDocs.filter(Boolean).sort(),
-      employeeOptions,
-      pagination: {
-        page: safePage,
-        pageSize: options.pageSize,
-        total,
-        totalPages,
-        start: total ? skip + 1 : 0,
-        end: Math.min(skip + options.pageSize, total),
-        tab: options.tab
-      }
-    }
-  };
 }
 
 function normalizeFmsCreatePayload(payload = {}) {
@@ -934,17 +1159,54 @@ function isAttendanceActive(rowsList, employeeId) {
   return !!first(latest, ['Punch In', 'Time']) && !first(latest, ['Punch Out']);
 }
 
+function attendanceDayQuery(date = today()) {
+  return {
+    $or: [
+      { 'data.Date': date },
+      { 'data.Date': { $regex: `^${date}` } },
+      { 'data.date': date },
+      { 'data.date': { $regex: `^${date}` } }
+    ]
+  };
+}
+
 async function requireAttendanceActive(employeeId) {
   if (!safe(employeeId) || eq(employeeId, 'client')) return null;
-  const attendance = await listRows('Attendance');
+  const attendance = await findRowsByFilter(
+    'Attendance',
+    {
+      $and: [
+        {
+          $or: [
+            { 'data.Employee ID': employeeId },
+            { 'data.EmpID': employeeId },
+            { 'data.employeeId': employeeId }
+          ]
+        },
+        attendanceDayQuery(today())
+      ]
+    },
+    {
+      projection: {
+        legacyId: 1,
+        'data.Employee ID': 1,
+        'data.EmpID': 1,
+        'data.employeeId': 1,
+        'data.Date': 1,
+        'data.Action': 1,
+        'data.Time': 1,
+        'data.Punch In': 1,
+        'data.Punch Out': 1
+      },
+      sort: { 'data.Time': -1, createdAt: -1 }
+    }
+  );
   if (isAttendanceActive(attendance, employeeId)) return null;
   return fail('Attendance Required: Aapne aaj ki Attendance (Punch In) mark nahi ki hai ya aap already Punch Out kar chuke hain. Kripya pehle Punch In karein!');
 }
 
 async function getRows() {
-  await ensureFmsSheetSynced();
-  const [users, clients, fms] = await Promise.all([listRows('User'), listRows('Client'), listRows('FmsTask')]);
-  return { users, clients, fms };
+  return getFmsReadRows();
 }
 
 function fromLegacyDocs(docs = []) {
@@ -956,121 +1218,122 @@ function fromLegacyDocs(docs = []) {
 }
 
 async function listDataRows(modelName, query = {}, projection = { data: 1, legacyId: 1 }) {
-  const docs = await LegacyModels[modelName].collection.find(query, { projection }).toArray();
-  return fromLegacyDocs(docs);
+  return findRowsByFilter(modelName, query, { projection, sort: { createdAt: 1 } });
 }
 
 async function getFmsReadRows() {
   await ensureFmsSheetSynced();
-  const userProjection = {
-    legacyId: 1,
-    'data.Employee ID': 1,
-    'data.User ID': 1,
-    'data.EmpID': 1,
-    'data.EMP Code': 1,
-    'data.employeeId': 1,
-    'data.Employee Name': 1,
-    'data.employeeName': 1,
-    'data.Name': 1,
-    'data.Full Name': 1,
-    'data.Role': 1,
-    'data.role': 1,
-    'data.Designation': 1,
-    'data.Status': 1,
-    'data.status': 1,
-    'data.Manager ID': 1,
-    'data.managerId': 1,
-    'data.Manager': 1,
-    'data.manager': 1,
-    'data.Task Approver': 1,
-    'data.taskApprover': 1,
-    'data.Department': 1,
-    'data.department': 1
-  };
-  const clientProjection = {
-    legacyId: 1,
-    'data.Client_Id': 1,
-    'data.Client ID': 1,
-    'data.CustomerID': 1,
-    'data.clientId': 1,
-    'data.Client Name': 1,
-    'data.Name': 1
-  };
-  const fmsProjection = {
-    legacyId: 1,
-    'data.Task ID': 1,
-    'data.ID': 1,
-    'data.rowId': 1,
-    'data.taskId': 1,
-    'data.FMS ID': 1,
-    'data.fmsId': 1,
-    'data.Employee ID': 1,
-    'data.EmpID': 1,
-    'data.empId': 1,
-    'data.employeeId': 1,
-    'data.EMP Code': 1,
-    'data.Employee Name': 1,
-    'data.employeeName': 1,
-    'data.User': 1,
-    'data.Who': 1,
-    'data.who': 1,
-    'data.Assigned To': 1,
-    'data.assignedTo': 1,
-    'data.what': 1,
-    'data.What': 1,
-    'data.Department': 1,
-    'data.department': 1,
-    'data.when': 1,
-    'data.When': 1,
-    'data.how': 1,
-    'data.How': 1,
-    'data.Channel': 1,
-    'data.channel': 1,
-    'data.Client': 1,
-    'data.Client Name': 1,
-    'data.CustomerName': 1,
-    'data.fmsName': 1,
-    'data.clientName': 1,
-    'data.Client_Id': 1,
-    'data.Client ID': 1,
-    'data.CustomerID': 1,
-    'data.clientId': 1,
-    'data.taskName': 1,
-    'data.Task Name': 1,
-    'data.Task Description': 1,
-    'data.Description': 1,
-    'data.description': 1,
-    'data.Content': 1,
-    'data.content': 1,
-    'data.stepNo': 1,
-    'data.Step': 1,
-    'data.Step No': 1,
-    'data.Plan Date': 1,
-    'data.planDate': 1,
-    'data.Date': 1,
-    'data.date': 1,
-    'data.TAT': 1,
-    'data.tatMinutes': 1,
-    'data.Duration': 1,
-    'data.Actual Duration': 1,
-    'data.duration': 1,
-    'data.Status': 1,
-    'data.status': 1,
-    'data.Done Date': 1,
-    'data.doneDate': 1,
-    'data.actualDate': 1,
-    'data.Form Link': 1,
-    'data.Form link': 1,
-    'data.formLink': 1,
-    'data.On Time Status': 1,
-    'data.Delay Days': 1
-  };
-  const [users, clients, fms] = await Promise.all([
-    listDataRows('User', {}, userProjection),
-    listDataRows('Client', {}, clientProjection),
-    listDataRows('FmsTask', {}, fmsProjection)
-  ]);
-  return { users, clients, fms };
+  return withFmsCache(fmsCacheKey('read-rows'), async () => {
+    const userProjection = {
+      legacyId: 1,
+      'data.Employee ID': 1,
+      'data.User ID': 1,
+      'data.EmpID': 1,
+      'data.EMP Code': 1,
+      'data.employeeId': 1,
+      'data.Employee Name': 1,
+      'data.employeeName': 1,
+      'data.Name': 1,
+      'data.Full Name': 1,
+      'data.Role': 1,
+      'data.role': 1,
+      'data.Designation': 1,
+      'data.Status': 1,
+      'data.status': 1,
+      'data.Manager ID': 1,
+      'data.managerId': 1,
+      'data.Manager': 1,
+      'data.manager': 1,
+      'data.Task Approver': 1,
+      'data.taskApprover': 1,
+      'data.Department': 1,
+      'data.department': 1
+    };
+    const clientProjection = {
+      legacyId: 1,
+      'data.Client_Id': 1,
+      'data.Client ID': 1,
+      'data.CustomerID': 1,
+      'data.clientId': 1,
+      'data.Client Name': 1,
+      'data.Name': 1
+    };
+    const fmsProjection = {
+      legacyId: 1,
+      'data.Task ID': 1,
+      'data.ID': 1,
+      'data.rowId': 1,
+      'data.taskId': 1,
+      'data.FMS ID': 1,
+      'data.fmsId': 1,
+      'data.Employee ID': 1,
+      'data.EmpID': 1,
+      'data.empId': 1,
+      'data.employeeId': 1,
+      'data.EMP Code': 1,
+      'data.Employee Name': 1,
+      'data.employeeName': 1,
+      'data.User': 1,
+      'data.Who': 1,
+      'data.who': 1,
+      'data.Assigned To': 1,
+      'data.assignedTo': 1,
+      'data.what': 1,
+      'data.What': 1,
+      'data.Department': 1,
+      'data.department': 1,
+      'data.when': 1,
+      'data.When': 1,
+      'data.how': 1,
+      'data.How': 1,
+      'data.Channel': 1,
+      'data.channel': 1,
+      'data.Client': 1,
+      'data.Client Name': 1,
+      'data.CustomerName': 1,
+      'data.fmsName': 1,
+      'data.clientName': 1,
+      'data.Client_Id': 1,
+      'data.Client ID': 1,
+      'data.CustomerID': 1,
+      'data.clientId': 1,
+      'data.taskName': 1,
+      'data.Task Name': 1,
+      'data.Task Description': 1,
+      'data.Description': 1,
+      'data.description': 1,
+      'data.Content': 1,
+      'data.content': 1,
+      'data.stepNo': 1,
+      'data.Step': 1,
+      'data.Step No': 1,
+      'data.Plan Date': 1,
+      'data.planDate': 1,
+      'data.Date': 1,
+      'data.date': 1,
+      'data.TAT': 1,
+      'data.tatMinutes': 1,
+      'data.Duration': 1,
+      'data.Actual Duration': 1,
+      'data.duration': 1,
+      'data.Status': 1,
+      'data.status': 1,
+      'data.Done Date': 1,
+      'data.doneDate': 1,
+      'data.actualDate': 1,
+      'data.Form Link': 1,
+      'data.Form link': 1,
+      'data.formLink': 1,
+      'data.On Time Status': 1,
+      'data.Delay Days': 1
+    };
+    const [users, clients, fms] = await Promise.all([
+      listDataRows('User', {}, userProjection),
+      listDataRows('Client', {}, clientProjection),
+      listDataRows('FmsTask', fmsStoredTaskQuery(), fmsProjection)
+    ]);
+    return { users, clients, fms };
+  });
 }
 
 export async function getFmsTasks(employeeId, options = {}) {
@@ -1150,17 +1413,51 @@ export async function getFmsTasks(employeeId, options = {}) {
 
 export async function getFmsAssignableUsers(employeeId) {
   await ensureFmsSheetSynced();
-  const users = await listRows('User');
-  const data = { users, fms: [] };
-  const liveFmsRows = data.fms.filter((item) => !looksLikeTempTask(item));
-  const context = buildFmsVisibilityContext(employeeId, data.users, liveFmsRows);
-  if (!context.valid) return fail('Access denied: user not found.');
-  if (!fmsCreatorAllowed(context.role)) {
-    return fail('Access denied: only Admin, HR, Manager, and Super Admin can create FMS tasks.');
-  }
-  return ok({
-    data: assignableUsersFor(employeeId, context.role, data.users),
-    meta: { role: context.role, teamCount: context.teamMembers.length, canCreate: true }
+  const key = fmsCacheKey('assignable', safe(employeeId).toUpperCase());
+  return withFmsCache(key, async () => {
+    const users = await listDataRows('User', {
+      $or: [
+        { 'data.Status': 'Active' },
+        { 'data.status': 'Active' },
+        { 'data.Status': { $exists: false } },
+        { 'data.status': { $exists: false } }
+      ]
+    }, {
+      legacyId: 1,
+      'data.Employee ID': 1,
+      'data.User ID': 1,
+      'data.EmpID': 1,
+      'data.EMP Code': 1,
+      'data.employeeId': 1,
+      'data.Employee Name': 1,
+      'data.employeeName': 1,
+      'data.Name': 1,
+      'data.Full Name': 1,
+      'data.Role': 1,
+      'data.role': 1,
+      'data.Designation': 1,
+      'data.Status': 1,
+      'data.status': 1,
+      'data.Manager ID': 1,
+      'data.managerId': 1,
+      'data.Manager': 1,
+      'data.manager': 1,
+      'data.Task Approver': 1,
+      'data.taskApprover': 1,
+      'data.Department': 1,
+      'data.department': 1
+    });
+    const data = { users, fms: [] };
+    const liveFmsRows = data.fms.filter((item) => !looksLikeTempTask(item));
+    const context = buildFmsVisibilityContext(employeeId, data.users, liveFmsRows);
+    if (!context.valid) return fail('Access denied: user not found.');
+    if (!fmsCreatorAllowed(context.role)) {
+      return fail('Access denied: only Admin, HR, Manager, and Super Admin can create FMS tasks.');
+    }
+    return ok({
+      data: assignableUsersFor(employeeId, context.role, data.users),
+      meta: { role: context.role, teamCount: context.teamMembers.length, canCreate: true }
+    });
   });
 }
 
@@ -1282,3 +1579,8 @@ export async function markFmsTaskDone(rowId, remarks, employeeId) {
   });
   return ok({ message: 'FMS task completed.', item: row });
 }
+
+registerStoreMutationListener((modelName = '') => {
+  if (!['FmsTask', 'User', 'Client'].includes(String(modelName || ''))) return;
+  void clearFmsCaches();
+});

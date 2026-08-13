@@ -94,6 +94,8 @@ export function AttendancePage() {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const canvasRef = useRef(null);
+  const selfCalendarCacheRef = useRef(new Map());
+  const teamCalendarCacheRef = useRef(new Map());
 
   const clearMessage = () => setMessage(null);
 
@@ -120,10 +122,21 @@ export function AttendancePage() {
 
     let active = true;
     async function loadSelfCalendar() {
+      const cacheKey = `${employeeId}__${selfCalendarRange.startDate}__${selfCalendarRange.endDate}`;
+      const cached = selfCalendarCacheRef.current.get(cacheKey);
+      if (cached) {
+        setSelfCalendarRows(cached);
+        setSelfCalendarLoading(false);
+        return;
+      }
       setSelfCalendarLoading(true);
       try {
         const payload = await fetchAttendanceForUser(employeeId, selfCalendarRange.startDate, selfCalendarRange.endDate);
-        if (active) setSelfCalendarRows(payload?.data || []);
+        if (active) {
+          const nextRows = payload?.data || [];
+          selfCalendarCacheRef.current.set(cacheKey, nextRows);
+          setSelfCalendarRows(nextRows);
+        }
       } catch {
         if (active) setSelfCalendarRows([]);
       }
@@ -143,16 +156,27 @@ export function AttendancePage() {
 
     let active = true;
     async function loadTeamCalendar() {
-      setTeamCalendarLoading(true);
       try {
         const fallbackDate = new Date(teamFilterDate ? `${teamFilterDate}T00:00:00` : Date.now());
         const fallbackYear = fallbackDate.getFullYear();
         const fallbackMonth = fallbackDate.getMonth();
         const startStr = teamCalendarRange?.startDate || toYmd(new Date(fallbackYear, fallbackMonth, 1));
         const endStr = teamCalendarRange?.endDate || toYmd(new Date(fallbackYear, fallbackMonth + 1, 0));
+        const cacheKey = `${teamCalendarUser}__${startStr}__${endStr}`;
+        const cached = teamCalendarCacheRef.current.get(cacheKey);
+        if (cached) {
+          setTeamCalendarRows(cached);
+          setTeamCalendarLoading(false);
+          return;
+        }
         
+        setTeamCalendarLoading(true);
         const payload = await fetchTeamAttendanceCalendar(teamCalendarUser, startStr, endStr);
-        if (active) setTeamCalendarRows(payload?.data || []);
+        if (active) {
+          const nextRows = payload?.data || [];
+          teamCalendarCacheRef.current.set(cacheKey, nextRows);
+          setTeamCalendarRows(nextRows);
+        }
       } catch (err) {
         if (active) setTeamCalendarRows([]);
       }
@@ -322,6 +346,8 @@ export function AttendancePage() {
         ...location
       });
       if (result.success) {
+        selfCalendarCacheRef.current.clear();
+        teamCalendarCacheRef.current.clear();
         setPhotoBase64('');
         setShowForm(false);
         setMessage({ tone: 'success', text: result.message || `${action} recorded successfully.` });
@@ -339,6 +365,8 @@ export function AttendancePage() {
     event.preventDefault();
     const result = await createLeave(leaveForm);
     if (result.success) {
+      selfCalendarCacheRef.current.clear();
+      teamCalendarCacheRef.current.clear();
       setMessage(null);
       setSubmitNotice({
         title: 'Leave Submitted',
@@ -360,6 +388,8 @@ export function AttendancePage() {
     event.preventDefault();
     const result = await createIntimation(intimationForm);
     if (result.success) {
+      selfCalendarCacheRef.current.clear();
+      teamCalendarCacheRef.current.clear();
       setMessage(null);
       setSubmitNotice({
         title: 'Intimation Submitted',
@@ -410,6 +440,8 @@ export function AttendancePage() {
       text: result.success ? (result.message || 'Attendance updated.') : result.message
     });
     if (result.success) {
+      selfCalendarCacheRef.current.clear();
+      teamCalendarCacheRef.current.clear();
       setTeamEditor(null);
     }
   };

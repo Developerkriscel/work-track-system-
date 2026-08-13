@@ -450,6 +450,372 @@ async function listDataRows(modelName, query = {}, projection = { data: 1, legac
   return fromLegacyDocs(docs);
 }
 
+async function listDataRowsPaginated(
+  modelName,
+  query = {},
+  {
+    projection = { data: 1, legacyId: 1 },
+    sort = { createdAt: -1 },
+    skip = 0,
+    limit = 20
+  } = {}
+) {
+  const docs = await LegacyModels[modelName].collection
+    .find(query, { projection })
+    .sort(sort)
+    .skip(Math.max(0, Number(skip) || 0))
+    .limit(Math.max(0, Number(limit) || 0))
+    .toArray();
+  return fromLegacyDocs(docs);
+}
+
+async function countDataRows(modelName, query = {}) {
+  return LegacyModels[modelName].countDocuments(query);
+}
+
+async function distinctDataValues(modelName, field, query = {}) {
+  return LegacyModels[modelName].distinct(field, query);
+}
+
+function approvalTicketStatusRegex(status = '') {
+  const normalized = safe(status).toLowerCase();
+  if (normalized === 'pending') return /pending approval|hr approved/i;
+  if (normalized === 'approved') return /approved|completed/i;
+  if (normalized === 'rejected') return /reject|rework|closed/i;
+  return /pending approval|hr approved|approved|completed|reject|rework|closed/i;
+}
+
+function fastVisibleTicketQuery(admin, users = [], filters = {}) {
+  const role = userRole(admin);
+  const adminId = safe(userId(admin));
+  const statusRegex = approvalTicketStatusRegex(filters.status);
+  const clauses = [
+    {
+      $or: [
+        { 'data.Status': statusRegex },
+        { 'data.status': statusRegex }
+      ]
+    }
+  ];
+
+  if (safe(filters.category)) {
+    clauses.push({
+      $or: [
+        { 'data.Task Category': safe(filters.category) },
+        { 'data.Category': safe(filters.category) },
+        { 'data.category': safe(filters.category) }
+      ]
+    });
+  }
+
+  if (safe(filters.employee)) {
+    const employeeNeedle = safe(filters.employee).toLowerCase();
+    const employeeIds = activeVisibleApprovalUsers(admin, users)
+      .filter((user) => {
+        const employeeText = `${first(user, ['Employee Name', 'employeeName', 'Name'], '')} ${userId(user)}`.toLowerCase();
+        return employeeText.includes(employeeNeedle);
+      })
+      .map((user) => safe(userId(user)))
+      .filter(Boolean);
+    if (!employeeIds.length) {
+      return { $or: [{ legacyId: '__no_match__' }] };
+    }
+    clauses.push(employeeIdsQuery(employeeIds));
+  }
+
+  if (safe(filters.search)) {
+    const textRegex = new RegExp(safe(filters.search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    clauses.push({
+      $or: [
+        { 'data.Ticket ID': textRegex },
+        { 'data.Task ID': textRegex },
+        { 'data.ID': textRegex },
+        { 'data.Task Description': textRegex },
+        { 'data.Description': textRegex },
+        { 'data.description': textRegex },
+        { 'data.Remarks': textRegex },
+        { 'data.remarks': textRegex },
+        { 'data.Name': textRegex },
+        { 'data.Client Name': textRegex },
+        { 'data.Client': textRegex },
+        { 'data.Client_Id': textRegex },
+        { 'data.Client ID': textRegex }
+      ]
+    });
+  }
+
+  if (role === 'super admin') {
+    return { $and: clauses };
+  }
+
+  const visibleUsers = activeVisibleApprovalUsers(admin, users);
+  const visibleUserIds = visibleUsers.map((user) => safe(userId(user))).filter(Boolean);
+
+  if (role === 'hr') {
+    clauses.push(employeeIdsQuery(visibleUserIds));
+    return { $and: clauses };
+  }
+
+  if (role === 'admin' || role === 'manager') {
+    const teamUserIds = visibleUsers
+      .filter((user) => !eq(userId(user), adminId))
+      .map((user) => safe(userId(user)))
+      .filter(Boolean);
+    clauses.push({
+      $or: [
+        employeeIdsQuery(teamUserIds),
+        { 'data.Task Approver': adminId },
+        { 'data.taskApprover': adminId },
+        { 'data.Reassigned To': adminId },
+        { 'data.reassignedTo': adminId }
+      ]
+    });
+    return { $and: clauses };
+  }
+
+  return { $or: [{ legacyId: '__no_match__' }] };
+}
+
+function fastActionableTicketQuery(admin, users = [], filters = {}) {
+  const role = userRole(admin);
+  const adminId = safe(userId(admin));
+  const visibleQuery = fastVisibleTicketQuery(admin, users, { ...filters, status: 'pending' });
+  if (!adminId) return { $or: [{ legacyId: '__no_match__' }] };
+
+  if (role === 'super admin') {
+    return visibleQuery;
+  }
+
+  if (role === 'hr') {
+    const hrEmployeeIds = users
+      .filter((user) => {
+        const ownerDepartment = safe(first(user, ['Department', 'department'])).toLowerCase();
+        return ownerDepartment === 'hr' || ownerDepartment.includes('hr intern') || ownerDepartment.includes('human resource');
+      })
+      .map((user) => safe(userId(user)))
+      .filter(Boolean);
+    return {
+      $and: [
+        visibleQuery,
+        {
+          $or: [
+            { 'data.Task Approver': adminId },
+            { 'data.taskApprover': adminId },
+            { 'data.Reassigned To': adminId },
+            { 'data.reassignedTo': adminId },
+            employeeIdsQuery(hrEmployeeIds)
+          ]
+        },
+        {
+          $nor: [
+            { 'data.Employee ID': adminId },
+            { 'data.employeeId': adminId },
+            { 'data.EmpID': adminId },
+            { 'data.User ID': adminId }
+          ]
+        }
+      ]
+    };
+  }
+
+  if (role === 'admin' || role === 'manager') {
+    return {
+      $and: [
+        visibleQuery,
+        {
+          $or: [
+            { 'data.Task Approver': adminId },
+            { 'data.taskApprover': adminId },
+            { 'data.Reassigned To': adminId },
+            { 'data.reassignedTo': adminId }
+          ]
+        },
+        {
+          $nor: [
+            { 'data.Employee ID': adminId },
+            { 'data.employeeId': adminId },
+            { 'data.EmpID': adminId },
+            { 'data.User ID': adminId }
+          ]
+        }
+      ]
+    };
+  }
+
+  return { $or: [{ legacyId: '__no_match__' }] };
+}
+
+async function getFastPendingTicketRows(adminId, options = {}) {
+  const page = Math.max(1, Number(options.page || 1) || 1);
+  const pageSize = Math.min(50, Math.max(20, Number(options.pageSize || 20) || 20));
+  const filters = {
+    employee: safe(options.filters?.employee),
+    category: safe(options.filters?.category),
+    startDate: safe(options.filters?.startDate),
+    endDate: safe(options.filters?.endDate),
+    search: safe(options.filters?.search),
+    status: safe(options.filters?.status)
+  };
+  const cacheKey = `${safe(adminId).toLowerCase()}::rows::tickets::fast::${JSON.stringify(filters)}::${page}::${pageSize}`;
+  const cached = await getCachedApprovalPayload(cacheKey);
+  if (cached) return cached;
+
+  const userProjection = {
+    legacyId: 1,
+    'data.Employee ID': 1,
+    'data.User ID': 1,
+    'data.EmpID': 1,
+    'data.employeeId': 1,
+    'data.Employee Name': 1,
+    'data.Name': 1,
+    'data.name': 1,
+    'data.Role': 1,
+    'data.role': 1,
+    'data.Department': 1,
+    'data.department': 1,
+    'data.Manager ID': 1,
+    'data.Manager': 1,
+    'data.managerId': 1,
+    'data.Reporting Manager': 1,
+    'data.Task Approver': 1,
+    'data.taskApprover': 1,
+    'data.Status': 1,
+    'data.status': 1
+  };
+  const ticketProjection = {
+    legacyId: 1,
+    'data.Ticket ID': 1,
+    'data.Task ID': 1,
+    'data.ID': 1,
+    'data.Client_Id': 1,
+    'data.Client ID': 1,
+    'data.CustomerID': 1,
+    'data.Name': 1,
+    'data.Client Name': 1,
+    'data.Client': 1,
+    'data.clientName': 1,
+    'data.Employee ID': 1,
+    'data.EmpID': 1,
+    'data.employeeId': 1,
+    'data.Employee Name': 1,
+    'data.User': 1,
+    'data.employeeName': 1,
+    'data.Task Category': 1,
+    'data.Category': 1,
+    'data.category': 1,
+    'data.Priority': 1,
+    'data.priority': 1,
+    'data.Task Description': 1,
+    'data.Description': 1,
+    'data.description': 1,
+    'data.Status': 1,
+    'data.status': 1,
+    'data.Timestamp': 1,
+    'data.timestamp': 1,
+    'data.Created At': 1,
+    'data.Date': 1,
+    'data.Plan Date': 1,
+    'data.planDate': 1,
+    'data.Last Update Date': 1,
+    'data.lastUpdateDate': 1,
+    'data.Start Time': 1,
+    'data.startTime': 1,
+    'data.End Time': 1,
+    'data.endTime': 1,
+    'data.Total Duration': 1,
+    'data.Duration': 1,
+    'data.totalDuration': 1,
+    'data.duration': 1,
+    'data.Remarks': 1,
+    'data.remarks': 1,
+    'data.TAT': 1,
+    'data.When': 1,
+    'data.tatMinutes': 1,
+    'data.Task Approver': 1,
+    'data.taskApprover': 1,
+    'data.Approver ID': 1,
+    'data.Reassigned By': 1,
+    'data.reassignedBy': 1,
+    'data.Reassigned To': 1,
+    'data.reassignedTo': 1
+  };
+  const clientProjection = {
+    legacyId: 1,
+    'data.Client_Id': 1,
+    'data.Client ID': 1,
+    'data.CustomerID': 1,
+    'data.Client Name': 1,
+    'data.Name': 1
+  };
+
+  const users = await listDataRows('User', {}, userProjection);
+  const admin = users.find((user) => eq(userId(user), adminId));
+  if (!admin || !elevatedRoles.has(userRole(admin))) return fail('Access Denied');
+
+  const visibleQuery = fastVisibleTicketQuery(admin, users, filters);
+  const actionableQuery = fastActionableTicketQuery(admin, users, filters);
+  const passiveQuery = { $and: [visibleQuery, { $nor: [fastActionableTicketQuery(admin, users, { ...filters, status: 'pending' })] }] };
+  const startIndex = (page - 1) * pageSize;
+
+  const [actionableTotal, total, clients, taskCategories, categories, normalizedCategories] = await Promise.all([
+    countDataRows('Ticket', actionableQuery),
+    countDataRows('Ticket', visibleQuery),
+    listDataRows('Client', {}, clientProjection),
+    distinctDataValues('Ticket', 'data.Task Category', visibleQuery),
+    distinctDataValues('Ticket', 'data.Category', visibleQuery),
+    distinctDataValues('Ticket', 'data.category', visibleQuery)
+  ]);
+
+  const actionableSkip = Math.min(startIndex, actionableTotal);
+  const actionableLimit = Math.max(0, Math.min(pageSize, actionableTotal - actionableSkip));
+  const actionableRows = actionableLimit
+    ? await listDataRowsPaginated('Ticket', actionableQuery, {
+        projection: ticketProjection,
+        sort: { createdAt: -1 },
+        skip: actionableSkip,
+        limit: actionableLimit
+      })
+    : [];
+
+  const passiveSkip = Math.max(0, startIndex - actionableTotal);
+  const passiveLimit = Math.max(0, pageSize - actionableRows.length);
+  const passiveRows = passiveLimit
+    ? await listDataRowsPaginated('Ticket', passiveQuery, {
+        projection: ticketProjection,
+        sort: { createdAt: -1 },
+        skip: passiveSkip,
+        limit: passiveLimit
+      })
+    : [];
+
+  const rows = [...actionableRows, ...passiveRows].map((row) => {
+    const decision = ticketApprovalDecision(admin, row, users);
+    const isPending = isPendingTicketStatus(first(row, ['Status']));
+    return {
+      ...asTicketRow(row, clients),
+      _canApprove: decision.canApprove && isPending,
+      _isActionableByMe: decision.actionable && isPending,
+      _canTransferApproval: decision.actionable && isPending
+    };
+  });
+
+  const payload = ok({
+    tab: 'tickets',
+    rows,
+    ticketCategories: Array.from(
+      new Set([...taskCategories, ...categories, ...normalizedCategories].map((value) => safe(value)).filter(Boolean))
+    ).sort((left, right) => left.localeCompare(right)),
+    pagination: {
+      page,
+      pageSize,
+      total,
+      hasMore: startIndex + rows.length < total
+    }
+  });
+  setCachedApprovalPayload(cacheKey, payload);
+  return payload;
+}
+
 async function getApprovalQueueRows(adminId, options = {}) {
   const requestedTabs = Array.isArray(options.tabs) && options.tabs.length
     ? new Set(options.tabs.map((value) => safe(value).toLowerCase()))
@@ -632,12 +998,12 @@ async function getApprovalQueueRows(adminId, options = {}) {
     'data.Client Name': 1,
     'data.Name': 1
   };
-  const ticketStatusQuery = { 'data.Status': /pending approval|hr approved|approved|closed|rework|reject|completed/i };
+  const filters = options.filters || {};
   const [leaves, intimations, attendance, tickets, clients] = await Promise.all([
-    requestedTabs.has('leaves') ? listDataRows('Leave', {}, leaveProjection) : Promise.resolve([]),
-    requestedTabs.has('intimations') ? listDataRows('Intimation', {}, intimationProjection) : Promise.resolve([]),
-    requestedTabs.has('attendance') ? listDataRows('Attendance', {}, attendanceProjection) : Promise.resolve([]),
-    requestedTabs.has('tickets') ? listDataRows('Ticket', ticketStatusQuery, ticketProjection) : Promise.resolve([]),
+    requestedTabs.has('leaves') ? listDataRows('Leave', approvalTabQuery('leaves', admin, users, filters), leaveProjection) : Promise.resolve([]),
+    requestedTabs.has('intimations') ? listDataRows('Intimation', approvalTabQuery('intimations', admin, users, filters), intimationProjection) : Promise.resolve([]),
+    requestedTabs.has('attendance') ? listDataRows('Attendance', approvalTabQuery('attendance', admin, users, filters), attendanceProjection) : Promise.resolve([]),
+    requestedTabs.has('tickets') ? listDataRows('Ticket', approvalTabQuery('tickets', admin, users, filters), ticketProjection) : Promise.resolve([]),
     requestedTabs.has('tickets') && includeClients ? listDataRows('Client', {}, clientProjection) : Promise.resolve([])
   ]);
   return { admin, users, leaves, intimations, attendance, tickets, clients };
@@ -760,6 +1126,116 @@ function employeeIdsQuery(employeeIds = []) {
       { 'data.User ID': { $in: ids } }
     ]
   };
+}
+
+function userIdentityQuery(employeeId = '') {
+  const value = safe(employeeId);
+  return {
+    $or: [
+      { 'data.Employee ID': value },
+      { 'data.employeeId': value },
+      { 'data.EmpID': value },
+      { 'data.User ID': value }
+    ]
+  };
+}
+
+function dateRangeFieldQuery(fields = [], startDate = '', endDate = '') {
+  const start = safe(startDate);
+  const end = safe(endDate);
+  if (!start && !end) return {};
+  const range = {};
+  if (start) range.$gte = start;
+  if (end) range.$lte = end;
+  return { $or: fields.filter(Boolean).map((field) => ({ [field]: range })) };
+}
+
+function visibleApprovalUsers(admin, users = []) {
+  return activeVisibleApprovalUsers(admin, users);
+}
+
+function visibleApprovalUserIds(admin, users = []) {
+  return visibleApprovalUsers(admin, users).map((user) => safe(userId(user))).filter(Boolean);
+}
+
+function approvalTicketScopeQuery(admin, users = [], { pendingOnly = false } = {}) {
+  const role = userRole(admin);
+  const adminId = safe(userId(admin));
+  const statusQuery = pendingOnly
+    ? { $or: [{ 'data.Status': /pending approval|hr approved/i }, { 'data.status': /pending approval|hr approved/i }] }
+    : { $or: [{ 'data.Status': /pending approval|hr approved|approved|closed|rework|reject|completed/i }, { 'data.status': /pending approval|hr approved|approved|closed|rework|reject|completed/i }] };
+
+  if (role === 'super admin') return statusQuery;
+
+  const visibleIds = visibleApprovalUserIds(admin, users);
+  const scopedEmployeeQuery = employeeIdsQuery(visibleIds);
+  const approverQuery = {
+    $or: [
+      { 'data.Task Approver': adminId },
+      { 'data.taskApprover': adminId },
+      { 'data.Reassigned To': adminId },
+      { 'data.reassignedTo': adminId }
+    ]
+  };
+
+  return {
+    $and: [
+      statusQuery,
+      {
+        $or: [
+          scopedEmployeeQuery,
+          approverQuery
+        ]
+      }
+    ]
+  };
+}
+
+function approvalTabQuery(tab, admin, users = [], filters = {}) {
+  const visibleIds = visibleApprovalUserIds(admin, users);
+  const ownerQuery = employeeIdsQuery(visibleIds);
+  const startDate = safe(filters.startDate);
+  const endDate = safe(filters.endDate);
+
+  if (tab === 'tickets') {
+    const clauses = [approvalTicketScopeQuery(admin, users)];
+    const dateQuery = dateRangeFieldQuery(['data.Plan Date', 'data.planDate', 'data.Date', 'data.Timestamp'], startDate, endDate);
+    if (Object.keys(dateQuery).length) clauses.push(dateQuery);
+    return clauses.length === 1 ? clauses[0] : { $and: clauses };
+  }
+
+  const clauses = [ownerQuery];
+  if (tab === 'leaves') {
+    clauses.push({
+      $or: [
+        { 'data.Status': /pending|approved|reject/i },
+        { 'data.status': /pending|approved|reject/i }
+      ]
+    });
+    const dateQuery = dateRangeFieldQuery(['data.Start Date', 'data.startDate', 'data.End Date', 'data.endDate'], startDate, endDate);
+    if (Object.keys(dateQuery).length) clauses.push(dateQuery);
+  } else if (tab === 'intimations') {
+    clauses.push({
+      $or: [
+        { 'data.Status': /submitted|pending|approved|reject/i },
+        { 'data.status': /submitted|pending|approved|reject/i }
+      ]
+    });
+    const dateQuery = dateRangeFieldQuery(['data.Intimation Date', 'data.Date', 'data.date'], startDate, endDate);
+    if (Object.keys(dateQuery).length) clauses.push(dateQuery);
+  } else if (tab === 'attendance') {
+    clauses.push({
+      $or: [
+        { 'data.Status': /need approval|pending|present|approved|reject|absent/i },
+        { 'data.status': /need approval|pending|present|approved|reject|absent/i },
+        { 'data.Admin Approval': /pending|approved|reject/i },
+        { 'data.adminApproval': /pending|approved|reject/i }
+      ]
+    });
+    const dateQuery = dateRangeFieldQuery(['data.Date', 'data.date'], startDate, endDate);
+    if (Object.keys(dateQuery).length) clauses.push(dateQuery);
+  }
+  return { $and: clauses };
 }
 
 function activeVisibleApprovalUsers(admin, users = []) {
@@ -1108,6 +1584,9 @@ async function getPendingApprovalsRows(adminId, options = {}) {
   const tab = ['tickets', 'leaves', 'intimations', 'attendance'].includes(safe(options.tab).toLowerCase())
     ? safe(options.tab).toLowerCase()
     : 'tickets';
+  if (tab === 'tickets') {
+    return getFastPendingTicketRows(adminId, options);
+  }
   const page = Math.max(1, Number(options.page || 1) || 1);
   const pageSize = Math.min(50, Math.max(20, Number(options.pageSize || 20) || 20));
   const filters = {
@@ -1122,7 +1601,7 @@ async function getPendingApprovalsRows(adminId, options = {}) {
   const cached = await getCachedApprovalPayload(cacheKey);
   if (cached) return cached;
 
-  const data = await getApprovalQueueRows(adminId, { tabs: [tab], includeClients: tab === 'tickets' });
+  const data = await getApprovalQueueRows(adminId, { tabs: [tab], includeClients: tab === 'tickets', filters });
   const admin = data.users.find((user) => eq(userId(user), adminId));
   if (!admin || !elevatedRoles.has(userRole(admin))) return fail('Access Denied');
 
@@ -1321,13 +1800,47 @@ export async function adminTicketAction(ticketId, adminId, action, remarks) {
   clearApprovalQueueCache();
   const gate = await requireAttendanceActive(adminId);
   if (gate) return gate;
-  const data = await getRows();
-  const ticket = data.tickets.find((item) => eq(item['Ticket ID'], ticketId));
+  const userProjection = {
+    legacyId: 1,
+    'data.Employee ID': 1,
+    'data.User ID': 1,
+    'data.EmpID': 1,
+    'data.employeeId': 1,
+    'data.Employee Name': 1,
+    'data.Name': 1,
+    'data.Role': 1,
+    'data.role': 1,
+    'data.Department': 1,
+    'data.department': 1,
+    'data.Manager ID': 1,
+    'data.Manager': 1,
+    'data.managerId': 1,
+    'data.Reporting Manager': 1,
+    'data.Task Approver': 1,
+    'data.taskApprover': 1,
+    'data.Status': 1,
+    'data.status': 1
+  };
+  const ticketProjection = {
+    legacyId: 1,
+    'data.Ticket ID': 1,
+    'data.Employee ID': 1,
+    'data.employeeId': 1,
+    'data.EmpID': 1,
+    'data.Status': 1,
+    'data.Remarks': 1
+  };
+  const [ticket, users] = await Promise.all([
+    listDataRows('Ticket', {
+      $or: [{ legacyId: ticketId }, { 'data.Ticket ID': ticketId }, { 'data.Task ID': ticketId }, { 'data.ID': ticketId }]
+    }, ticketProjection).then((rows) => rows[0] || null),
+    listDataRows('User', {}, userProjection)
+  ]);
   if (!ticket) return fail('Ticket not found.');
-  const adminUser = data.users.find((user) => eq(userId(user), adminId));
+  const adminUser = users.find((user) => eq(userId(user), adminId));
   if (!adminUser) return fail('Admin user not found.');
   if (!/pending approval|hr approved/i.test(first(ticket, ['Status']))) return fail('Only pending approval tickets can be actioned.');
-  const decision = ticketApprovalDecision(adminUser, ticket, data.users);
+  const decision = ticketApprovalDecision(adminUser, ticket, users);
   if (!decision.actionable) return fail('Access Denied: You are not the designated approver for this ticket.');
   if (!safe(remarks) && /reject|rework/i.test(action)) return fail('Rework remarks are required.');
   const statusMap = { approve: 'Closed', approved: 'Closed', reject: 'Rework', rework: 'Rework', close: 'Closed' };
@@ -1397,10 +1910,45 @@ export async function transferTicketApproval(ticketId, targetManagerId, currentM
   clearApprovalQueueCache();
   const gate = await requireAttendanceActive(currentManagerId);
   if (gate) return gate;
-  const tickets = await listRows('Ticket');
-  const ticket = tickets.find((item) => eq(item['Ticket ID'], ticketId));
+  const userProjection = {
+    legacyId: 1,
+    'data.Employee ID': 1,
+    'data.User ID': 1,
+    'data.EmpID': 1,
+    'data.employeeId': 1,
+    'data.Employee Name': 1,
+    'data.Name': 1,
+    'data.Role': 1,
+    'data.role': 1,
+    'data.Department': 1,
+    'data.department': 1,
+    'data.Manager ID': 1,
+    'data.Manager': 1,
+    'data.managerId': 1,
+    'data.Reporting Manager': 1,
+    'data.Task Approver': 1,
+    'data.taskApprover': 1,
+    'data.Status': 1,
+    'data.status': 1
+  };
+  const ticketProjection = {
+    legacyId: 1,
+    'data.Ticket ID': 1,
+    'data.Employee ID': 1,
+    'data.employeeId': 1,
+    'data.EmpID': 1,
+    'data.Status': 1,
+    'data.Reassigned To': 1,
+    'data.reassignedTo': 1,
+    'data.Remarks': 1
+  };
+  const [ticket, users] = await Promise.all([
+    listDataRows('Ticket', {
+      $or: [{ legacyId: ticketId }, { 'data.Ticket ID': ticketId }, { 'data.Task ID': ticketId }, { 'data.ID': ticketId }]
+    }, ticketProjection).then((rows) => rows[0] || null),
+    listDataRows('User', {}, userProjection)
+  ]);
   if (!ticket) return fail('Ticket not found.');
-  const users = await listRows('User');
   const currentManager = users.find((user) => eq(userId(user), currentManagerId));
   const targetManager = users.find((user) => eq(userId(user), targetManagerId) && eq(first(user, ['Status', 'status'], 'Active'), 'Active'));
   if (!currentManager || !targetManager) return fail('Manager details not found.');

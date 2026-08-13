@@ -1,6 +1,14 @@
 import { LegacyModels } from '../models/legacyModels.js';
 import { buildRedisKey, getJson, setJson } from './redisCache.service.js';
-import { insertRow, listRows, registerStoreMutationListener, stripInternalMetadata, upsertRow } from './legacyStore.service.js';
+import {
+  findOneRowByFilter,
+  findRowsByFilter,
+  insertRow,
+  listRows,
+  registerStoreMutationListener,
+  stripInternalMetadata,
+  upsertRow
+} from './legacyStore.service.js';
 import { saveBase64File } from './fileStorage.service.js';
 
 const safe = (value) => String(value ?? '').trim();
@@ -15,10 +23,12 @@ const userRole = (user = {}) => safe(first(user, ['Role', 'role', 'Designation']
 const TICKET_SUPPORT_CACHE_TTL_MS = Number(process.env.WORKTRACK_TICKET_SUPPORT_CACHE_TTL_MS || 60_000);
 const TICKET_WORKSPACE_CACHE_TTL_MS = Number(process.env.WORKTRACK_TICKET_WORKSPACE_CACHE_TTL_MS || 15_000);
 const TICKET_WORKSPACE_SCHEMA_VERSION = 1;
+const TICKET_OWNER_CHUNK_SIZE = 100;
 const ticketSupportCache = new Map();
 const ticketWorkspaceCache = new Map();
 const ticketSupportInflight = new Map();
 const ticketWorkspaceInflight = new Map();
+const ticketOwnerFieldCache = new Map();
 let ticketWorkspaceVersion = 0;
 
 registerStoreMutationListener((modelName = '') => {
@@ -26,15 +36,121 @@ registerStoreMutationListener((modelName = '') => {
     ticketWorkspaceVersion += 1;
     ticketSupportCache.clear();
     ticketWorkspaceCache.clear();
+    ticketOwnerFieldCache.clear();
   }
 });
 
-const ticketSupportProjection = {
+const ticketSupportClientProjection = {
   legacyId: 1,
-  data: 1
+  'data.Client_Id': 1,
+  'data.Client ID': 1,
+  'data.CustomerID': 1,
+  'data.clientId': 1,
+  'data.customerId': 1,
+  'data.Client Name': 1,
+  'data.CustomerName': 1,
+  'data.Name': 1,
+  'data.clientName': 1,
+  'data.name': 1,
+  'data.Services': 1
 };
 
-const ticketWorkspaceProjection = {
+const ticketSupportUserProjection = {
+  legacyId: 1,
+  'data.Employee ID': 1,
+  'data.User ID': 1,
+  'data.EMP Code': 1,
+  'data.employeeId': 1,
+  'data.EmpID': 1,
+  'data.Employee Name': 1,
+  'data.Name': 1,
+  'data.Full Name': 1,
+  'data.employeeName': 1,
+  'data.name': 1,
+  'data.Role': 1,
+  'data.role': 1,
+  'data.Designation': 1,
+  'data.Status': 1,
+  'data.status': 1,
+  'data.Manager ID': 1,
+  'data.Manager': 1,
+  'data.managerId': 1,
+  'data.Reporting Manager': 1,
+  'data.Task Approver': 1,
+  'data.taskApprover': 1,
+  'data.Approver ID': 1,
+  'data.Department': 1,
+  'data.department': 1,
+  'data.Assign Buddy': 1,
+  'data.Buddy': 1,
+  'data.assignBuddy': 1
+};
+
+const ticketSupportLeaveProjection = {
+  legacyId: 1,
+  'data.Employee ID': 1,
+  'data.User ID': 1,
+  'data.EMP Code': 1,
+  'data.employeeId': 1,
+  'data.EmpID': 1,
+  'data.Status': 1,
+  'data.status': 1,
+  'data.Approval Status': 1,
+  'data.Start Date': 1,
+  'data.StartDate': 1,
+  'data.End Date': 1,
+  'data.EndDate': 1,
+  'data.Date': 1,
+  'data.date': 1
+};
+
+const ticketSupportIntimationProjection = {
+  legacyId: 1,
+  'data.Employee ID': 1,
+  'data.User ID': 1,
+  'data.EMP Code': 1,
+  'data.employeeId': 1,
+  'data.EmpID': 1,
+  'data.Status': 1,
+  'data.status': 1,
+  'data.Approval Status': 1,
+  'data.Intimation Date': 1,
+  'data.Date': 1,
+  'data.date': 1
+};
+
+const ticketSupportEmpMasterProjection = {
+  legacyId: 1,
+  'data.Employee ID': 1,
+  'data.User ID': 1,
+  'data.EMP Code': 1,
+  'data.employeeId': 1,
+  'data.EmpID': 1,
+  'data.Employee Name': 1,
+  'data.Name': 1,
+  'data.Full Name': 1,
+  'data.employeeName': 1,
+  'data.name': 1,
+  'data.Role': 1,
+  'data.role': 1,
+  'data.Designation': 1,
+  'data.Status': 1,
+  'data.status': 1,
+  'data.Manager ID': 1,
+  'data.Manager': 1,
+  'data.managerId': 1,
+  'data.Reporting Manager': 1,
+  'data.Task Approver': 1,
+  'data.taskApprover': 1,
+  'data.Approver ID': 1,
+  'data.Department': 1,
+  'data.department': 1,
+  'data.Assign Buddy': 1,
+  'data.Buddy': 1,
+  'data.assignBuddy': 1
+};
+
+const ticketWorkspaceListProjection = {
   legacyId: 1,
   'data.Ticket ID': 1,
   'data.Task ID': 1,
@@ -76,8 +192,6 @@ const ticketWorkspaceProjection = {
   'data.Duration': 1,
   'data.totalDuration': 1,
   'data.duration': 1,
-  'data.Remarks': 1,
-  'data.remarks': 1,
   'data.TAT': 1,
   'data.When': 1,
   'data.tatMinutes': 1,
@@ -98,11 +212,19 @@ const ticketWorkspaceProjection = {
   'data.clientTicket': 1,
   'data.Is Client Ticket': 1,
   'data.isClientTicket': 1,
+  'data.HasUnreadAdminMessages': 1,
+  'data.HasUnreadMessages': 1
+};
+
+const ticketWorkspaceDetailProjection = {
+  ...ticketWorkspaceListProjection,
+  'data.Remarks': 1,
+  'data.remarks': 1,
   'data.Attachment': 1,
   'data.Attachments': 1,
   'data.Closing Attachment': 1,
-  'data.HasUnreadAdminMessages': 1,
-  'data.HasUnreadMessages': 1
+  'data.Created By': 1,
+  'data.Creator ID': 1
 };
 
 function teamIds(employeeId, users = []) {
@@ -151,6 +273,12 @@ function employeeIdQuery(ids = []) {
   };
 }
 
+function fieldValueQuery(fieldName, values = []) {
+  const normalizedValues = values.map((value) => safe(value)).filter(Boolean);
+  if (!normalizedValues.length) return { legacyId: '__no_ticket_match__' };
+  return { [fieldName]: normalizedValues.length === 1 ? normalizedValues[0] : { $in: normalizedValues } };
+}
+
 function ticketIdQuery(ticketId = '') {
   const value = safe(ticketId);
   return {
@@ -162,6 +290,48 @@ function ticketIdQuery(ticketId = '') {
     ]
   };
 }
+
+function userIdentityQuery(employeeId = '') {
+  const value = safe(employeeId);
+  return {
+    $or: [
+      { 'data.Employee ID': value },
+      { 'data.User ID': value },
+      { 'data.EMP Code': value },
+      { 'data.employeeId': value },
+      { 'data.EmpID': value }
+    ]
+  };
+}
+
+const ticketAccessProjection = {
+  legacyId: 1,
+  'data.Ticket ID': 1,
+  'data.Task ID': 1,
+  'data.ID': 1,
+  'data.Employee ID': 1,
+  'data.EmpID': 1,
+  'data.employeeId': 1,
+  'data.Reassigned By': 1,
+  'data.reassignedBy': 1
+};
+
+const ticketAccessUserProjection = {
+  legacyId: 1,
+  'data.Employee ID': 1,
+  'data.User ID': 1,
+  'data.EMP Code': 1,
+  'data.employeeId': 1,
+  'data.EmpID': 1,
+  'data.Department': 1,
+  'data.department': 1,
+  'data.Manager ID': 1,
+  'data.Manager': 1,
+  'data.managerId': 1,
+  'data.Reporting Manager': 1,
+  'data.Task Approver': 1,
+  'data.taskApprover': 1
+};
 
 function buildVisibleTicketQuery(employeeId, role, users = []) {
   const normalizedRole = safe(role).toLowerCase();
@@ -263,6 +433,16 @@ async function queryLegacyRows(modelName, query = {}, projection = { data: 1, le
   return fromLegacyDocs(docs);
 }
 
+async function queryLegacyRowsAdvanced(modelName, query = {}, options = {}) {
+  const docs = await LegacyModels[modelName].collection.find(query, {
+    projection: options.projection || { data: 1, legacyId: 1 },
+    sort: options.sort,
+    skip: options.skip,
+    limit: options.limit
+  }).toArray();
+  return fromLegacyDocs(docs);
+}
+
 async function findLegacyRow(modelName, query = {}, projection = { data: 1, legacyId: 1 }) {
   const doc = await LegacyModels[modelName].collection.findOne(query, { projection });
   return doc ? fromLegacyDocs([doc])[0] : null;
@@ -291,22 +471,36 @@ function writeTicketScopeCache(cacheKey, payload) {
   void setJson(ticketScopeRedisKey(cacheKey), entry, TICKET_WORKSPACE_CACHE_TTL_MS);
 }
 
-async function getTicketSupportData() {
-  const cacheKey = `support::v${ticketWorkspaceVersion}`;
+function ticketSupportRedisKey(cacheKey) {
+  return buildRedisKey('ticket-support', `schema${TICKET_WORKSPACE_SCHEMA_VERSION}`, cacheKey);
+}
+
+function buildTicketSupportCacheKey(options = {}) {
+  return `support::v${ticketWorkspaceVersion}::${options.includeLeaveSignals === false ? 'lite' : 'full'}`;
+}
+
+async function getTicketSupportData(options = {}) {
+  const includeLeaveSignals = options.includeLeaveSignals !== false;
+  const cacheKey = buildTicketSupportCacheKey({ includeLeaveSignals });
   const cached = ticketSupportCache.get(cacheKey);
   if (cached && Date.now() - cached.createdAt < TICKET_SUPPORT_CACHE_TTL_MS) {
     return cached.payload;
+  }
+  const redisCached = await getJson(ticketSupportRedisKey(cacheKey));
+  if (redisCached && Date.now() - Number(redisCached.createdAt || 0) < TICKET_SUPPORT_CACHE_TTL_MS) {
+    ticketSupportCache.set(cacheKey, redisCached);
+    return redisCached.payload;
   }
   const inflight = ticketSupportInflight.get(cacheKey);
   if (inflight) return inflight;
 
   const loadPromise = (async () => {
     const [clients, users, leaves, intimations, empMasters] = await Promise.all([
-      queryLegacyRows('Client', {}, ticketSupportProjection),
-      queryLegacyRows('User', {}, ticketSupportProjection),
-      queryLegacyRows('Leave', {}, ticketSupportProjection),
-      queryLegacyRows('Intimation', {}, ticketSupportProjection),
-      queryLegacyRows('EmpMaster', {}, ticketSupportProjection)
+      queryLegacyRows('Client', {}, ticketSupportClientProjection),
+      queryLegacyRows('User', {}, ticketSupportUserProjection),
+      includeLeaveSignals ? queryLegacyRows('Leave', {}, ticketSupportLeaveProjection) : Promise.resolve([]),
+      includeLeaveSignals ? queryLegacyRows('Intimation', {}, ticketSupportIntimationProjection) : Promise.resolve([]),
+      queryLegacyRows('EmpMaster', {}, ticketSupportEmpMasterProjection)
     ]);
 
     const empMasterById = new Map(empMasters.map((row) => [safe(first(row, ['Employee ID', 'User ID', 'EMP Code', 'employeeId', 'EmpID'])).toLowerCase(), row]));
@@ -320,7 +514,9 @@ async function getTicketSupportData() {
       leaves,
       intimations
     };
-    ticketSupportCache.set(cacheKey, { createdAt: Date.now(), payload });
+    const entry = { createdAt: Date.now(), payload };
+    ticketSupportCache.set(cacheKey, entry);
+    void setJson(ticketSupportRedisKey(cacheKey), entry, TICKET_SUPPORT_CACHE_TTL_MS);
     return payload;
   })();
 
@@ -334,7 +530,7 @@ async function getTicketSupportData() {
 
 function parseWorkspaceOptions(options = {}) {
   const page = Math.max(1, Number(options.page || 1) || 1);
-  const pageSize = Math.min(50, Math.max(10, Number(options.pageSize || 20) || 20));
+  const pageSize = Math.min(100, Math.max(10, Number(options.pageSize || 10) || 10));
   return {
     page,
     pageSize,
@@ -374,6 +570,10 @@ function clientOriginConditions() {
 
 function clientOriginMongoQuery() {
   return { $or: clientOriginConditions() };
+}
+
+function notClientOriginMongoQuery() {
+  return { $nor: clientOriginConditions() };
 }
 
 function ticketDateForPeriod(value) {
@@ -473,6 +673,88 @@ function paginateRows(rows = [], page = 1, pageSize = 20) {
   };
 }
 
+async function resolveTicketOwnerField(employeeId) {
+  const normalizedId = safe(employeeId).toLowerCase();
+  const cacheKey = `${ticketWorkspaceVersion}::${normalizedId}`;
+  if (ticketOwnerFieldCache.has(cacheKey)) return ticketOwnerFieldCache.get(cacheKey);
+
+  const exactValue = safe(employeeId);
+  const fieldCandidates = ['data.Employee ID', 'data.EmpID', 'data.employeeId'];
+  const counts = await Promise.all(
+    fieldCandidates.map((fieldName) => LegacyModels.Ticket.collection.countDocuments(fieldValueQuery(fieldName, [exactValue])))
+  );
+  const bestIndex = counts.reduce((best, current, index, items) => (
+    current > items[best] ? index : best
+  ), 0);
+  const bestField = counts[bestIndex] > 0 ? fieldCandidates[bestIndex] : fieldCandidates[0];
+  ticketOwnerFieldCache.set(cacheKey, bestField);
+  return bestField;
+}
+
+async function queryOwnerTicketChunk(employeeId, projection, { skip = 0, limit = TICKET_OWNER_CHUNK_SIZE } = {}) {
+  const ownerField = await resolveTicketOwnerField(employeeId);
+  const ownerValue = safe(employeeId);
+  const [docs, total] = await Promise.all([
+    queryLegacyRowsAdvanced('Ticket', fieldValueQuery(ownerField, [ownerValue]), {
+      projection,
+      sort: { updatedAt: -1, createdAt: -1 },
+      skip,
+      limit
+    }),
+    LegacyModels.Ticket.collection.countDocuments(fieldValueQuery(ownerField, [ownerValue]))
+  ]);
+  return { docs, total, ownerField };
+}
+
+async function queryTeamTicketChunk(employeeId, role, users, projection, { skip = 0, limit = TICKET_OWNER_CHUNK_SIZE } = {}) {
+  const normalizedRole = safe(role).toLowerCase();
+  const currentId = safe(employeeId);
+  let query = { legacyId: '__no_team_match__' };
+
+  if (normalizedRole === 'super admin') {
+    query = {
+      $and: [
+        { 'data.Employee ID': { $ne: currentId } },
+        notClientOriginMongoQuery()
+      ]
+    };
+  } else if (normalizedRole === 'admin') {
+    const ids = teamIds(employeeId, users).map((id) => id.toUpperCase() === currentId.toLowerCase() ? currentId : id);
+    query = ids.length
+      ? { $and: [employeeIdQuery(ids), notClientOriginMongoQuery()] }
+      : { legacyId: '__no_team_match__' };
+  } else if (normalizedRole === 'manager') {
+    const ids = directTeamIds(employeeId, users).map((id) => id.toUpperCase() === currentId.toLowerCase() ? currentId : id);
+    query = ids.length
+      ? { $and: [employeeIdQuery(ids), notClientOriginMongoQuery()] }
+      : { legacyId: '__no_team_match__' };
+  } else if (normalizedRole === 'hr') {
+    const hrIds = users
+      .filter((user) => {
+        const department = safe(first(user, ['Department', 'department'])).toLowerCase();
+        return department === 'hr' || department.includes('human resource');
+      })
+      .map((user) => userId(user))
+      .filter(Boolean);
+    const ids = [...new Set([...teamIds(employeeId, users), ...hrIds])];
+    query = ids.length
+      ? { $and: [employeeIdQuery(ids), notClientOriginMongoQuery()] }
+      : { legacyId: '__no_team_match__' };
+  }
+
+  const [docs, total] = await Promise.all([
+    queryLegacyRowsAdvanced('Ticket', query, {
+      projection,
+      sort: { updatedAt: -1, createdAt: -1 },
+      skip,
+      limit
+    }),
+    LegacyModels.Ticket.collection.countDocuments(query)
+  ]);
+
+  return { docs, total, query };
+}
+
 async function getTicketScope(ticketId, employeeId, role) {
   const supportData = await getTicketSupportData();
   const ticket = await findLegacyRow('Ticket', ticketIdQuery(ticketId));
@@ -480,9 +762,48 @@ async function getTicketScope(ticketId, employeeId, role) {
   if (!canSeeTicket(ticket, employeeId, role, supportData.users)) return { error: fail('Access denied for this ticket.') };
   const ownerEmployeeId = first(ticket, ['Employee ID', 'EmpID', 'employeeId']);
   const ownerTickets = ownerEmployeeId
-    ? await queryLegacyRows('Ticket', employeeIdQuery([ownerEmployeeId]), ticketWorkspaceProjection)
+    ? await queryLegacyRows('Ticket', employeeIdQuery([ownerEmployeeId]), ticketWorkspaceDetailProjection)
     : [];
   return { data: { ...supportData, tickets: ownerTickets }, ticket };
+}
+
+async function getTicketMessageScope(ticketId, employeeId, role) {
+  const ticket = await findLegacyRow('Ticket', ticketIdQuery(ticketId), ticketAccessProjection);
+  if (!ticket) return { error: fail('Ticket not found.') };
+
+  const normalizedRole = safe(role).toLowerCase();
+  const currentId = safe(employeeId).toLowerCase();
+  const ownerId = first(ticket, ['Employee ID', 'EmpID', 'employeeId']).toLowerCase();
+  const reassignedBy = first(ticket, ['Reassigned By', 'reassignedBy']).toLowerCase();
+
+  if (normalizedRole === 'super admin' || ownerId === currentId || reassignedBy === currentId) {
+    return { ticket };
+  }
+
+  if (!ownerId) return { error: fail('Access denied for this ticket.') };
+
+  const owner = await findOneRowByFilter(
+    'User',
+    userIdentityQuery(ownerId.toUpperCase()),
+    { projection: ticketAccessUserProjection }
+  );
+  if (!owner) return { error: fail('Access denied for this ticket.') };
+
+  const ownerManagers = splitIds(first(owner, ['Manager ID', 'Manager', 'managerId', 'Reporting Manager']));
+  const ownerApprovers = splitIds(first(owner, ['Task Approver', 'taskApprover']));
+  const ownerDepartment = safe(first(owner, ['Department', 'department'])).toLowerCase();
+
+  if (normalizedRole === 'admin' && (ownerManagers.includes(currentId) || ownerApprovers.includes(currentId))) {
+    return { ticket };
+  }
+  if (normalizedRole === 'manager' && ownerManagers.includes(currentId)) {
+    return { ticket };
+  }
+  if (normalizedRole === 'hr' && (ownerManagers.includes(currentId) || ownerApprovers.includes(currentId) || ownerDepartment === 'hr' || ownerDepartment.includes('human resource'))) {
+    return { ticket };
+  }
+
+  return { error: fail('Access denied for this ticket.') };
 }
 
 function parseReferenceNow(value) {
@@ -566,9 +887,53 @@ function isAttendanceActive(rowsList, employeeId) {
   return !!first(latest, ['Punch In', 'Time']) && !first(latest, ['Punch Out']);
 }
 
+function attendanceDayQuery(date = today()) {
+  return {
+    $or: [
+      { 'data.Date': date },
+      { 'data.Date': { $regex: `^${date}` } },
+      { 'data.date': date },
+      { 'data.date': { $regex: `^${date}` } }
+    ]
+  };
+}
+
+async function getTodayAttendanceRows(employeeId) {
+  if (!safe(employeeId) || eq(employeeId, 'client')) return [];
+  return findRowsByFilter(
+    'Attendance',
+    {
+      $and: [
+        {
+          $or: [
+            { 'data.Employee ID': employeeId },
+            { 'data.EmpID': employeeId },
+            { 'data.employeeId': employeeId }
+          ]
+        },
+        attendanceDayQuery(today())
+      ]
+    },
+    {
+      projection: {
+        legacyId: 1,
+        'data.Employee ID': 1,
+        'data.EmpID': 1,
+        'data.employeeId': 1,
+        'data.Date': 1,
+        'data.Action': 1,
+        'data.Time': 1,
+        'data.Punch In': 1,
+        'data.Punch Out': 1
+      },
+      sort: { 'data.Time': -1, createdAt: -1 }
+    }
+  );
+}
+
 async function requireAttendanceActive(employeeId) {
   if (!safe(employeeId) || eq(employeeId, 'client')) return null;
-  const attendance = await listRows('Attendance');
+  const attendance = await getTodayAttendanceRows(employeeId);
   if (isAttendanceActive(attendance, employeeId)) return null;
   return fail('Attendance Required: Aapne aaj ki Attendance (Punch In) mark nahi ki hai ya aap already Punch Out kar chuke hain. Kripya pehle Punch In karein!');
 }
@@ -752,7 +1117,7 @@ function asUserRow(row = {}) {
 
 async function getRows() {
   const supportData = await getTicketSupportData();
-  const tickets = await queryLegacyRows('Ticket', {}, ticketWorkspaceProjection);
+  const tickets = await queryLegacyRows('Ticket', {}, ticketWorkspaceListProjection);
   return {
     tickets,
     ...supportData
@@ -784,15 +1149,21 @@ export async function getTicketSystemData(employeeId, role, options = {}) {
   if (inflight) return inflight;
 
   const loadPromise = (async () => {
-    const data = await getTicketSupportData();
     const elevated = ['super admin', 'admin', 'manager', 'hr'].includes(normalizedRole);
-    const activeUsers = data.users.filter((user) => eq(first(user, ['Status', 'status'], 'Active'), 'Active'));
-    const allowedAssigneeIds = assignableIdsFor(employeeId, role, activeUsers);
-    const assignableUsers = activeUsers.filter((user) => allowedAssigneeIds.includes(userId(user).toLowerCase()));
     const defaultFilters = isDefaultTicketWorkspaceFilters(workspaceOptions.filters);
 
     if (workspaceOptions.viewMode === 'my' && defaultFilters) {
-      const myTicketDocs = await queryLegacyRows('Ticket', employeeIdQuery([employeeId]), ticketWorkspaceProjection);
+      const data = await getTicketSupportData();
+      const activeUsers = data.users.filter((user) => eq(first(user, ['Status', 'status'], 'Active'), 'Active'));
+      const allowedAssigneeIds = assignableIdsFor(employeeId, role, activeUsers);
+      const assignableUsers = activeUsers.filter((user) => allowedAssigneeIds.includes(userId(user).toLowerCase()));
+      const absoluteStart = (workspaceOptions.page - 1) * workspaceOptions.pageSize;
+      const chunkStart = Math.floor(absoluteStart / TICKET_OWNER_CHUNK_SIZE) * TICKET_OWNER_CHUNK_SIZE;
+      const offsetWithinChunk = absoluteStart - chunkStart;
+      const { docs: myTicketDocs, total: myTicketTotal } = await queryOwnerTicketChunk(employeeId, ticketWorkspaceListProjection, {
+        skip: chunkStart,
+        limit: TICKET_OWNER_CHUNK_SIZE
+      });
       const visibleTickets = myTicketDocs.map((ticket) => compactTicketRow({
         ...asTicketRow(ticket, data.clients, data.users),
         _canApprove: false,
@@ -801,7 +1172,8 @@ export async function getTicketSystemData(employeeId, role, options = {}) {
         _canSeeTeam: elevated
       }));
       const filteredRows = sortWorkspaceTickets(visibleTickets);
-      const paged = paginateRows(filteredRows, workspaceOptions.page, workspaceOptions.pageSize);
+      const pagedRows = filteredRows.slice(offsetWithinChunk, offsetWithinChunk + workspaceOptions.pageSize);
+      const totalPages = Math.max(1, Math.ceil(myTicketTotal / workspaceOptions.pageSize));
       const categories = [...new Set([
         'Google Sheet', 'Digital Marketing', 'Recruitment', 'Graphic Design', 'Development',
         ...myTicketDocs.map((ticket) => first(ticket, ['Task Category', 'Category']))
@@ -864,38 +1236,38 @@ export async function getTicketSystemData(employeeId, role, options = {}) {
         .map((u) => userId(u))
         .filter(Boolean);
 
-      const [teamCount, clientCount, buddyCount] = await Promise.all([
-        elevated ? LegacyModels.Ticket.collection.countDocuments(teamQuery) : Promise.resolve(0),
-        (elevated || visibleTickets.some((ticket) => ticket._isClientOrigin))
-          ? LegacyModels.Ticket.collection.countDocuments(
-            elevated
-              ? clientOriginMongoQuery()
-              : { $and: [visibleQuery, clientOriginMongoQuery()] }
-          )
-          : Promise.resolve(0),
-        buddyCandidateIds.length ? LegacyModels.Ticket.collection.countDocuments(employeeIdQuery(buddyCandidateIds)) : Promise.resolve(0)
-      ]);
+      const hasClientTicketAccess = elevated
+        ? true
+        : await LegacyModels.Ticket.collection.findOne(
+          { $and: [visibleQuery, clientOriginMongoQuery()] },
+          { projection: { _id: 1 } }
+        ).then(Boolean);
 
       const payload = ok({
         clients,
         users: assignableUsers,
         allUsers: activeUsers,
         employees: assignableUsers,
-        tickets: paged.rows,
+        tickets: pagedRows,
         buddyTickets: [],
         teamTickets: [],
         clientOriginTickets: [],
         canViewTeamTickets: elevated,
-        canViewClientTickets: elevated || clientCount > 0,
+        canViewClientTickets: hasClientTicketAccess,
         categories,
         counts: {
-          my: filteredRows.length,
-          team: teamCount,
-          client: clientCount,
-          buddy: buddyCount
+          my: myTicketTotal,
+          team: 0,
+          client: 0,
+          buddy: 0
         },
         pagination: {
-          ...paged.pagination,
+          page: workspaceOptions.page,
+          pageSize: workspaceOptions.pageSize,
+          total: myTicketTotal,
+          totalPages,
+          start: myTicketTotal ? absoluteStart + 1 : 0,
+          end: myTicketTotal ? Math.min(absoluteStart + pagedRows.length, myTicketTotal) : 0,
           viewMode: workspaceOptions.viewMode
         },
         dropdowns: {
@@ -908,14 +1280,117 @@ export async function getTicketSystemData(employeeId, role, options = {}) {
       writeTicketScopeCache(cacheKey, payload);
       return payload;
     }
+
+    if (workspaceOptions.viewMode === 'team' && elevated && defaultFilters) {
+      const data = await getTicketSupportData({ includeLeaveSignals: false });
+      const activeUsers = data.users.filter((user) => eq(first(user, ['Status', 'status'], 'Active'), 'Active'));
+      const allowedAssigneeIds = assignableIdsFor(employeeId, role, activeUsers);
+      const assignableUsers = activeUsers.filter((user) => allowedAssigneeIds.includes(userId(user).toLowerCase()));
+      const absoluteStart = (workspaceOptions.page - 1) * workspaceOptions.pageSize;
+      const chunkStart = Math.floor(absoluteStart / TICKET_OWNER_CHUNK_SIZE) * TICKET_OWNER_CHUNK_SIZE;
+      const offsetWithinChunk = absoluteStart - chunkStart;
+      const { docs: teamTicketDocs, total: teamTicketTotal } = await queryTeamTicketChunk(
+        employeeId,
+        role,
+        data.users,
+        ticketWorkspaceListProjection,
+        {
+          skip: chunkStart,
+          limit: TICKET_OWNER_CHUNK_SIZE
+        }
+      );
+      const categories = [...new Set([
+        'Google Sheet', 'Digital Marketing', 'Recruitment', 'Graphic Design', 'Development',
+        ...teamTicketDocs.map((ticket) => first(ticket, ['Task Category', 'Category']))
+      ].filter(Boolean))];
+      const clientMap = new Map(data.clients.map((client) => {
+        const id = first(client, ['Client_Id', 'Client ID', 'CustomerID', 'clientId']);
+        return [safe(id).toLowerCase(), client];
+      }));
+      teamTicketDocs.forEach((ticket) => {
+        const id = first(ticket, ['Client_Id', 'Client ID', 'CustomerID', 'clientId']);
+        if (!safe(id) || clientMap.has(safe(id).toLowerCase())) return;
+        const name = first(ticket, ['Name', 'Client Name', 'Client', 'clientName'], id);
+        clientMap.set(safe(id).toLowerCase(), { 'Client_Id': id, 'Client ID': id, 'Client Name': name, Services: '' });
+      });
+      const clients = [...clientMap.values()];
+      const ownerFor = (ticket) => data.users.find((user) => eq(userId(user), first(ticket, ['Employee ID', 'EmpID', 'employeeId'])));
+      const approvalFor = (ticket) => {
+        const owner = ownerFor(ticket);
+        const reassignedTo = first(ticket, ['Reassigned To', 'reassignedTo']);
+        const approver = reassignedTo || first(owner, ['Task Approver', 'Manager ID', 'Manager']);
+        return safe(approver).split(',')[0].trim();
+      };
+      const visibleTickets = teamTicketDocs.map((ticket) => {
+        const row = asTicketRow(ticket, clients, data.users);
+        const isPending = eq(row.Status, 'Pending Approval');
+        const isOwner = eq(row['Employee ID'], employeeId);
+        const designated = eq(approvalFor(ticket), employeeId);
+        const owner = ownerFor(ticket);
+        const ownerDepartment = safe(first(owner, ['Department', 'department'])).toLowerCase();
+        const superAdminAction = normalizedRole === 'super admin' && !isOwner;
+        const hrAction = normalizedRole === 'hr' && (ownerDepartment === 'hr' || ownerDepartment.includes('human resource'));
+        const actionable = isPending && !isOwner && (superAdminAction || designated || hrAction);
+        return compactTicketRow({
+          ...row,
+          _canApprove: actionable,
+          _isActionableByMe: actionable,
+          _canTransferApproval: actionable,
+          _canSeeTeam: true
+        });
+      });
+      const filteredRows = sortWorkspaceTickets(visibleTickets);
+      const pagedRows = filteredRows.slice(offsetWithinChunk, offsetWithinChunk + workspaceOptions.pageSize);
+      const totalPages = Math.max(1, Math.ceil(teamTicketTotal / workspaceOptions.pageSize));
+      const payload = ok({
+        clients,
+        users: assignableUsers,
+        allUsers: activeUsers,
+        employees: assignableUsers,
+        tickets: pagedRows,
+        buddyTickets: [],
+        teamTickets: [],
+        clientOriginTickets: [],
+        canViewTeamTickets: true,
+        canViewClientTickets: true,
+        categories,
+        counts: {
+          my: 0,
+          team: teamTicketTotal,
+          client: 0,
+          buddy: 0
+        },
+        pagination: {
+          page: workspaceOptions.page,
+          pageSize: workspaceOptions.pageSize,
+          total: teamTicketTotal,
+          totalPages,
+          start: teamTicketTotal ? absoluteStart + 1 : 0,
+          end: teamTicketTotal ? Math.min(absoluteStart + pagedRows.length, teamTicketTotal) : 0,
+          viewMode: workspaceOptions.viewMode
+        },
+        dropdowns: {
+          clients,
+          categories,
+          users: assignableUsers,
+          allUsers: activeUsers
+        }
+      });
+      writeTicketScopeCache(cacheKey, payload);
+      return payload;
+    }
+    const data = await getTicketSupportData();
+    const activeUsers = data.users.filter((user) => eq(first(user, ['Status', 'status'], 'Active'), 'Active'));
+    const allowedAssigneeIds = assignableIdsFor(employeeId, role, activeUsers);
+    const assignableUsers = activeUsers.filter((user) => allowedAssigneeIds.includes(userId(user).toLowerCase()));
     const visibleTicketQuery = buildVisibleTicketQuery(employeeId, role, data.users);
-    const visibleTicketDocs = await queryLegacyRows('Ticket', visibleTicketQuery, ticketWorkspaceProjection);
+    const visibleTicketDocs = await queryLegacyRows('Ticket', visibleTicketQuery, ticketWorkspaceListProjection);
     const tickets = visibleTicketDocs.filter((ticket) => canSeeTicket(ticket, employeeId, role, data.users));
     const allTicketsForClientOrigin = elevated
       ? (
         Object.keys(visibleTicketQuery).length === 0
           ? visibleTicketDocs
-          : await queryLegacyRows('Ticket', {}, ticketWorkspaceProjection)
+          : await queryLegacyRows('Ticket', {}, ticketWorkspaceListProjection)
       )
       : tickets;
   const categories = [...new Set([
@@ -1027,7 +1502,7 @@ export async function getTicketSystemData(employeeId, role, options = {}) {
     .map((u) => userId(u))
     .filter(Boolean);
   const buddyTicketDocs = buddyCandidateIds.length
-    ? await queryLegacyRows('Ticket', employeeIdQuery(buddyCandidateIds), ticketWorkspaceProjection)
+    ? await queryLegacyRows('Ticket', employeeIdQuery(buddyCandidateIds), ticketWorkspaceListProjection)
     : [];
   const buddyTickets = [];
   data.users.forEach(u => {
@@ -1119,6 +1594,18 @@ export async function getTicketSystemData(employeeId, role, options = {}) {
   } finally {
     ticketWorkspaceInflight.delete(cacheKey);
   }
+}
+
+export async function getTicketDetails(ticketId, employeeId, role) {
+  const [supportData, detailRow] = await Promise.all([
+    getTicketSupportData(),
+    findLegacyRow('Ticket', ticketIdQuery(ticketId), ticketWorkspaceDetailProjection)
+  ]);
+  if (!detailRow) return fail('Ticket not found.');
+  if (!canSeeTicket(detailRow, employeeId, role, supportData.users)) return fail('Access denied for this ticket.');
+  return ok({
+    item: compactTicketRow(asTicketRow(detailRow, supportData.clients, supportData.users))
+  });
 }
 
 function approvalDecision(data, ticket, actorId) {
@@ -1449,21 +1936,37 @@ export async function processClientResponse(ticketId, clientResponse, newPlanDat
 }
 
 export async function getTaskMessages(taskId, employeeId, role) {
-  const scope = await getTicketScope(taskId, employeeId, role);
+  const scope = await getTicketMessageScope(taskId, employeeId, role);
   if (scope.error) return scope.error;
-  const messages = (await listRows('Message'))
-    .filter((message) => eq(message.TaskID, taskId))
-    .sort((left, right) => (Date.parse(left.Timestamp) || 0) - (Date.parse(right.Timestamp) || 0));
+  const messages = await findRowsByFilter(
+    'Message',
+    { 'data.TaskID': taskId },
+    {
+      projection: { data: 1, legacyId: 1 },
+      sort: { 'data.Timestamp': 1, createdAt: 1 }
+    }
+  );
   return ok({ data: messages, messages });
 }
 
 export async function postTaskMessage(taskId, messageText, employeeId, role) {
-  const scope = await getTicketScope(taskId, employeeId, role);
+  const scope = await getTicketMessageScope(taskId, employeeId, role);
   if (scope.error) return scope.error;
   const gate = await requireAttendanceActive(employeeId);
   if (gate) return gate;
-  const users = await listRows('User');
-  const user = users.find((item) => eq(item['Employee ID'], employeeId));
+  const user = await findOneRowByFilter(
+    'User',
+    userIdentityQuery(employeeId),
+    {
+      projection: {
+        legacyId: 1,
+        'data.Employee ID': 1,
+        'data.Employee Name': 1,
+        'data.Name': 1,
+        'data.Full Name': 1
+      }
+    }
+  );
   const row = {
     MessageID: `MSG_${Date.now()}`,
     TaskID: taskId,
@@ -1483,7 +1986,7 @@ export async function postTaskMessage(taskId, messageText, employeeId, role) {
 
 export async function markTicketMessagesAsRead(taskId, clientId = '', employeeId = '', role = '') {
   if (employeeId) {
-    const scope = await getTicketScope(taskId, employeeId, role);
+    const scope = await getTicketMessageScope(taskId, employeeId, role);
     if (scope.error) return scope.error;
   }
   const row = await upsertRow('Ticket', 'Ticket ID', taskId, {
@@ -1499,7 +2002,7 @@ export function primeTicketWorkspaceCaches(employeeId, role) {
     getTicketSystemData(employeeId, role, {
       viewMode: 'my',
       page: 1,
-      pageSize: 20,
+      pageSize: 10,
       filters: {
         clientIds: [],
         statuses: [],
@@ -1514,7 +2017,7 @@ export function primeTicketWorkspaceCaches(employeeId, role) {
       getTicketSystemData(employeeId, role, {
         viewMode: 'team',
         page: 1,
-        pageSize: 20,
+        pageSize: 10,
         filters: {
           clientIds: [],
           statuses: [],

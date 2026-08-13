@@ -17,6 +17,7 @@ export function ManagementDashboardReportTab() {
     activeTab,
     setActiveTab,
     kpis,
+    charts,
     users,
     clients,
     tickets,
@@ -58,6 +59,7 @@ export function ManagementDashboardReportTab() {
       {activeTab === 'overview' ? (
         <OverviewDashboardSection
           kpis={kpis}
+          charts={charts}
           tickets={tickets}
           fms={fms}
           todo={todo}

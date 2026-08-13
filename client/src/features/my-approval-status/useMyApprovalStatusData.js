@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { fetchMyApprovalStatus } from '@/features/my-approval-status/api';
 
-const DEFAULT_TAB = 'tickets';
+const DEFAULT_TAB = 'leaves';
 const PAGE_SIZE = 20;
 const DEFAULT_FILTERS = Object.freeze({
   status: '',
@@ -21,7 +21,7 @@ function emptyFilters() {
 }
 
 function firstAvailableTab(counts = {}) {
-  return ['tickets', 'leaves', 'intimations', 'attendance'].find((key) => Number(counts[key] || 0) > 0) || DEFAULT_TAB;
+  return DEFAULT_TAB;
 }
 
 function normalizeSummary(payload = {}) {
@@ -66,7 +66,7 @@ export function useMyApprovalStatusData() {
       const nextCounts = normalizeCounts(result.data?.counts || {});
       setSummary(nextSummary);
       setCounts(nextCounts);
-      setActiveTab((current) => ((nextCounts[current] || 0) > 0 ? current : firstAvailableTab(nextCounts)));
+      setActiveTab((current) => (current ? current : firstAvailableTab(nextCounts)));
     } catch (err) {
       setError(err.message || 'Failed to load approval status history.');
     } finally {

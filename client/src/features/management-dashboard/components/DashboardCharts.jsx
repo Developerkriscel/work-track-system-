@@ -46,29 +46,42 @@ const CustomTooltip = ({ active, payload }) => {
   return null;
 };
 
-export function DashboardCharts({ tickets = [], fms = [], todo = [] }) {
+export function DashboardCharts({ tickets = [], fms = [], todo = [], charts = null }) {
   // Aggregate Tickets by Status
   const ticketData = useMemo(() => {
+    if (Array.isArray(charts?.ticketData)) {
+      return charts.ticketData.map((entry) => ({
+        ...entry,
+        fill: entry.fill || getStatusColor(entry.name)
+      }));
+    }
     const counts = {};
     tickets.forEach(t => {
       const status = t.Status || 'Unknown';
       counts[status] = (counts[status] || 0) + 1;
     });
     return Object.entries(counts).map(([name, value]) => ({ name, value, fill: getStatusColor(name) }));
-  }, [tickets]);
+  }, [charts?.ticketData, tickets]);
 
   // Aggregate FMS by Status
   const fmsData = useMemo(() => {
+    if (Array.isArray(charts?.fmsData)) {
+      return charts.fmsData.map((entry) => ({
+        ...entry,
+        fill: entry.fill || getStatusColor(entry.name)
+      }));
+    }
     const counts = {};
     fms.forEach(f => {
       const status = f.Status || 'Unknown';
       counts[status] = (counts[status] || 0) + 1;
     });
     return Object.entries(counts).map(([name, value]) => ({ name, value, fill: getStatusColor(name) }));
-  }, [fms]);
+  }, [charts?.fmsData, fms]);
 
   // Aggregate Workload by User (combining tickets and fms for active users)
   const userWorkload = useMemo(() => {
+    if (Array.isArray(charts?.userWorkload)) return charts.userWorkload;
     const counts = {};
     const process = (items) => {
       items.forEach(item => {
@@ -89,7 +102,7 @@ export function DashboardCharts({ tickets = [], fms = [], todo = [] }) {
       .map(([name, activeTasks]) => ({ name, activeTasks }))
       .sort((a, b) => b.activeTasks - a.activeTasks)
       .slice(0, 8);
-  }, [tickets, fms, todo]);
+  }, [charts?.userWorkload, tickets, fms, todo]);
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', marginBottom: '32px' }}>

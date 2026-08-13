@@ -1,11 +1,13 @@
 import { httpClient } from '@/lib/api/httpClient';
 
-export async function fetchManagementDashboardData(startDate, endDate) {
+export async function fetchManagementDashboardData(startDate, endDate, scope = 'full', extra = {}) {
   return httpClient('/api/management-dashboard/data', {
     method: 'POST',
     body: JSON.stringify({
       startDate,
-      endDate
+      endDate,
+      scope,
+      ...extra
     })
   });
 }

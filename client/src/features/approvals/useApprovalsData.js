@@ -42,13 +42,13 @@ function safeArray(value) {
 }
 
 function firstAvailableTab(counts = {}) {
-  return ['tickets', 'leaves', 'intimations', 'attendance'].find((tab) => Number(counts[tab] || 0) > 0) || 'tickets';
+  return ['leaves', 'intimations', 'attendance', 'tickets'].find((tab) => Number(counts[tab] || 0) > 0) || 'leaves';
 }
 
 export function useApprovalsData() {
   const { user } = useAuth();
   const employeeId = user?.['Employee ID'] || '';
-  const [activeTab, setActiveTab] = useState('tickets');
+  const [activeTab, setActiveTab] = useState('leaves');
   const [filters, setFilters] = useState(() => emptyTabFilters());
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [rowsLoading, setRowsLoading] = useState(false);

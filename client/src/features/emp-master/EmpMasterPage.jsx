@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertDialog } from '@/components/modals/AlertDialog';
 import { RefreshCw } from '@/components/common/icons';
@@ -619,6 +619,8 @@ export function EmpMasterPage() {
   const [deletingId, setDeletingId] = useState('');
   const [confirmAction, setConfirmAction] = useState(null);
   const [alertMsg, setAlertMsg] = useState(null);
+  const categoryCacheRef = useRef(new Map());
+  const supportDataRef = useRef({ users: null, managers: null });
   const currentRole = useMemo(() => normalizeRole(user?.Role || user?.role), [user]);
 
   async function load(nextCategory = category) {
@@ -629,16 +631,30 @@ export function EmpMasterPage() {
         nextCategory === 'Documents' || nextCategory === 'Hierarchy'
           ? categories.map(([value]) => value).filter((value) => value !== 'Documents' && value !== 'Hierarchy')
           : [nextCategory];
-      const categoryPayloads = await Promise.all(requestedCategories.map((value) => fetchEmpMasterData(value)));
-      const [usersPayload, managersPayload] = await Promise.all([
-        fetchAllUsersForAdmin(user?.['Employee ID'] || user?.employeeId || ''),
-        fetchAllManagersList()
-      ]);
 
-      const payloadRows = categoryPayloads.flatMap((payload) => (Array.isArray(payload?.data) ? payload.data : []));
+      const uncachedCategories = requestedCategories.filter((value) => !categoryCacheRef.current.has(value));
+      if (uncachedCategories.length) {
+        const categoryPayloads = await Promise.all(uncachedCategories.map((value) => fetchEmpMasterData(value)));
+        uncachedCategories.forEach((value, index) => {
+          categoryCacheRef.current.set(value, Array.isArray(categoryPayloads[index]?.data) ? categoryPayloads[index].data : []);
+        });
+      }
+
+      if (!supportDataRef.current.users || !supportDataRef.current.managers) {
+        const [usersPayload, managersPayload] = await Promise.all([
+          fetchAllUsersForAdmin(user?.['Employee ID'] || user?.employeeId || ''),
+          fetchAllManagersList()
+        ]);
+        supportDataRef.current = {
+          users: Array.isArray(usersPayload?.data) ? usersPayload.data : [],
+          managers: Array.isArray(managersPayload) ? managersPayload : []
+        };
+      }
+
+      const payloadRows = requestedCategories.flatMap((value) => categoryCacheRef.current.get(value) || []);
       setRows(nextCategory === 'Documents' || nextCategory === 'Hierarchy' ? dedupeRowsByIdentity(payloadRows) : payloadRows);
-      setAllUsers(Array.isArray(usersPayload?.data) ? usersPayload.data : []);
-      setManagerOptions(Array.isArray(managersPayload) ? managersPayload : []);
+      setAllUsers(supportDataRef.current.users || []);
+      setManagerOptions(supportDataRef.current.managers || []);
     } catch (reason) {
       setRows([]);
       setAllUsers([]);
@@ -723,6 +739,8 @@ export function EmpMasterPage() {
   function saved(text) {
     setEditor(null);
     setMessage(text);
+    categoryCacheRef.current.clear();
+    supportDataRef.current = { users: null, managers: null };
     load(category);
   }
 

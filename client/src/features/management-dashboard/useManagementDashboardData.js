@@ -28,31 +28,38 @@ export function useManagementDashboardData() {
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [selectedClientId, setSelectedClientId] = useState('');
-  const [state, setState] = useState({
+  const [overviewState, setOverviewState] = useState({
     loading: true,
     error: null,
     payload: null
   });
+  const [explorerState, setExplorerState] = useState({
+    loading: false,
+    error: null,
+    payload: null,
+    key: ''
+  });
   const refreshRef = useRef(0);
 
   const bounds = useMemo(() => managementRangeBounds(range), [range]);
+  const rangeKey = `${bounds.startDate || ''}:${bounds.endDate || ''}`;
 
   useEffect(() => {
     let alive = true;
 
     async function load() {
-      setState((current) => ({ ...current, loading: true, error: null }));
+      setOverviewState((current) => ({ ...current, loading: true, error: null }));
       try {
-        const payload = await fetchManagementDashboardData(bounds.startDate, bounds.endDate);
+        const payload = await fetchManagementDashboardData(bounds.startDate, bounds.endDate, 'overview');
         if (!alive) return;
-        setState({
+        setOverviewState({
           loading: false,
           error: null,
           payload
         });
       } catch (error) {
         if (!alive) return;
-        setState({
+        setOverviewState({
           loading: false,
           error: error.message || 'Failed to load management dashboard.',
           payload: null
@@ -66,14 +73,70 @@ export function useManagementDashboardData() {
     };
   }, [bounds.startDate, bounds.endDate, refreshRef.current]);
 
-  const data = state.payload?.data || {};
-  const users = Array.isArray(data.users) ? data.users : [];
-  const clients = Array.isArray(data.clients) ? data.clients : [];
-  const tickets = Array.isArray(data.tickets) ? data.tickets : [];
-  const fms = Array.isArray(data.fms) ? data.fms : [];
-  const todo = Array.isArray(data.todo) ? data.todo : [];
-  const attendance = Array.isArray(data.attendance) ? data.attendance : [];
-  const invoices = Array.isArray(data.invoices) ? data.invoices : [];
+  const needsUserExplorer = activeTab === 'user-explorer' && Boolean(selectedUserId);
+  const needsClientExplorer = activeTab === 'client-explorer' && Boolean(selectedClientId);
+
+  useEffect(() => {
+    const explorerKey = needsUserExplorer
+      ? `user:${selectedUserId}:${rangeKey}`
+      : needsClientExplorer
+        ? `client:${selectedClientId}:${rangeKey}`
+        : '';
+
+    if (!explorerKey) return undefined;
+    if (explorerState.key === explorerKey && explorerState.payload && !explorerState.error) {
+      return undefined;
+    }
+
+    let alive = true;
+
+    async function loadExplorer() {
+      setExplorerState((current) => ({
+        ...current,
+        loading: true,
+        error: null
+      }));
+
+      try {
+        const payload = needsUserExplorer
+          ? await fetchManagementDashboardData(bounds.startDate, bounds.endDate, 'user-explorer', { selectedUserId })
+          : await fetchManagementDashboardData(bounds.startDate, bounds.endDate, 'client-explorer', { selectedClientId });
+        if (!alive) return;
+        setExplorerState({
+          loading: false,
+          error: null,
+          payload,
+          key: explorerKey
+        });
+      } catch (error) {
+        if (!alive) return;
+        setExplorerState({
+          loading: false,
+          error: error.message || 'Failed to load management explorer data.',
+          payload: null,
+          key: explorerKey
+        });
+      }
+    }
+
+    loadExplorer();
+    return () => {
+      alive = false;
+    };
+  }, [needsUserExplorer, needsClientExplorer, selectedUserId, selectedClientId, bounds.startDate, bounds.endDate, rangeKey, explorerState.key, explorerState.payload, explorerState.error]);
+
+  const overviewData = overviewState.payload?.data || {};
+  const explorerData = explorerState.payload?.data || {};
+  const sourceData = (needsUserExplorer || needsClientExplorer) && explorerState.payload ? explorerData : overviewData;
+
+  const users = Array.isArray(sourceData.users) ? sourceData.users : [];
+  const clients = Array.isArray(sourceData.clients) ? sourceData.clients : [];
+  const tickets = Array.isArray(sourceData.tickets) ? sourceData.tickets : [];
+  const fms = Array.isArray(sourceData.fms) ? sourceData.fms : [];
+  const todo = Array.isArray(sourceData.todo) ? sourceData.todo : [];
+  const attendance = Array.isArray(sourceData.attendance) ? sourceData.attendance : [];
+  const invoices = Array.isArray(sourceData.invoices) ? sourceData.invoices : [];
+  const charts = overviewData.charts || sourceData.charts || {};
 
   useEffect(() => {
     if (!selectedUserId && users.length) {
@@ -137,19 +200,33 @@ export function useManagementDashboardData() {
 
   function refresh() {
     refreshRef.current += 1;
-    setState((current) => ({ ...current }));
+    setOverviewState((current) => ({ ...current }));
+    setExplorerState({
+      loading: false,
+      error: null,
+      payload: null,
+      key: ''
+    });
   }
+
+  const loading = (needsUserExplorer || needsClientExplorer) ? (overviewState.loading || explorerState.loading) : overviewState.loading;
+  const error = explorerState.error || overviewState.error;
 
   return {
     currentUser: user || null,
-    loading: state.loading,
-    error: state.error, clearError: () => setState((current) => ({ ...current, error: null })),
+    loading,
+    error,
+    clearError: () => {
+      setOverviewState((current) => ({ ...current, error: null }));
+      setExplorerState((current) => ({ ...current, error: null }));
+    },
     range,
     setRange,
     rangeOptions: managementRangeOptions,
     activeTab,
     setActiveTab,
-    kpis: data.kpis || {},
+    kpis: sourceData.kpis || overviewData.kpis || {},
+    charts,
     users,
     clients,
     tickets,

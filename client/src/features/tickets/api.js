@@ -10,6 +10,13 @@ export async function fetchTicketSystemData(employeeId, options = {}) {
   });
 }
 
+export async function fetchTicketDetails(ticketId) {
+  return httpClient('/api/tickets/details', {
+    method: 'POST',
+    body: JSON.stringify({ ticketId })
+  });
+}
+
 export async function createTicket(ticketPayload) {
   return httpClient('/api/tickets/create', {
     method: 'POST',

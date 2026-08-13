@@ -1,6 +1,17 @@
 import { saveBase64File } from './fileStorage.service.js';
-import { getLegacyId, insertRow, listRows, sheetAttendance, stripInternalMetadata, upsertRow } from './legacyStore.service.js';
+import {
+  findOneRowByFilter,
+  findRowsByFilter,
+  getLegacyId,
+  insertRow,
+  listRows,
+  registerStoreMutationListener,
+  sheetAttendance,
+  stripInternalMetadata,
+  upsertRow
+} from './legacyStore.service.js';
 import { LegacyModels } from '../models/legacyModels.js';
+import { buildRedisKey, deleteByPrefix, getJson, setJson } from './redisCache.service.js';
 
 const safe = (value) => String(value ?? '').trim();
 const eq = (left, right) => safe(left).toLowerCase() === safe(right).toLowerCase();
@@ -9,9 +20,64 @@ const num = (value) => Number(String(value ?? 0).replace(/[^0-9.-]/g, '')) || 0;
 const ok = (payload = {}) => ({ success: true, ...payload });
 const fail = (message) => ({ success: false, message });
 const ATTENDANCE_POLICY_ID = 'ATTENDANCE_LOCATION_POLICY';
+const ATTENDANCE_CACHE_TTL_MS = Number(process.env.WORKTRACK_ATTENDANCE_CACHE_TTL_MS || 30_000);
+const attendanceCache = new Map();
+const attendanceInflight = new Map();
 
 function identityKey(value = '') {
   return safe(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function attendanceCacheKey(scope, ...parts) {
+  return buildRedisKey('attendance', scope, ...parts.map((part) => String(part ?? '').trim()));
+}
+
+function readAttendanceMemoryCache(key) {
+  const cached = attendanceCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.at > ATTENDANCE_CACHE_TTL_MS) {
+    attendanceCache.delete(key);
+    return null;
+  }
+  return cached.value;
+}
+
+function writeAttendanceMemoryCache(key, value) {
+  attendanceCache.set(key, { at: Date.now(), value });
+}
+
+async function withAttendanceCache(key, loader) {
+  const memory = readAttendanceMemoryCache(key);
+  if (memory) return memory;
+
+  const redis = await getJson(key);
+  if (redis) {
+    writeAttendanceMemoryCache(key, redis);
+    return redis;
+  }
+
+  const inflight = attendanceInflight.get(key);
+  if (inflight) return inflight;
+
+  const promise = (async () => {
+    const value = await loader();
+    writeAttendanceMemoryCache(key, value);
+    await setJson(key, value, ATTENDANCE_CACHE_TTL_MS);
+    return value;
+  })();
+
+  attendanceInflight.set(key, promise);
+  try {
+    return await promise;
+  } finally {
+    attendanceInflight.delete(key);
+  }
+}
+
+async function clearAttendanceCaches() {
+  attendanceCache.clear();
+  attendanceInflight.clear();
+  await deleteByPrefix(buildRedisKey('attendance'));
 }
 
 function parseReferenceNow(value) {
@@ -191,8 +257,21 @@ function locationPolicyRecord(policy = {}) {
 }
 
 async function getAttendanceLocationPolicy() {
-  const rows = await listRows('AttendancePolicy');
-  const row = [...rows].reverse().find((item) => eq(first(item, ['PolicyID', 'ID', 'policyId', 'AttendancePolicyID']), ATTENDANCE_POLICY_ID)) || rows[rows.length - 1];
+  const row = await findOneRowByFilter(
+    'AttendancePolicy',
+    {
+      $or: [
+        { 'data.PolicyID': ATTENDANCE_POLICY_ID },
+        { 'data.ID': ATTENDANCE_POLICY_ID },
+        { 'data.policyId': ATTENDANCE_POLICY_ID },
+        { 'data.AttendancePolicyID': ATTENDANCE_POLICY_ID }
+      ]
+    },
+    {
+      projection: { data: 1, legacyId: 1 },
+      sort: { updatedAt: -1, createdAt: -1 }
+    }
+  );
   if (!row) {
     return normalizeLocationPolicy(locationPolicyRecord({
       PolicyID: ATTENDANCE_POLICY_ID,
@@ -232,15 +311,37 @@ function haversineDistanceMeters(leftLat, leftLng, rightLat, rightLng) {
 }
 
 async function isWFHApprovedForDate(employeeId, dateValue) {
-  const intimationRows = await listRows('Intimation');
   const date = normalizedDate(dateValue || today());
-  return intimationRows.some((row) => {
-    const rowEmployeeId = safe(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID'])).toUpperCase();
-    if (!eq(rowEmployeeId, employeeId)) return false;
-    const rowDate = normalizedDate(first(row, ['Intimation Date', 'Date', 'date']));
-    if (rowDate !== date) return false;
-    return isWorkFromHomeIntimation(row) && isApprovedStatus(first(row, ['Status', 'status']));
-  });
+  const intimationRows = await findIntimationRows(
+    {
+      $and: [
+        employeeIdQuery(employeeId),
+        {
+          $or: [
+            { 'data.Intimation Date': date },
+            { 'data.Date': date },
+            { 'data.date': date }
+          ]
+        }
+      ]
+    },
+    {
+      legacyId: 1,
+      'data.Employee ID': 1,
+      'data.User ID': 1,
+      'data.employeeId': 1,
+      'data.EmpID': 1,
+      'data.Intimation Date': 1,
+      'data.Date': 1,
+      'data.date': 1,
+      'data.Intimation Type': 1,
+      'data.type': 1,
+      'data.Reason': 1,
+      'data.Status': 1,
+      'data.status': 1
+    }
+  );
+  return intimationRows.some((row) => isWorkFromHomeIntimation(row) && isApprovedStatus(first(row, ['Status', 'status'])));
 }
 
 async function canPunchAtLocation(employeeId, latitude, longitude, dateValue = today()) {
@@ -610,6 +711,55 @@ async function findIntimationRows(query = {}, projection = { data: 1, legacyId: 
   return fromLegacyDocs(docs);
 }
 
+function teamAttendanceUserProjection() {
+  return {
+    legacyId: 1,
+    'data.Employee ID': 1,
+    'data.employeeId': 1,
+    'data.User ID': 1,
+    'data.EmpID': 1,
+    'data.Employee Name': 1,
+    'data.Name': 1,
+    'data.Role': 1,
+    'data.role': 1,
+    'data.Status': 1,
+    'data.status': 1,
+    'data.Department': 1,
+    'data.department': 1,
+    'data.Manager ID': 1,
+    'data.Manager': 1,
+    'data.managerId': 1,
+    'data.Reporting Manager': 1,
+    'data.Task Approver': 1,
+    'data.Approver ID': 1,
+    'data.taskApprover': 1,
+    'data.Date of Joining': 1,
+    'data.Joining Date': 1,
+    'data.Date Of Joining': 1
+  };
+}
+
+async function loadTeamAttendanceUsers(reviewerId = '', targetEmployeeId = '') {
+  const identityClauses = [employeeIdQuery(reviewerId)];
+  if (safe(targetEmployeeId)) identityClauses.push(employeeIdQuery(targetEmployeeId));
+  return findUserRows(
+    {
+      $or: [
+        {
+          $or: [
+            { 'data.Status': 'Active' },
+            { 'data.status': 'Active' },
+            { 'data.Status': { $exists: false } },
+            { 'data.status': { $exists: false } }
+          ]
+        },
+        ...identityClauses
+      ]
+    },
+    teamAttendanceUserProjection()
+  );
+}
+
 function employeeIdQuery(value = '') {
   const employeeId = safe(value).toUpperCase();
   return {
@@ -645,6 +795,18 @@ function userDateRangeQuery(startDate, endDate, keys = ['data.Date', 'data.date'
         $lte: end
       }
     }))
+  };
+}
+
+function attendanceDayQuery(date = today()) {
+  const normalized = normalizedDate(date);
+  return {
+    $or: [
+      { 'data.Date': normalized },
+      { 'data.Date': { $regex: `^${normalized}` } },
+      { 'data.date': normalized },
+      { 'data.date': { $regex: `^${normalized}` } }
+    ]
   };
 }
 
@@ -704,7 +866,34 @@ export async function recordAttendance(attendanceData = {}) {
     return fail(locationCheck.message || 'Aap allowed location ke bahar hain.');
   }
 
-  const existingAttendance = await listRows('Attendance');
+  const existingAttendance = await findAttendanceRows(
+    {
+      $and: [
+        employeeIdQuery(employeeId),
+        attendanceDayQuery(today())
+      ]
+    },
+    {
+      legacyId: 1,
+      'data.AttendanceID': 1,
+      'data.ID': 1,
+      'data.attendanceId': 1,
+      'data.Employee ID': 1,
+      'data.User ID': 1,
+      'data.employeeId': 1,
+      'data.EmpID': 1,
+      'data.Employee Name': 1,
+      'data.Name': 1,
+      'data.Date': 1,
+      'data.date': 1,
+      'data.Action': 1,
+      'data.Time': 1,
+      'data.Punch In': 1,
+      'data.Punch Out': 1,
+      'data.Status': 1,
+      'data.Duration': 1
+    }
+  );
   const latest = latestAttendanceEvent(existingAttendance, employeeId, today());
   if (action === 'Punch In' && latest?.Action === 'Punch In') {
     return { success: false, message: 'Aap aaj pehle hi Punch In kar chuke hain.' };
@@ -727,8 +916,20 @@ export async function recordAttendance(attendanceData = {}) {
 
   let finalStatus = 'Need Approval';
   if (action === 'Punch In') {
-    const allEmployees = await listRows('EmpMaster');
-    const employee = allEmployees.find(e => eq(first(e, ['Employee ID', 'User ID', 'employeeId', 'EmpID', 'legacyId']), employeeId));
+    const employee = await findOneRowByFilter(
+      'EmpMaster',
+      employeeIdQuery(employeeId),
+      {
+        projection: {
+          legacyId: 1,
+          'data.Employee ID': 1,
+          'data.User ID': 1,
+          'data.employeeId': 1,
+          'data.EmpID': 1,
+          'data.In Timing': 1
+        }
+      }
+    );
     const inTimingStr = employee?.['In Timing'];
     if (inTimingStr) {
       const [inHour, inMin] = inTimingStr.split(':').map(Number);
@@ -798,7 +999,8 @@ export async function recordAttendance(attendanceData = {}) {
 }
 
 export async function getAttendanceLocationPolicyForUser() {
-  return ok({ data: await getAttendanceLocationPolicy() });
+  const key = attendanceCacheKey('location-policy');
+  return withAttendanceCache(key, async () => ok({ data: await getAttendanceLocationPolicy() }));
 }
 
 export async function updateAttendanceLocationPolicy(editorId, editorRole, policy = {}) {
@@ -814,6 +1016,8 @@ export async function updateAttendanceLocationPolicy(editorId, editorRole, polic
 }
 
 export async function getAttendanceForUser(employeeId, startDate, endDate) {
+  const cacheKey = attendanceCacheKey('self', safe(employeeId).toUpperCase(), normalizedDate(startDate || today()), normalizedDate(endDate || startDate || today()));
+  return withAttendanceCache(cacheKey, async () => {
   const targetEmployeeId = safe(employeeId).toUpperCase();
   const [users, attendance, leaves, intimations] = await Promise.all([
     findUserRows(employeeIdQuery(targetEmployeeId), {
@@ -862,33 +1066,36 @@ export async function getAttendanceForUser(employeeId, startDate, endDate) {
   const joiningDateStr = user ? first(user, ['Date of Joining', 'Joining Date', 'Date Of Joining']) : '';
   const joiningDate = joiningDateStr ? normalizedDate(joiningDateStr) : '';
 
-  return ok({
-    data: attendance
-      .filter((row) => {
-          const rowDate = normalizedDate(first(row, ['Date', 'date']));
+    return ok({
+      data: attendance
+        .filter((row) => {
+            const rowDate = normalizedDate(first(row, ['Date', 'date']));
+            return eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), targetEmployeeId) && 
+                   dateInRange(rowDate, startDate, endDate) &&
+                   (!joiningDate || rowDate >= joiningDate);
+        })
+        .map((row) => attendanceRowsForApp(row))
+        .flat(),
+      leaves: leaves.filter((row) => {
+          const rowDate = normalizedDate(first(row, ['Start Date', 'Start Date']));
+          return eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), targetEmployeeId) && 
+                 dateInRange(rowDate, startDate, endDate) &&
+                 (!joiningDate || rowDate >= joiningDate);
+      }),
+      intimations: intimations.filter((row) => {
+          const rowDate = normalizedDate(first(row, ['Intimation Date', 'Intimation Date']));
           return eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), targetEmployeeId) && 
                  dateInRange(rowDate, startDate, endDate) &&
                  (!joiningDate || rowDate >= joiningDate);
       })
-      .map((row) => attendanceRowsForApp(row))
-      .flat(),
-    leaves: leaves.filter((row) => {
-        const rowDate = normalizedDate(first(row, ['Start Date', 'Start Date']));
-        return eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), targetEmployeeId) && 
-               dateInRange(rowDate, startDate, endDate) &&
-               (!joiningDate || rowDate >= joiningDate);
-    }),
-    intimations: intimations.filter((row) => {
-        const rowDate = normalizedDate(first(row, ['Intimation Date', 'Intimation Date']));
-        return eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), targetEmployeeId) && 
-               dateInRange(rowDate, startDate, endDate) &&
-               (!joiningDate || rowDate >= joiningDate);
-    })
+    });
   });
 }
 
 export async function getTeamAttendanceForReviewer(reviewerId, startDate, endDate) {
-  const users = await listRows('User');
+  const cacheKey = attendanceCacheKey('team-list', safe(reviewerId).toUpperCase(), normalizedDate(startDate || today()), normalizedDate(endDate || startDate || today()));
+  return withAttendanceCache(cacheKey, async () => {
+  const users = await loadTeamAttendanceUsers(reviewerId);
   const reviewer = requireTeamAttendanceReviewer(reviewerId, users);
   if (!reviewer) return fail('Only Admin, Super Admin, or HR can view team attendance.');
 
@@ -902,25 +1109,28 @@ export async function getTeamAttendanceForReviewer(reviewerId, startDate, endDat
       })
     : [];
   const rows = buildTeamAttendanceGroups(attendance, users, visibleIds, startDate, endDate);
-  return ok({
-    data: rows,
-    users: users
-      .filter((user) => visibleIds.has(safe(userId(user)).toUpperCase()))
-      .map((user) => ({
-        id: userId(user),
-        name: first(user, ['Employee Name', 'Name'], userId(user)),
-        role: first(user, ['Role', 'role'], ''),
-        department: first(user, ['Department', 'department'], '')
-      }))
-      .sort((left, right) => left.name.localeCompare(right.name))
+    return ok({
+      data: rows,
+      users: users
+        .filter((user) => visibleIds.has(safe(userId(user)).toUpperCase()))
+        .map((user) => ({
+          id: userId(user),
+          name: first(user, ['Employee Name', 'Name'], userId(user)),
+          role: first(user, ['Role', 'role'], ''),
+          department: first(user, ['Department', 'department'], '')
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name))
+    });
   });
 }
 
 export async function getTeamAttendanceCalendarForReviewer(reviewerId, employeeId, startDate, endDate) {
+  const cacheKey = attendanceCacheKey('team-calendar', safe(reviewerId).toUpperCase(), safe(employeeId).toUpperCase(), normalizedDate(startDate || today()), normalizedDate(endDate || startDate || today()));
+  return withAttendanceCache(cacheKey, async () => {
   const targetEmployeeId = safe(employeeId).toUpperCase();
   if (!targetEmployeeId) return fail('Employee ID is required.');
 
-  const users = await listRows('User');
+  const users = await loadTeamAttendanceUsers(reviewerId, targetEmployeeId);
   const reviewer = requireTeamAttendanceReviewer(reviewerId, users);
   if (!reviewer) return fail('Only Admin, Super Admin, or HR can view team attendance.');
 
@@ -986,8 +1196,9 @@ export async function getTeamAttendanceCalendarForReviewer(reviewerId, employeeI
     }
   );
 
-  const rows = buildTeamAttendanceGroups(attendance, users, new Set([targetEmployeeId]), effectiveStart, normalizedEnd);
-  return ok({ data: rows });
+    const rows = buildTeamAttendanceGroups(attendance, users, new Set([targetEmployeeId]), effectiveStart, normalizedEnd);
+    return ok({ data: rows });
+  });
 }
 
 export async function updateTeamAttendanceEntry(reviewerId, payload = {}) {
@@ -999,8 +1210,56 @@ export async function updateTeamAttendanceEntry(reviewerId, payload = {}) {
   if (!nextPunchIn && !nextPunchOut) return fail('Provide punch in or punch out time to update.');
 
   const [users, attendance] = await Promise.all([
-    listRows('User'),
-    listRows('Attendance')
+    findUserRows({}, {
+      legacyId: 1,
+      'data.Employee ID': 1,
+      'data.employeeId': 1,
+      'data.User ID': 1,
+      'data.EmpID': 1,
+      'data.Employee Name': 1,
+      'data.Name': 1,
+      'data.Role': 1,
+      'data.role': 1,
+      'data.Status': 1,
+      'data.status': 1,
+      'data.Manager ID': 1,
+      'data.Manager': 1,
+      'data.managerId': 1,
+      'data.Reporting Manager': 1,
+      'data.Task Approver': 1,
+      'data.Approver ID': 1,
+      'data.taskApprover': 1
+    }),
+    findAttendanceRows(
+      {
+        $and: [
+          employeeIdQuery(employeeId),
+          attendanceDayQuery(date)
+        ]
+      },
+      {
+        legacyId: 1,
+        'data.AttendanceID': 1,
+        'data.ID': 1,
+        'data.attendanceId': 1,
+        'data.Employee ID': 1,
+        'data.employeeId': 1,
+        'data.EmpID': 1,
+        'data.Employee Name': 1,
+        'data.Name': 1,
+        'data.Date': 1,
+        'data.date': 1,
+        'data.Action': 1,
+        'data.Time': 1,
+        'data.Punch In': 1,
+        'data.Punch Out': 1,
+        'data.Duration': 1,
+        'data.Total Working Hours': 1,
+        'data.Status': 1,
+        'data.Admin Approval': 1,
+        'data.Admin Remarks': 1
+      }
+    )
   ]);
 
   const reviewer = requireTeamAttendanceReviewer(reviewerId, users);
@@ -1176,7 +1435,27 @@ export async function submitIntimation(intimationData = {}) {
 }
 
 export async function checkUserAttendanceActive(employeeId) {
-  const attendance = await listRows('Attendance');
+  const attendance = await findAttendanceRows(
+    {
+      $and: [
+        employeeIdQuery(employeeId),
+        attendanceDayQuery(today())
+      ]
+    },
+    {
+      legacyId: 1,
+      'data.Employee ID': 1,
+      'data.User ID': 1,
+      'data.employeeId': 1,
+      'data.EmpID': 1,
+      'data.Date': 1,
+      'data.date': 1,
+      'data.Action': 1,
+      'data.Time': 1,
+      'data.Punch In': 1,
+      'data.Punch Out': 1
+    }
+  );
   const latest = latestAttendanceEvent(attendance, employeeId, today());
   if (!latest) return ok({ active: false, status: 'Out' });
 
@@ -1195,3 +1474,8 @@ export async function enforceAttendanceGate(employeeId) {
       'Attendance Required: Aapne aaj ki Attendance (Punch In) mark nahi ki hai ya aap already Punch Out kar chuke hain. Kripya pehle Punch In karein!'
   };
 }
+
+registerStoreMutationListener((modelName = '') => {
+  if (!['Attendance', 'Leave', 'Intimation', 'User', 'AttendancePolicy'].includes(String(modelName || ''))) return;
+  void clearAttendanceCaches();
+});

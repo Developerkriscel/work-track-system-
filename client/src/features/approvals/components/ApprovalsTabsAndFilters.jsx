@@ -92,9 +92,6 @@ export function ApprovalsTabsAndFilters({
   return (
     <>
       <div className="approval-tabs">
-        <TabButton active={activeTab === 'tickets'} count={counts.tickets} onClick={() => onTabChange('tickets')}>
-          Pending Tickets
-        </TabButton>
         <TabButton active={activeTab === 'leaves'} count={counts.leaves} onClick={() => onTabChange('leaves')}>
           Leave Requests
         </TabButton>
@@ -103,6 +100,9 @@ export function ApprovalsTabsAndFilters({
         </TabButton>
         <TabButton active={activeTab === 'attendance'} count={counts.attendance} onClick={() => onTabChange('attendance')}>
           Attendance
+        </TabButton>
+        <TabButton active={activeTab === 'tickets'} count={counts.tickets} onClick={() => onTabChange('tickets')}>
+          Pending Tickets
         </TabButton>
       </div>
 

@@ -1,6 +1,7 @@
 import { saveBase64File } from './fileStorage.service.js';
-import { deleteRow, listRows, upsertRow } from './legacyStore.service.js';
+import { deleteRow, listRows, registerStoreMutationListener, upsertRow } from './legacyStore.service.js';
 import { saveOrUpdateUser } from './admin.service.js';
+import { buildRedisKey, deleteByPrefix, getJson, setJson } from './redisCache.service.js';
 
 const safe = (value = '') => String(value ?? '').trim();
 function first(row = {}, keys = [], fallback = '') {
@@ -24,9 +25,64 @@ const editableCategories = new Map([
   ['freelancer', 'Freelancer'],
   ['intern', 'Intern']
 ]);
+const EMP_MASTER_CACHE_TTL_MS = Number(process.env.WORKTRACK_EMP_MASTER_CACHE_TTL_MS || 60_000);
+const empMasterCache = new Map();
+const empMasterInflight = new Map();
 
 export const empCategories = ['Master', 'EMP', 'Freelancer', 'Intern'];
 export const empStatuses = ['Active', 'Pending', 'Inactive', 'Resigned', 'Terminated'];
+
+function cacheKey(category, adminRole = '') {
+  return buildRedisKey('emp-master', safe(category || 'Master').toLowerCase(), safe(adminRole || 'none').toLowerCase());
+}
+
+function readMemoryCache(key) {
+  const cached = empMasterCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.at > EMP_MASTER_CACHE_TTL_MS) {
+    empMasterCache.delete(key);
+    return null;
+  }
+  return cached.value;
+}
+
+function writeMemoryCache(key, value) {
+  empMasterCache.set(key, { at: Date.now(), value });
+}
+
+async function withEmpMasterCache(key, loader) {
+  const memory = readMemoryCache(key);
+  if (memory) return memory;
+
+  const redis = await getJson(key);
+  if (redis) {
+    writeMemoryCache(key, redis);
+    return redis;
+  }
+
+  const inflight = empMasterInflight.get(key);
+  if (inflight) return inflight;
+
+  const promise = (async () => {
+    const value = await loader();
+    writeMemoryCache(key, value);
+    await setJson(key, value, EMP_MASTER_CACHE_TTL_MS);
+    return value;
+  })();
+
+  empMasterInflight.set(key, promise);
+  try {
+    return await promise;
+  } finally {
+    empMasterInflight.delete(key);
+  }
+}
+
+async function clearEmpMasterCaches() {
+  empMasterCache.clear();
+  empMasterInflight.clear();
+  await deleteByPrefix(buildRedisKey('emp-master'));
+}
 
 function normalizeCategory(value) {
   const raw = safe(value).toLowerCase();
@@ -174,46 +230,51 @@ async function syncToLoginUser(row, adminId, portalPassword = '', existingUser =
 
 export async function getEmpMasterData(category = 'Master', adminRole = '') {
   const targetCategory = normalizeCategory(category);
-  const [records, users] = await Promise.all([
-    listRows('EmpMaster'),
-    listRows('User')
-  ]);
-  const normalized = records.map((row) => normalizeEmpMasterRow(row, row.Category));
+  const key = cacheKey(targetCategory, adminRole);
 
-  let finalData = [];
-  if (targetCategory === 'Inactive') {
-    const inactiveMasterRows = normalized
-      .filter((row) => empCode(row) && inactiveStatuses.has(safe(row.Status).toLowerCase()))
-      .map((row) => ({ ...row, _sourceSheet: row.Category }));
+  return withEmpMasterCache(key, async () => {
+    const [records, users] = await Promise.all([
+      listRows('EmpMaster'),
+      listRows('User')
+    ]);
+    const normalized = records.map((row) => normalizeEmpMasterRow(row, row.Category));
 
-    const inactiveUserRows = users
-      .map(projectUserAsMaster)
-      .filter((row) => empCode(row) && inactiveStatuses.has(safe(row.Status).toLowerCase()))
-      .filter((row) => !inactiveMasterRows.some((existing) => safe(empCode(existing)).toLowerCase() === safe(empCode(row)).toLowerCase()))
-      .map((row) => ({ ...row, _sourceSheet: 'User' }));
+    let finalData = [];
+    if (targetCategory === 'Inactive') {
+      const inactiveMasterRows = normalized
+        .filter((row) => empCode(row) && inactiveStatuses.has(safe(row.Status).toLowerCase()))
+        .map((row) => ({ ...row, _sourceSheet: row.Category }));
 
-    finalData = [...inactiveMasterRows, ...inactiveUserRows];
-  } else if (targetCategory === 'Master') {
-    const allEmpMasterRows = normalized.filter((row) => empCode(row) && activeRow(row));
-    const existingEmpCodes = new Set(allEmpMasterRows.map((row) => safe(empCode(row)).toLowerCase()));
-    
-    const legacyUsers = users
-      .map(projectUserAsMaster)
-      .filter((row) => empCode(row) && activeRow(row) && !existingEmpCodes.has(safe(empCode(row)).toLowerCase()));
-      
-    finalData = [...allEmpMasterRows, ...legacyUsers];
-  } else {
-    finalData = normalized.filter((row) => empCode(row) && row.Category === targetCategory && activeRow(row));
-  }
+      const existingInactiveIds = new Set(inactiveMasterRows.map((row) => safe(empCode(row)).toLowerCase()));
+      const inactiveUserRows = users
+        .map(projectUserAsMaster)
+        .filter((row) => empCode(row) && inactiveStatuses.has(safe(row.Status).toLowerCase()))
+        .filter((row) => !existingInactiveIds.has(safe(empCode(row)).toLowerCase()))
+        .map((row) => ({ ...row, _sourceSheet: 'User' }));
 
-  const role = String(adminRole || '').trim().toLowerCase();
-  if (role === 'admin') {
-    finalData = finalData.filter(u => String(u.Role || '').trim().toLowerCase() !== 'super admin');
-  } else if (role === 'hr' || role === 'hr admin') {
-    finalData = finalData.filter(u => String(u.Role || '').trim().toLowerCase() !== 'super admin' && String(u.Role || '').trim().toLowerCase() !== 'admin');
-  }
+      finalData = [...inactiveMasterRows, ...inactiveUserRows];
+    } else if (targetCategory === 'Master') {
+      const allEmpMasterRows = normalized.filter((row) => empCode(row) && activeRow(row));
+      const existingEmpCodes = new Set(allEmpMasterRows.map((row) => safe(empCode(row)).toLowerCase()));
 
-  return ok({ category: targetCategory, data: finalData });
+      const legacyUsers = users
+        .map(projectUserAsMaster)
+        .filter((row) => empCode(row) && activeRow(row) && !existingEmpCodes.has(safe(empCode(row)).toLowerCase()));
+
+      finalData = [...allEmpMasterRows, ...legacyUsers];
+    } else {
+      finalData = normalized.filter((row) => empCode(row) && row.Category === targetCategory && activeRow(row));
+    }
+
+    const role = String(adminRole || '').trim().toLowerCase();
+    if (role === 'admin') {
+      finalData = finalData.filter(u => String(u.Role || '').trim().toLowerCase() !== 'super admin');
+    } else if (role === 'hr' || role === 'hr admin') {
+      finalData = finalData.filter(u => String(u.Role || '').trim().toLowerCase() !== 'super admin' && String(u.Role || '').trim().toLowerCase() !== 'admin');
+    }
+
+    return ok({ category: targetCategory, data: finalData });
+  });
 }
 
 export async function getNextEmpCode(category = 'EMP') {
@@ -357,6 +418,16 @@ export function primeEmpMasterCaches(role = '') {
   if (!['admin', 'super admin', 'hr'].includes(normalizedRole)) return Promise.resolve();
   return Promise.allSettled([
     listRows('EmpMaster'),
-    listRows('User')
+    listRows('User'),
+    getEmpMasterData('Master', role),
+    getEmpMasterData('EMP', role),
+    getEmpMasterData('Freelancer', role),
+    getEmpMasterData('Intern', role),
+    getEmpMasterData('Inactive', role)
   ]);
 }
+
+registerStoreMutationListener((modelName = '') => {
+  if (!['EmpMaster', 'User'].includes(String(modelName || ''))) return;
+  void clearEmpMasterCaches();
+});

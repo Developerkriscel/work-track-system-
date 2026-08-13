@@ -264,7 +264,7 @@ export function useAttendanceData() {
   const [locationPolicyState, setLocationPolicyState] = useState({ loading: true, error: null, data: null, saving: false });
   const [todayRows, setTodayRows] = useState([]);
   const [submitting, setSubmitting] = useState(false);
-  const refreshTick = useRef(0);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   const bounds = useMemo(
     () => rangeBounds(range, customStart, customEnd),
@@ -272,8 +272,7 @@ export function useAttendanceData() {
   );
 
   const reload = () => {
-    refreshTick.current += 1;
-    setAttendanceState((current) => ({ ...current }));
+    setRefreshTick((current) => current + 1);
   };
 
   useEffect(() => {
@@ -293,14 +292,16 @@ export function useAttendanceData() {
       try {
         const teamStartDate = teamFilterDate || bounds.startDate;
         const teamEndDate = teamFilterDate || bounds.endDate;
+        const includeTodayInPrimaryRange = rangeIncludesDate(bounds.startDate, bounds.endDate, todayYmd());
         const requests = [
           fetchAttendanceForUser(employeeId, bounds.startDate, bounds.endDate),
-          fetchAttendanceForUser(employeeId, todayYmd(), todayYmd())
+          includeTodayInPrimaryRange ? Promise.resolve(null) : fetchAttendanceForUser(employeeId, todayYmd(), todayYmd()),
+          fetchAttendanceLocationPolicy()
         ];
         if (canManageTeamAttendance) {
           requests.push(fetchTeamAttendance(teamStartDate, teamEndDate));
         }
-        const [payload, todayPayload, teamPayload] = await Promise.all(requests);
+        const [payload, todayPayload, policyPayload, teamPayload] = await Promise.all(requests);
         if (!alive) return;
         setAttendanceState({
           loading: false,
@@ -309,7 +310,10 @@ export function useAttendanceData() {
           leaves: payload.leaves || [],
           intimations: payload.intimations || []
         });
-        setTodayRows(todayPayload.data || []);
+        setTodayRows(includeTodayInPrimaryRange
+          ? (payload.data || []).filter((row) => normalizeDateKey(row.Date || row.date) === todayYmd())
+          : (todayPayload?.data || [])
+        );
         if (canManageTeamAttendance) {
           setTeamAttendanceState({
             loading: false,
@@ -320,24 +324,12 @@ export function useAttendanceData() {
         } else {
           setTeamAttendanceState({ loading: false, error: null, rows: [], users: [] });
         }
-        try {
-          const policyPayload = await fetchAttendanceLocationPolicy();
-          if (!alive) return;
-          setLocationPolicyState({
-            loading: false,
-            error: null,
-            data: policyPayload?.data || null,
-            saving: false
-          });
-        } catch (policyError) {
-          if (!alive) return;
-          setLocationPolicyState({
-            loading: false,
-            error: policyError.message || 'Failed to load attendance location policy.',
-            data: null,
-            saving: false
-          });
-        }
+        setLocationPolicyState({
+          loading: false,
+          error: null,
+          data: policyPayload?.data || null,
+          saving: false
+        });
       } catch (error) {
         if (!alive) return;
         setAttendanceState({
@@ -367,7 +359,7 @@ export function useAttendanceData() {
     return () => {
       alive = false;
     };
-  }, [employeeId, bounds.startDate, bounds.endDate, canManageTeamAttendance, teamFilterDate, refreshTick.current]);
+  }, [employeeId, bounds.startDate, bounds.endDate, canManageTeamAttendance, teamFilterDate, refreshTick]);
 
   const groupedRows = useMemo(
     () => groupAttendanceRows(attendanceState.rows, bounds),

@@ -4,6 +4,7 @@ import {
   createBulkTickets,
   adminTicketAction,
   getTaskMessages,
+  getTicketDetails,
   getTicketSystemData,
   markTicketMessagesAsRead,
   postTaskMessage,
@@ -34,6 +35,16 @@ router.get('/debug-buddy', async (req, res) => {
 router.post('/workspace', async (req, res) => {
   try {
     res.json(await getTicketSystemData(req.auth.sub, req.auth.role, req.body || {}));
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/details', async (req, res) => {
+  try {
+    const result = await getTicketDetails(req.body.ticketId, req.auth.sub, req.auth.role);
+    if (!result.success) return res.status(404).json(result);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

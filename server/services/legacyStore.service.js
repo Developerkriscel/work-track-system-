@@ -264,6 +264,49 @@ function cloneRows(rows = []) {
   return rows.map((row) => ({ ...row }));
 }
 
+function cloneRow(row = null) {
+  if (!row || typeof row !== 'object') return row;
+  return { ...row };
+}
+
+function normalizeQueryOptions(options = {}) {
+  const {
+    projection = { data: 1, legacyId: 1 },
+    sort = null,
+    skip = 0,
+    limit = 0
+  } = options || {};
+
+  return {
+    projection,
+    sort,
+    skip: Number.isFinite(Number(skip)) ? Math.max(0, Number(skip)) : 0,
+    limit: Number.isFinite(Number(limit)) ? Math.max(0, Number(limit)) : 0
+  };
+}
+
+function normalizeLegacyDoc(doc = {}) {
+  return {
+    ...stripInternalMetadata(doc.data || {}),
+    _id: String(doc._id),
+    _legacyId: doc.legacyId
+  };
+}
+
+async function runLegacyQuery(modelName, query = {}, options = {}) {
+  await assertMongoReady();
+  void ensurePerformanceIndexes();
+  const Model = LegacyModels[modelName];
+  if (!Model) throw new Error(`Unknown legacy model: ${modelName}`);
+
+  const { projection, sort, skip, limit } = normalizeQueryOptions(options);
+  let cursor = Model.find(query).select(projection).lean();
+  if (sort && Object.keys(sort).length) cursor = cursor.sort(sort);
+  if (skip) cursor = cursor.skip(skip);
+  if (limit) cursor = cursor.limit(limit);
+  return cursor;
+}
+
 function clearReadCache(modelName = '') {
   if (modelName) {
     readCache.delete(modelName);
@@ -326,6 +369,9 @@ export async function ensurePerformanceIndexes() {
     Expense: [
       [{ 'data.Employee ID': 1, createdAt: -1 }, { background: true }]
     ],
+    Message: [
+      [{ 'data.TaskID': 1, 'data.Timestamp': 1, createdAt: 1 }, { background: true }]
+    ],
     TicketHistory: [
       [{ 'data.Action By': 1, 'data.Timestamp': -1 }, { background: true }],
       [{ 'data.Employee ID': 1, 'data.Timestamp': -1 }, { background: true }]
@@ -353,6 +399,11 @@ export async function ensurePerformanceIndexes() {
       Model.collection.createIndex({ 'data.Status': 1 }).catch(() => null),
       Model.collection.createIndex({ 'data.Plan Date': 1 }).catch(() => null),
       Model.collection.createIndex({ 'data.Date': 1 }).catch(() => null),
+      Model.collection.createIndex({ 'data.rawPlanDate': 1 }).catch(() => null),
+      Model.collection.createIndex({ 'data.Raw Plan Date': 1 }).catch(() => null),
+      Model.collection.createIndex({ 'data.actualDate': 1 }).catch(() => null),
+      Model.collection.createIndex({ 'data.Done Date': 1 }).catch(() => null),
+      Model.collection.createIndex({ 'data.Due Date': 1 }).catch(() => null),
       Model.collection.createIndex({ 'data.Task Approver': 1 }).catch(() => null),
       Model.collection.createIndex({ 'data.Ticket ID': 1 }).catch(() => null),
       Model.collection.createIndex({ 'data.Task ID': 1 }).catch(() => null),
@@ -475,6 +526,40 @@ export async function listMongoRows(modelName) {
   }
 }
 
+export async function findRowsByFilter(modelName, query = {}, options = {}) {
+  const docs = await runLegacyQuery(modelName, query, options);
+  return docs.map(normalizeLegacyDoc);
+}
+
+export async function findOneRowByFilter(modelName, query = {}, options = {}) {
+  const docs = await runLegacyQuery(modelName, query, { ...options, limit: 1 });
+  return docs[0] ? normalizeLegacyDoc(docs[0]) : null;
+}
+
+export async function countRowsByFilter(modelName, query = {}) {
+  await assertMongoReady();
+  void ensurePerformanceIndexes();
+  const Model = LegacyModels[modelName];
+  if (!Model) throw new Error(`Unknown legacy model: ${modelName}`);
+  return Model.countDocuments(query);
+}
+
+export async function existsRowByFilter(modelName, query = {}) {
+  const row = await findOneRowByFilter(modelName, query, {
+    projection: { _id: 1, legacyId: 1 }
+  });
+  return Boolean(row);
+}
+
+export async function findRowsPaginated(modelName, query = {}, options = {}) {
+  const rows = await findRowsByFilter(modelName, query, options);
+  return {
+    rows,
+    skip: normalizeQueryOptions(options).skip,
+    limit: normalizeQueryOptions(options).limit
+  };
+}
+
 export async function insertRow(modelName, row) {
   await assertMongoReady();
   const cleanRow = stripInternalMetadata(row);
@@ -531,8 +616,7 @@ export async function upsertRow(modelName, key, value, updateData) {
 }
 
 export async function deleteOrDeactivate(modelName, key, value) {
-  const rows = await listRows(modelName);
-  const row = rows.find((item) => String(item[key] || '') === String(value));
+  const row = await findOneRowByFilter(modelName, { [`data.${key}`]: String(value) });
   if (!row) return null;
   const next = { ...row, Status: 'Inactive' };
   await LegacyModels[modelName].findOneAndUpdate({ legacyId: getLegacyId(modelName, row) }, { $set: { data: next } });
@@ -542,8 +626,7 @@ export async function deleteOrDeactivate(modelName, key, value) {
 
 export async function deleteRow(modelName, key, value) {
   await assertMongoReady();
-  const rows = await listRows(modelName);
-  const row = rows.find((item) => String(item[key] || '').trim() === String(value || '').trim());
+  const row = await findOneRowByFilter(modelName, { [`data.${key}`]: String(value || '').trim() });
   if (!row) return null;
   const legacyId = row._legacyId || getLegacyId(modelName, row);
   await LegacyModels[modelName].deleteMany({ legacyId });

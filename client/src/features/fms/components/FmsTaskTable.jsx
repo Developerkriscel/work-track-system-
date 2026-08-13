@@ -6,7 +6,7 @@ import {
   getFmsTaskStatusLabel
 } from '@/features/fms/services/fmsPresentation';
 
-const PAGE_SIZE = 60;
+const PAGE_SIZE = 20;
 
 export function FmsTaskTable({ tasks, pagination = null, submitting, onPageChange, onComplete }) {
   const serverPaged = Boolean(pagination && onPageChange);

@@ -114,7 +114,7 @@ export function useFmsData() {
   const [assignableUsers, setAssignableUsers] = useState([]);
   const [assignableLoading, setAssignableLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [pagination, setPagination] = useState({ page: 1, pageSize: 60, total: 0, totalPages: 1, start: 0, end: 0 });
+  const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0, totalPages: 1, start: 0, end: 0 });
 
   const reload = () => {
     setRefreshKey((current) => current + 1);

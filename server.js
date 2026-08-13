@@ -29,6 +29,8 @@ import filesRoutes from './server/routes/files.routes.js';
 import ticketRoutes from './server/routes/ticket.routes.js';
 import todoRoutes from './server/routes/todo.routes.js';
 import { assertAuthConfiguration, requireAuth } from './server/middleware/auth.middleware.js';
+import { ensurePerformanceIndexes, listRows } from './server/services/legacyStore.service.js';
+import { getManagementDashboardData } from './server/services/managementDashboard.service.js';
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -302,7 +304,36 @@ app.use('/api', (_req, res) => {
 });
 
 await connectDatabase();
+await ensurePerformanceIndexes().catch((error) => {
+  console.warn(`Legacy index warmup skipped: ${error.message}`);
+});
+await Promise.allSettled([
+  listRows('User'),
+  listRows('EmpMaster'),
+  listRows('Client')
+]);
+
+function primeManagementDashboardCaches() {
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + (now.getDay() === 0 ? -6 : 1 - now.getDay()));
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const ranges = [
+    [today, today],
+    [monday.toISOString().slice(0, 10), sunday.toISOString().slice(0, 10)],
+    [monthStart.toISOString().slice(0, 10), monthEnd.toISOString().slice(0, 10)]
+  ];
+  ranges.forEach(([startDate, endDate]) => {
+    void getManagementDashboardData(startDate, endDate, 'overview').catch(() => null);
+    void getManagementDashboardData(startDate, endDate, 'full').catch(() => null);
+  });
+}
 
 app.listen(port, () => {
   console.log(`WorkTrack MERN API running on http://localhost:${port}`);
+  primeManagementDashboardCaches();
 });

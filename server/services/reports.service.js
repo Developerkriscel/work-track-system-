@@ -349,6 +349,14 @@ function asFmsRow(row = {}, userIndex = new Map()) {
   };
 }
 
+function normalizeLegacyDocs(docs = []) {
+  return docs.map((doc) => ({
+    ...(doc?.data || {}),
+    _id: String(doc?._id || ''),
+    _legacyId: doc?.legacyId || ''
+  }));
+}
+
 async function loadRows() {
   const [tickets, fms, attendance, expenses, todos, leaves, intimations, users, clients, forms] = await Promise.all([
     listRows('Ticket'),
@@ -380,6 +388,14 @@ async function loadFmsRows() {
     listRows('User')
   ]);
   return { fms, users };
+}
+
+async function queryProjectionRows(modelName, projection = { data: 1, legacyId: 1 }) {
+  const docs = await LegacyModels[modelName]
+    .find({})
+    .select(projection)
+    .lean();
+  return normalizeLegacyDocs(docs);
 }
 
 function dateClause(field = '', startDate = '', endDate = '') {
@@ -427,8 +443,18 @@ export async function getTicketReportData(employeeId, role, startDate, endDate) 
   const version = await getReportVersion();
   return getCachedReport('tickets', [version, employeeId, role, startDate, endDate], async () => {
     const [users, clients] = await Promise.all([
-      getCachedReport('users-source', [version], () => listRows('User')),
-      getCachedReport('clients-source', [version], () => listRows('Client'))
+      getCachedReport('users-report-source', [version], () =>
+        queryProjectionRows('User', {
+          data: 1,
+          legacyId: 1
+        })
+      ),
+      getCachedReport('clients-report-source', [version], () =>
+        queryProjectionRows('Client', {
+          data: 1,
+          legacyId: 1
+        })
+      )
     ]);
     const normalizedRole = safe(role).toLowerCase();
     const canSeeAll = normalizedRole === 'super admin';
@@ -468,7 +494,12 @@ export async function getTicketReportData(employeeId, role, startDate, endDate) 
 export async function getFmsReportData(employeeId, role, startDate, endDate) {
   const version = await getReportVersion();
   return getCachedReport('fms', [version, employeeId, role, startDate, endDate], async () => {
-    const users = await getCachedReport('users-source', [version], () => listRows('User'));
+    const users = await getCachedReport('users-report-source', [version], () =>
+      queryProjectionRows('User', {
+        data: 1,
+        legacyId: 1
+      })
+    );
     const userIndex = buildUserNameIndex(users);
     const normalizedRole = safe(role).toLowerCase();
     const canSeeAll = ['super admin', 'hr'].includes(normalizedRole);

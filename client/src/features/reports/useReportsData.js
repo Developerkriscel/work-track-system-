@@ -151,6 +151,16 @@ export function useReportsData() {
 
     let alive = true;
 
+    if (!isManagerOnly && activeTab === 'management') {
+      setState({
+        loading: false,
+        error: null,
+        tickets: [],
+        fms: []
+      });
+      return undefined;
+    }
+
     async function loadReports() {
       setState((current) => ({ ...current, loading: true, error: null }));
       setMessage(null);
@@ -186,7 +196,7 @@ export function useReportsData() {
     return () => {
       alive = false;
     };
-  }, [employeeId, role, bounds.startDate, bounds.endDate, refreshIndex.current]);
+  }, [employeeId, role, activeTab, isManagerOnly, bounds.startDate, bounds.endDate, refreshIndex.current]);
 
   const ticketPriorities = useMemo(
     () =>

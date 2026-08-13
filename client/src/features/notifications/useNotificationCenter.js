@@ -15,6 +15,7 @@ export function useNotificationCenter({ mode = 'employee', subjectId = '' } = {}
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [lastSeenAt, setLastSeenAt] = useState(0);
+  const [serverTime, setServerTime] = useState(0);
 
   const storageKey = useMemo(() => buildReadKey(mode, subjectId), [mode, subjectId]);
 
@@ -57,6 +58,7 @@ export function useNotificationCenter({ mode = 'employee', subjectId = '' } = {}
         : await fetchEmployeeNotifications(subjectId);
       const nextItems = result.notifications || result.updates || [];
       setItems(nextItems);
+      setServerTime(Number(result.serverTime) || Date.parse(result.serverTime) || Date.now());
     } catch (loadError) {
       setError(loadError.message || 'Unable to load notifications.');
     } finally {
@@ -87,9 +89,9 @@ export function useNotificationCenter({ mode = 'employee', subjectId = '' } = {}
     [decoratedItems]
   );
 
-  const markAllRead = useCallback((timestamp = Date.now()) => {
+  const markAllRead = useCallback((timestamp = serverTime || Date.now()) => {
     persistLastSeenAt(timestamp);
-  }, [persistLastSeenAt]);
+  }, [persistLastSeenAt, serverTime]);
 
   const close = useCallback(() => {
     if (open) {

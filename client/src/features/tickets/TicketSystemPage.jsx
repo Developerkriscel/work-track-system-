@@ -45,6 +45,7 @@ export function TicketSystemPage() {
     submitReassign,
     submitApprovalAction,
     submitApprovalTransfer,
+    loadTicketDetails,
     loadTicketMessages,
     submitTicketMessage,
     markTicketMessagesRead,
@@ -190,6 +191,21 @@ export function TicketSystemPage() {
     }
   };
 
+  const handleDetailsOpen = async (ticket) => {
+    const ticketId = ticket?.['Ticket ID'];
+    if (!ticketId) return;
+    try {
+      const response = await loadTicketDetails(ticketId);
+      if (response?.success === false) {
+        setMessage({ tone: 'danger', text: response.message || 'Unable to load ticket details.' });
+        return;
+      }
+      setDetailsTicket(response?.item || ticket);
+    } catch (error) {
+      setMessage({ tone: 'danger', text: error.message || 'Unable to load ticket details.' });
+    }
+  };
+
   const handleChatSend = async (messageText) => {
     const ticketId = chatTicketState.ticket?.['Ticket ID'];
     if (!ticketId) return { success: false };
@@ -331,7 +347,7 @@ export function TicketSystemPage() {
           onApprovalAction={handleApprovalAction}
           onApprovalTransfer={setTransferDialog}
           onChat={handleChatOpen}
-          onDetails={setDetailsTicket}
+          onDetails={handleDetailsOpen}
           currentUser={currentUser}
         />
       </article>

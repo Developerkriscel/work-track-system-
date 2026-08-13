@@ -54,7 +54,7 @@ function SimpleTaskTable({ title, rows = [] }) {
   );
 }
 
-export function OverviewDashboardSection({ kpis, tickets, fms, todo, users, clients }) {
+export function OverviewDashboardSection({ kpis, tickets, fms, todo, users, clients, charts }) {
   return (
     <>
       <div className="dashboard-kpi-grid reports-kpi-grid">
@@ -68,7 +68,7 @@ export function OverviewDashboardSection({ kpis, tickets, fms, todo, users, clie
         <SummaryCard icon={BadgeCheck} color="green" label="Active Clients" value={clients.length} />
       </div>
 
-      <DashboardCharts tickets={tickets} fms={fms} todo={todo} />
+      <DashboardCharts tickets={tickets} fms={fms} todo={todo} charts={charts} />
 
       <div className="migration-grid">
         <SimpleTaskTable title="Tickets" rows={tickets} />

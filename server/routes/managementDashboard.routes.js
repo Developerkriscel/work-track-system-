@@ -5,7 +5,7 @@ const router = express.Router();
 
 router.post('/data', async (req, res) => {
   try {
-    const result = await getManagementDashboardData(req.body.startDate, req.body.endDate);
+    const result = await getManagementDashboardData(req.body.startDate, req.body.endDate, req.body.scope, req.body);
     res.json(result);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

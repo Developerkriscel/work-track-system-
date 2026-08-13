@@ -59,10 +59,25 @@ function normalizedDate(value) {
   if (!value) return today();
   const raw = safe(value);
   if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
-  const dmy = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
-  if (dmy) return `${dmy[3]}-${String(dmy[2]).padStart(2, '0')}-${String(dmy[1]).padStart(2, '0')}`;
+  const calendarDate = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/);
+  if (calendarDate) {
+    const firstPart = Number(calendarDate[1]);
+    const secondPart = Number(calendarDate[2]);
+    const year = calendarDate[3];
+
+    if (raw.includes('/')) {
+      // Google Sheet imports are primarily stored as M/D/YYYY in the current dataset.
+      return `${year}-${String(firstPart).padStart(2, '0')}-${String(secondPart).padStart(2, '0')}`;
+    }
+
+    if (firstPart > 12 && secondPart <= 12) {
+      return `${year}-${String(secondPart).padStart(2, '0')}-${String(firstPart).padStart(2, '0')}`;
+    }
+
+    return `${year}-${String(firstPart).padStart(2, '0')}-${String(secondPart).padStart(2, '0')}`;
+  }
   const parsed = new Date(raw);
-  return Number.isNaN(parsed.getTime()) ? raw : parsed.toISOString().slice(0, 10);
+  return Number.isNaN(parsed.getTime()) ? raw : localDate(parsed);
 }
 
 function dateInRange(value, start, end) {
@@ -190,9 +205,16 @@ function scopedDateQuery(fields = [], start, end) {
 }
 
 function combineAndQueries(...clauses) {
-  return {
-    $and: clauses.filter(Boolean)
-  };
+  const filtered = clauses.filter(Boolean);
+  if (!filtered.length) return {};
+  if (filtered.length === 1) return filtered[0];
+  return { $and: filtered };
+}
+
+function lastSevenDayRange() {
+  const endDate = today();
+  const startDate = localDate(addDays(referenceNow(), -6));
+  return { start: startDate, end: endDate };
 }
 
 function teamUsersQuery(employeeId = '') {
@@ -301,6 +323,86 @@ function sortDashboardTasks(rows = []) {
     if (leftStatus !== rightStatus) return leftStatus.localeCompare(rightStatus);
     return safe(left.ID).localeCompare(safe(right.ID));
   });
+}
+
+function buildDashboardScope(employeeId, normalizedViewMode, user, initialTeamMembers = []) {
+  const normalizedRole = userRole(user);
+  const canViewTeamDashboard = teamDashboardRoles.has(normalizedRole);
+  const isTeamMode = normalizedViewMode === 'team' && canViewTeamDashboard;
+  const teamMembers = isTeamMode ? teamMemberRows(initialTeamMembers, employeeId) : [];
+  const scopedEmployeeIds = isTeamMode ? teamMembers.map((member) => userId(member)).filter(Boolean) : [employeeId];
+  const scopedUserRows = isTeamMode ? teamMembers : (user ? [user] : []);
+  const ticketHistoryUserNames = scopedUserRows.map((item) => userName(item)).filter(Boolean);
+  const ticketHistoryBaseQuery = isTeamMode
+    ? {
+        $or: [
+          { 'data.Action By': { $in: scopedEmployeeIds } },
+          { 'data.Employee ID': { $in: scopedEmployeeIds } },
+          { 'data.Employee Name': { $in: ticketHistoryUserNames } },
+          { 'data.Action By': { $in: ticketHistoryUserNames } }
+        ]
+      }
+    : {
+        $or: [
+          { 'data.Action By': employeeId },
+          { 'data.Employee ID': employeeId },
+          { 'data.Employee Name': userName(user) || employeeId }
+        ]
+      };
+
+  return {
+    normalizedRole,
+    canViewTeamDashboard,
+    isTeamMode,
+    scopedEmployeeIds,
+    scopedUserRows,
+    ticketHistoryBaseQuery
+  };
+}
+
+function buildDashboardDataQueries({ employeeId, scopedEmployeeIds, ticketHistoryBaseQuery, start, end }) {
+  const employeeQuery = buildEmployeeQuery(scopedEmployeeIds);
+  const ticketBaseQuery = scopedEmployeeIds.length > 1 ? employeeQuery : selfTicketQuery(employeeId);
+  const selectedTicketQuery = combineAndQueries(
+    ticketBaseQuery,
+    scopedDateQuery(['data.Date', 'data.Plan Date'], start, end)
+  );
+  const selectedFmsQuery = combineAndQueries(
+    employeeQuery,
+    scopedDateQuery(['data.Date', 'data.Plan Date', 'data.actualDate', 'data.Done Date'], start, end)
+  );
+  const selectedTodoQuery = combineAndQueries(
+    employeeQuery,
+    scopedDateQuery(['data.Date', 'data.Due Date'], start, end)
+  );
+  const selectedExpenseQuery = combineAndQueries(
+    employeeQuery,
+    scopedDateQuery(['data.Date', 'data.Timestamp'], start, end)
+  );
+  const selectedHistoryQuery = combineAndQueries(
+    ticketHistoryBaseQuery,
+    scopedDateQuery(['data.Timestamp', 'data.Date', 'data.Created At'], start, end)
+  );
+  const chartRange = lastSevenDayRange();
+  const chartTicketQuery = combineAndQueries(
+    ticketBaseQuery,
+    scopedDateQuery(['data.Date', 'data.Plan Date'], chartRange.start, chartRange.end)
+  );
+  const chartFmsQuery = combineAndQueries(
+    employeeQuery,
+    scopedDateQuery(['data.Date', 'data.Plan Date', 'data.actualDate', 'data.Done Date'], chartRange.start, chartRange.end)
+  );
+
+  return {
+    employeeQuery,
+    selectedTicketQuery,
+    selectedFmsQuery,
+    selectedTodoQuery,
+    selectedExpenseQuery,
+    selectedHistoryQuery,
+    chartTicketQuery,
+    chartFmsQuery
+  };
 }
 
 function paginateDashboardTasks(rows = [], page = 1, pageSize = DEFAULT_DASHBOARD_TASKS_PAGE_SIZE) {
@@ -592,39 +694,29 @@ async function computeDashboardSnapshot(employeeId, filterRange, normalizedViewM
     normalizedViewMode === 'team' ? listDataRows('User', teamUsersQuery(employeeId), userProjection) : Promise.resolve([])
   ]);
 
-  const normalizedRole = userRole(user);
-  const canViewTeamDashboard = teamDashboardRoles.has(normalizedRole);
-  const isTeamMode = normalizedViewMode === 'team' && canViewTeamDashboard;
-  const teamMembers = isTeamMode ? teamMemberRows(initialTeamMembers, employeeId) : [];
-  const scopedEmployeeIds = isTeamMode ? teamMembers.map((member) => userId(member)).filter(Boolean) : [employeeId];
-  const scopedUserRows = isTeamMode ? teamMembers : (user ? [user] : []);
-  const ticketHistoryUserNames = scopedUserRows.map((item) => userName(item)).filter(Boolean);
-  const ticketHistoryQuery = isTeamMode
-    ? {
-      $or: [
-        { 'data.Action By': { $in: scopedEmployeeIds } },
-        { 'data.Employee ID': { $in: scopedEmployeeIds } },
-        { 'data.Employee Name': { $in: ticketHistoryUserNames } },
-        { 'data.Action By': { $in: ticketHistoryUserNames } }
-      ]
-    }
-    : {
-      $or: [
-        { 'data.Action By': employeeId },
-        { 'data.Employee ID': employeeId },
-        { 'data.Employee Name': userName(user) || employeeId }
-      ]
-    };
-
-  const chartTicketBaseQuery = isTeamMode ? buildEmployeeQuery(scopedEmployeeIds) : selfTicketQuery(employeeId);
-  const chartFmsBaseQuery = buildEmployeeQuery(scopedEmployeeIds);
-  const selectedTicketQuery = isTeamMode ? buildEmployeeQuery(scopedEmployeeIds) : selfTicketQuery(employeeId);
-  const selectedFmsQuery = buildEmployeeQuery(scopedEmployeeIds);
-  const selectedTodoQuery = buildEmployeeQuery(scopedEmployeeIds);
-  const selectedExpenseQuery = buildEmployeeQuery(scopedEmployeeIds);
-  const selectedHistoryQuery = ticketHistoryQuery;
-  const chartTicketQuery = chartTicketBaseQuery;
-  const chartFmsQuery = chartFmsBaseQuery;
+  const {
+    canViewTeamDashboard,
+    isTeamMode,
+    scopedEmployeeIds,
+    scopedUserRows,
+    ticketHistoryBaseQuery
+  } = buildDashboardScope(employeeId, normalizedViewMode, user, initialTeamMembers);
+  const {
+    employeeQuery,
+    selectedTicketQuery,
+    selectedFmsQuery,
+    selectedTodoQuery,
+    selectedExpenseQuery,
+    selectedHistoryQuery,
+    chartTicketQuery,
+    chartFmsQuery
+  } = buildDashboardDataQueries({
+    employeeId,
+    scopedEmployeeIds,
+    ticketHistoryBaseQuery,
+    start,
+    end
+  });
 
   const [tickets, fms, todos, expenses, pendingLeaveCount, ticketHistory] = await Promise.all([
     listDataRows('Ticket', selectedTicketQuery, dashboardTaskProjection),
@@ -633,7 +725,7 @@ async function computeDashboardSnapshot(employeeId, filterRange, normalizedViewM
     listDataRows('Expense', selectedExpenseQuery, expenseProjection),
     LegacyModels.Leave.collection.countDocuments({
       $and: [
-        buildEmployeeQuery(scopedEmployeeIds),
+        employeeQuery,
         { $or: [{ 'data.Status': /pending/i }, { 'data.status': /pending/i }, { 'data.Admin Approval': /pending/i }] }
       ]
     }),
@@ -663,6 +755,126 @@ async function computeDashboardSnapshot(employeeId, filterRange, normalizedViewM
     }),
     canViewTeamDashboard
   };
+}
+
+async function computeDashboardSummarySnapshot(employeeId, filterRange, normalizedViewMode) {
+  return computeDashboardSnapshot(employeeId, filterRange, normalizedViewMode);
+}
+
+async function computeDashboardTasksPayload(employeeId, filterRange, normalizedViewMode, options = {}) {
+  const { start, end } = rangeForFilter(filterRange);
+  const taskPage = Math.max(1, Number(options.taskPage || options.page || 1) || 1);
+  const taskPageSize = Math.min(50, Math.max(10, Number(options.taskPageSize || options.pageSize || DEFAULT_DASHBOARD_TASKS_PAGE_SIZE) || DEFAULT_DASHBOARD_TASKS_PAGE_SIZE));
+  const userQuery = {
+    $or: [
+      { 'data.Employee ID': employeeId },
+      { 'data.User ID': employeeId },
+      { 'data.EMP Code': employeeId }
+    ]
+  };
+  const userProjection = {
+    legacyId: 1,
+    'data.Employee ID': 1,
+    'data.User ID': 1,
+    'data.EMP Code': 1,
+    'data.employeeId': 1,
+    'data.EmpID': 1,
+    'data.Employee Name': 1,
+    'data.Name': 1,
+    'data.name': 1,
+    'data.Role': 1,
+    'data.role': 1,
+    'data.Department': 1,
+    'data.department': 1,
+    'data.Status': 1,
+    'data.status': 1,
+    'data.Manager ID': 1,
+    'data.Manager': 1,
+    'data.managerId': 1,
+    'data.Reporting Manager': 1,
+    'data.Task Approver': 1,
+    'data.Approver ID': 1,
+    'data.taskApprover': 1
+  };
+  const dashboardTaskProjection = {
+    legacyId: 1,
+    'data.Ticket ID': 1,
+    'data.Task ID': 1,
+    'data.TodoID': 1,
+    'data.ID': 1,
+    'data.Employee ID': 1,
+    'data.EmpID': 1,
+    'data.empId': 1,
+    'data.Employee Name': 1,
+    'data.User': 1,
+    'data.Who': 1,
+    'data.Assigned To': 1,
+    'data.Status': 1,
+    'data.Plan Date': 1,
+    'data.Date': 1,
+    'data.Timestamp': 1,
+    'data.Due Date': 1,
+    'data.TAT': 1,
+    'data.When': 1,
+    'data.TAT Minutes': 1,
+    'data.Duration': 1,
+    'data.Total Duration': 1,
+    'data.Actual Duration': 1,
+    'data.Task Description': 1,
+    'data.Description': 1,
+    'data.Task': 1,
+    'data.Content': 1,
+    'data.Done Date': 1,
+    'data.actualDate': 1
+  };
+  const [user, initialTeamMembers] = await Promise.all([
+    findDataRow('User', userQuery, userProjection),
+    normalizedViewMode === 'team' ? listDataRows('User', teamUsersQuery(employeeId), userProjection) : Promise.resolve([])
+  ]);
+  const {
+    canViewTeamDashboard,
+    isTeamMode,
+    scopedEmployeeIds,
+    scopedUserRows,
+    ticketHistoryBaseQuery
+  } = buildDashboardScope(employeeId, normalizedViewMode, user, initialTeamMembers);
+  const {
+    selectedTicketQuery,
+    selectedFmsQuery,
+    selectedTodoQuery
+  } = buildDashboardDataQueries({
+    employeeId,
+    scopedEmployeeIds,
+    ticketHistoryBaseQuery,
+    start,
+    end
+  });
+
+  const [tickets, fms, todos] = await Promise.all([
+    listDataRows('Ticket', selectedTicketQuery, dashboardTaskProjection),
+    listDataRows('FmsTask', selectedFmsQuery, dashboardTaskProjection),
+    listDataRows('Todo', selectedTodoQuery, dashboardTaskProjection)
+  ]);
+
+  const normalizedTickets = tickets.map((ticket) => normalizeTicketForDashboard(ticket, scopedUserRows));
+  const normalizedFms = fms.map((task) => normalizeFmsForDashboard(task, scopedUserRows));
+  const normalizedTodos = todos.map((todo) => normalizeTodoForDashboard(todo, scopedUserRows));
+  const dashboardTasks = sortDashboardTasks([
+    ...normalizedTickets.filter((task) => dateInRange(task.Date, start, end)),
+    ...normalizedFms.filter((task) => dateInRange(task.Date, start, end)),
+    ...normalizedTodos.filter((task) => dateInRange(task.Date, start, end))
+  ]);
+  const pagedTasks = paginateDashboardTasks(dashboardTasks, taskPage, taskPageSize);
+
+  return ok({
+    data: {
+      scope: isTeamMode ? 'team' : 'my',
+      canViewTeamDashboard,
+      todaysTasks: pagedTasks.rows,
+      upcomingTasks: dashboardTasks.filter((task) => isDashboardActionableStatus(task.Status)),
+      taskPagination: pagedTasks.pagination
+    }
+  });
 }
 
 export async function primeDashboardSnapshotsForAllEmployees() {
@@ -744,6 +956,15 @@ export async function getDashboardData(employeeId, filterRange, viewMode = 'my',
     return redisPayload.payload;
   }
 
+  if (includeTasks && !includeCollections) {
+    const payload = await computeDashboardTasksPayload(employeeId, filterRange, normalizedViewMode, {
+      taskPage,
+      taskPageSize
+    });
+    writeDashboardPayload(cacheKey, payload);
+    return payload;
+  }
+
   const snapshotKey = buildDashboardSnapshotKey(employeeId, filterRange, normalizedViewMode);
   const primeJob = dashboardPrimeJobs.get(snapshotKey);
   if (primeJob) {
@@ -788,7 +1009,7 @@ export async function getDashboardData(employeeId, filterRange, viewMode = 'my',
     return payload;
   }
 
-  const snapshot = await computeDashboardSnapshot(employeeId, filterRange, normalizedViewMode);
+  const snapshot = await computeDashboardSummarySnapshot(employeeId, filterRange, normalizedViewMode);
   if (cacheVersion === dashboardCacheVersion) {
     writeDashboardSnapshot(snapshotKey, snapshot);
   }
@@ -809,7 +1030,7 @@ export function primeDashboardSnapshots(employeeId, role) {
   const jobs = [
     trackPrimeJob(
       buildDashboardSnapshotKey(employeeId, 'today', 'my'),
-      computeDashboardSnapshot(employeeId, 'today', 'my').then((snapshot) => {
+      computeDashboardSummarySnapshot(employeeId, 'today', 'my').then((snapshot) => {
         if (cacheVersion !== dashboardCacheVersion) return;
         const snapshotKey = buildDashboardSnapshotKey(employeeId, 'today', 'my');
         writeDashboardSnapshot(snapshotKey, snapshot);
@@ -829,14 +1050,14 @@ export function primeDashboardSnapshots(employeeId, role) {
     jobs.push(
       trackPrimeJob(
         buildDashboardSnapshotKey(employeeId, 'today', 'team'),
-        computeDashboardSnapshot(employeeId, 'today', 'team').then((snapshot) => {
+        computeDashboardSummarySnapshot(employeeId, 'today', 'team').then((snapshot) => {
           if (cacheVersion !== dashboardCacheVersion) return;
           const snapshotKey = buildDashboardSnapshotKey(employeeId, 'today', 'team');
           writeDashboardSnapshot(snapshotKey, snapshot);
           writeDashboardPayload(
-            `${snapshotKey}::tasks::compact::1::${tasksPageSize}`,
+            `${snapshotKey}::summary::compact::1::${tasksPageSize}`,
             materializeDashboardPayload(snapshot, {
-              includeTasks: true,
+              includeTasks: false,
               includeCollections: false,
               taskPage: 1,
               taskPageSize: tasksPageSize

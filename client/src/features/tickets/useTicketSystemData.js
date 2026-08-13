@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   createTicket,
   createBulkTickets,
+  fetchTicketDetails,
   fetchTicketMessages,
   fetchTicketSystemData,
   markTicketMessagesRead,
@@ -147,7 +148,7 @@ export function useTicketSystemData() {
   const [submitting, setSubmitting] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [activeTab, setActiveTab] = useState('my');
-  const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0, totalPages: 1, start: 0, end: 0 });
+  const [pagination, setPagination] = useState({ page: 1, pageSize: 10, total: 0, totalPages: 1, start: 0, end: 0 });
 
   const reload = () => {
     setRefreshKey((current) => current + 1);
@@ -206,6 +207,30 @@ export function useTicketSystemData() {
     };
   }, [employeeId, refreshKey, activeTab, appliedFilters, pagination.page, pagination.pageSize]);
 
+  useEffect(() => {
+    if (!employeeId || activeTab !== 'my' || appliedFilters.search || appliedFilters.clientIds.length || appliedFilters.statuses.length || appliedFilters.timePeriod !== 'All Time') {
+      return undefined;
+    }
+    const role = String(user?.Role || user?.role || '').toLowerCase();
+    if (!['super admin', 'admin', 'manager', 'hr'].includes(role)) {
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      void fetchTicketSystemData(employeeId, {
+        page: 1,
+        pageSize: 10,
+        viewMode: 'team',
+        filters: {
+          clientIds: [],
+          statuses: [],
+          search: '',
+          timePeriod: 'All Time'
+        }
+      }).catch(() => null);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [employeeId, activeTab, appliedFilters, user]);
+
   const rawTickets = state.payload?.tickets || [];
   const clients = state.payload?.clients?.length
     ? state.payload.clients
@@ -251,7 +276,7 @@ export function useTicketSystemData() {
   }
 
   function changeTicketPageSize(nextPageSize) {
-    setPagination((current) => ({ ...current, page: 1, pageSize: Number(nextPageSize) || 20 }));
+    setPagination((current) => ({ ...current, page: 1, pageSize: Number(nextPageSize) || 10 }));
   }
 
   async function submitNewTicket(payload) {
@@ -362,6 +387,10 @@ export function useTicketSystemData() {
     return fetchTicketMessages(ticketId);
   }
 
+  async function loadTicketDetails(ticketId) {
+    return fetchTicketDetails(ticketId);
+  }
+
   async function submitTicketMessage(ticketId, messageText) {
     try {
       const response = await postTicketMessage(ticketId, messageText, employeeId);
@@ -404,6 +433,7 @@ export function useTicketSystemData() {
     submitApprovalAction,
     submitApprovalTransfer,
     submitClientTicketResponse,
+    loadTicketDetails,
     loadTicketMessages,
     submitTicketMessage,
     markTicketMessagesRead
