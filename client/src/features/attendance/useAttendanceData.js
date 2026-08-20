@@ -115,10 +115,18 @@ function attendanceStatus(group, punchIn) {
   return 'Very Late';
 }
 
-function departureStatus(group, punchOut) {
+function departureStatus(group, punchOut, punchIn) {
   if (!punchOut) return null;
   const punchTime = parseTimeToDate(group.date, punchOut.Time || punchOut['Punch Out']);
   if (!punchTime) return null;
+
+  if (punchIn) {
+    const inTime = parseTimeToDate(group.date, punchIn.Time || punchIn['Punch In']);
+    if (inTime && (punchTime.getTime() - inTime.getTime()) / 60000 >= 480) {
+      return 'On Time Departure';
+    }
+  }
+
   const shiftEnd = new Date(`${group.date}T19:00:00+05:30`);
   const difference = (punchTime.getTime() - shiftEnd.getTime()) / 60000;
   if (difference < -15) return 'Early Departure';
@@ -189,7 +197,7 @@ export function groupAttendanceRows(rows, bounds) {
       punchIn,
       punchOut,
       status: attendanceStatus({ date: group.date }, punchIn),
-      outStatus: departureStatus({ date: group.date }, punchOut),
+      outStatus: departureStatus({ date: group.date }, punchOut, punchIn),
       duration: durationLabel(inAt, outAt) !== '-'
         ? durationLabel(inAt, outAt)
         : punchOut?.Duration || punchOut?.['Total Duration'] || '-'
@@ -254,7 +262,7 @@ export function useAttendanceData() {
   const employeeName = user?.['Employee Name'] || user?.Name || employeeId;
   const role = String(user?.Role || user?.role || '');
   const canManageTeamAttendance = /^(admin|super admin|hr|manager)$/i.test(role.trim());
-  const canEditLocationPolicy = /^(admin|super admin|hr)$/i.test(role.trim());
+  const canEditLocationPolicy = /^super admin$/i.test(role.trim());
   const [range, setRange] = useState('today');
   const [customStart, setCustomStart] = useState(toYmd(new Date()));
   const [customEnd, setCustomEnd] = useState(toYmd(new Date()));
@@ -461,7 +469,7 @@ export function useAttendanceData() {
 
   async function saveLocationPolicy(payload) {
     if (!canEditLocationPolicy) {
-      return { success: false, message: 'Only Admin, Super Admin, or HR can update the attendance location policy.' };
+      return { success: false, message: 'Only Super Admin can update the attendance location policy.' };
     }
     setLocationPolicyState((current) => ({ ...current, saving: true, error: null }));
     try {

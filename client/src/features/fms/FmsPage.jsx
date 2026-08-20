@@ -33,6 +33,7 @@ export function FmsPage() {
     assignableUsers,
     assignableLoading,
     createTask,
+    syncFms,
     reload
   } = useFmsData();
   const [message, setMessage] = useState(null);
@@ -64,13 +65,45 @@ export function FmsPage() {
     if (result.success) setCreateOpen(false);
   };
 
+  const handleSyncSubmit = async () => {
+    const result = await syncFms();
+    setMessage({
+      tone: result.success ? 'success' : 'danger',
+      text: result.success ? `Successfully synced ${result.response.count} records (${result.response.changed} updated/new).` : result.message
+    });
+  };
+
   return (
     <section className="page-card fms-page">
+      {submitting && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(255, 255, 255, 0.85)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 9999,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <svg style={{ animation: 'wt-spin 1s linear infinite', width: '48px', height: '48px', color: '#6941C6' }} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeOpacity="0.25"></circle>
+            <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p style={{ marginTop: '20px', fontWeight: '600', fontSize: '18px', color: '#111827' }}>Fetching FMS Data...</p>
+          <p style={{ marginTop: '8px', fontSize: '14px', color: '#4B5563' }}>Please wait while we securely sync with the latest Google Sheet.</p>
+        </div>
+      )}
+
       <FmsHeader
         currentUser={currentUser}
         employeeId={employeeId}
         canCreateFms={canCreateFms && !formsTabActive}
+        isSuperAdmin={String(meta?.role || '').toLowerCase() === 'super admin'}
         onCreate={() => setCreateOpen(true)}
+        onSync={handleSyncSubmit}
+        submitting={submitting}
       />
 
       <FmsTabsPanel

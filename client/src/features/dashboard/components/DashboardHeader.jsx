@@ -27,7 +27,7 @@ export function DashboardHeader({
         <h1 className="page-card__title page-card__title--dashboard">{heading}</h1>
         <p className="dashboard-page__welcome">{welcomeText}</p>
         {canViewTeamDashboard ? (
-          <div className="approval-tabs" style={{ marginTop: '18px', gap: '10px', flexWrap: 'wrap' }}>
+          <div className="approval-tabs" style={{ marginTop: '18px', gap: '10px' }}>
             <button type="button" className={tabButtonClass(viewMode === 'my')} onClick={() => onViewModeChange?.('my')}>
               My Dashboard
             </button>
@@ -36,11 +36,9 @@ export function DashboardHeader({
             </button>
           </div>
         ) : null}
-        <div className="page-card__status dashboard-mobile-pill" style={{ display: 'none' }}>{employeeId || 'Employee session'}</div>
       </div>
 
       <div className="dashboard-controls">
-        <div className="page-card__status dashboard-desktop-pill">{employeeId || 'Employee session'}</div>
         <label className="dashboard-control">
           <span>Date Range</span>
           <select value={range} onChange={(event) => onRangeChange(event.target.value)}>

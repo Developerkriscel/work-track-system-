@@ -88,7 +88,7 @@ export function AttendancePage() {
   });
   const [intimationForm, setIntimationForm] = useState({
     date: today,
-    type: 'Work from Home',
+    type: 'On-site Client Visit',
     reason: ''
   });
   const videoRef = useRef(null);
@@ -627,7 +627,9 @@ export function AttendancePage() {
             <label className="dashboard-control">
               <span>Intimation Type</span>
               <select value={intimationForm.type} onChange={(event) => setIntimationForm((current) => ({ ...current, type: event.target.value }))}>
-                <option>Work from Home</option>
+                {(String(currentUser?.Role || currentUser?.role || '').toLowerCase() === 'super admin') && (
+                  <option>Work from Home</option>
+                )}
                 <option>On-site Client Visit</option>
                 <option>Late Arrival</option>
                 <option>Early Departure</option>

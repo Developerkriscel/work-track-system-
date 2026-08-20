@@ -10,6 +10,12 @@ export async function fetchFmsTasks(employeeId, options = {}) {
   });
 }
 
+export async function syncFmsTasks() {
+  return httpClient('/api/fms/sync', {
+    method: 'POST'
+  });
+}
+
 export async function fetchFmsAssignableUsers(employeeId) {
   return httpClient('/api/fms/assignable-users', {
     method: 'POST',

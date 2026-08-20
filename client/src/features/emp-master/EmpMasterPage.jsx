@@ -908,7 +908,7 @@ export function EmpMasterPage() {
                             <button type="button" className="attendance-cta attendance-cta--gray" onClick={() => openView(row)}>
                               View
                             </button>
-                            {editable ? (
+                            {editable && (
                               <>
                                 <button type="button" className="attendance-cta attendance-cta--blue" onClick={() => openEdit(row)}>
                                   Edit
@@ -922,8 +922,6 @@ export function EmpMasterPage() {
                                   {deletingId === id ? 'Deleting...' : 'Delete'}
                                 </button>
                               </>
-                            ) : (
-                              <span className="attendance-cta attendance-cta--gray cursor-not-allowed">View Only</span>
                             )}
                           </div>
                         </td>

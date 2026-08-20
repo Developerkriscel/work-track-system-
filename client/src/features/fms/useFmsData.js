@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createFmsTask, fetchFmsAssignableUsers, fetchFmsTasks, markFmsTaskDone } from '@/features/fms/api';
+import { createFmsTask, fetchFmsAssignableUsers, fetchFmsTasks, markFmsTaskDone, syncFmsTasks } from '@/features/fms/api';
 import { useAuth } from '@/features/auth/AuthProvider';
 
 function normalizedDate(value) {
@@ -289,6 +289,19 @@ export function useFmsData() {
     }
   }
 
+  async function syncFms() {
+    setSubmitting(true);
+    try {
+      const response = await syncFmsTasks();
+      reload();
+      return { success: true, response };
+    } catch (error) {
+      return { success: false, message: error.message || 'FMS sync failed.' };
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return {
     employeeId,
     currentUser: user || null,
@@ -318,7 +331,8 @@ export function useFmsData() {
     categoryOptions,
     tabCounts,
     completeTask,
-    createTask
+    createTask,
+    syncFms
   };
 }
 

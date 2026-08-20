@@ -44,20 +44,20 @@ export function AttendanceEntryPanel({
         <div className="attendance-punch-actions">
           <button
             type="button"
-            className={`attendance-cta attendance-cta--purple${photoBase64 ? ' attendance-cta--hidden' : ''}`}
+            className={`attendance-cta attendance-cta--purple punch-btn-capture${photoBase64 ? ' attendance-cta--hidden' : ''}`}
             disabled={!cameraReady || submitting || Boolean(photoBase64) || Boolean(punchAction)}
             onClick={onCapturePhoto}
           >
             Capture
           </button>
           {photoBase64 ? (
-            <button type="button" className="attendance-cta attendance-cta--gray" disabled={submitting || Boolean(punchAction)} onClick={onRetakePhoto}>
+            <button type="button" className="attendance-cta attendance-cta--gray punch-btn-retake" disabled={submitting || Boolean(punchAction)} onClick={onRetakePhoto}>
               Retake
             </button>
           ) : null}
           <button
             type="button"
-            className={`attendance-cta attendance-cta--green${punchInBusy ? ' attendance-cta--busy' : ''}`}
+            className={`attendance-cta attendance-cta--green punch-btn-in${punchInBusy ? ' attendance-cta--busy' : ''}`}
             disabled={submitting || !photoBase64 || isPunchedIn || Boolean(punchAction)}
             onClick={() => onPunch('Punch In')}
           >
@@ -65,7 +65,7 @@ export function AttendanceEntryPanel({
           </button>
           <button
             type="button"
-            className={`attendance-cta attendance-cta--red${punchOutBusy ? ' attendance-cta--busy' : ''}`}
+            className={`attendance-cta attendance-cta--red punch-btn-out${punchOutBusy ? ' attendance-cta--busy' : ''}`}
             disabled={submitting || !photoBase64 || !isPunchedIn || Boolean(punchAction)}
             onClick={() => onPunch('Punch Out')}
           >
@@ -73,7 +73,7 @@ export function AttendanceEntryPanel({
           </button>
           <button
             type="button"
-            className="attendance-cta attendance-cta--gray"
+            className="attendance-cta attendance-cta--gray punch-btn-cancel"
             disabled={submitting || Boolean(punchAction)}
             onClick={onClose}
           >

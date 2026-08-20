@@ -49,48 +49,66 @@ async function getRedisClient() {
 }
 
 async function getJson(cacheKey) {
-  const client = await getRedisClient();
-  if (!client) return null;
-  const raw = await client.get(cacheKey);
-  if (!raw) return null;
   try {
+    const client = await getRedisClient();
+    if (!client) return null;
+    const raw = await client.get(cacheKey);
+    if (!raw) return null;
     return JSON.parse(raw);
-  } catch {
+  } catch (err) {
     return null;
   }
 }
 
 async function setJson(cacheKey, value, ttlMs) {
-  const client = await getRedisClient();
-  if (!client) return false;
-  const serialized = JSON.stringify(value);
-  if (Number.isFinite(ttlMs) && ttlMs > 0) {
-    await client.set(cacheKey, serialized, { PX: ttlMs });
-  } else {
-    await client.set(cacheKey, serialized);
+  try {
+    const client = await getRedisClient();
+    if (!client) return false;
+    const serialized = JSON.stringify(value);
+    if (Number.isFinite(ttlMs) && ttlMs > 0) {
+      if (typeof client.pSetEx === 'function') {
+        await client.pSetEx(cacheKey, Math.round(ttlMs), serialized);
+      } else if (typeof client.setEx === 'function') {
+        await client.setEx(cacheKey, Math.max(1, Math.ceil(ttlMs / 1000)), serialized);
+      } else {
+        await client.set(cacheKey, serialized, { PX: Math.round(ttlMs) });
+      }
+    } else {
+      await client.set(cacheKey, serialized);
+    }
+    return true;
+  } catch (err) {
+    return false;
   }
-  return true;
 }
 
 async function deleteKey(cacheKey) {
-  const client = await getRedisClient();
-  if (!client) return false;
-  await client.del(cacheKey);
-  return true;
+  try {
+    const client = await getRedisClient();
+    if (!client) return false;
+    await client.del(cacheKey);
+    return true;
+  } catch (err) {
+    return false;
+  }
 }
 
 async function deleteByPrefix(prefix) {
-  const client = await getRedisClient();
-  if (!client) return 0;
-  const pattern = `${prefix}*`;
-  const keys = [];
-  for await (const key of client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
-    keys.push(key);
+  try {
+    const client = await getRedisClient();
+    if (!client) return 0;
+    const pattern = `${prefix}*`;
+    const keys = [];
+    for await (const key of client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+      keys.push(key);
+    }
+    if (keys.length) {
+      await client.del(keys.length === 1 ? keys[0] : keys);
+    }
+    return keys.length;
+  } catch (err) {
+    return 0;
   }
-  if (keys.length) {
-    await client.del(keys);
-  }
-  return keys.length;
 }
 
 export {

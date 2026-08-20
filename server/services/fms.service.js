@@ -398,7 +398,7 @@ async function cleanupStaleFmsSheetRows(currentTaskIds = []) {
   return result.deletedCount || 0;
 }
 
-async function syncFmsFromGoogleSheet() {
+export async function syncFmsFromGoogleSheet() {
   if (!fmsSheetSyncEnabled()) return { synced: false, count: 0 };
   const rows = await fetchFmsSheetRows();
   const currentTaskIds = rows.map((row, index) => fmsSheetTaskId(row, index));
@@ -708,7 +708,7 @@ function filterFmsRows(rows = [], filters = {}) {
 function sortFmsRows(rows = []) {
   return [...rows].sort((left, right) => {
     if (left._completed !== right._completed) return Number(left._completed) - Number(right._completed);
-    return safe(first(left, ['planDate', 'Plan Date', 'Date'])).localeCompare(safe(first(right, ['planDate', 'Plan Date', 'Date'])));
+    return safe(first(right, ['planDate', 'Plan Date', 'Date'])).localeCompare(safe(first(left, ['planDate', 'Plan Date', 'Date'])));
   });
 }
 

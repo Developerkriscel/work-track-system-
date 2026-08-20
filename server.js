@@ -39,8 +39,13 @@ const __dirname = path.dirname(__filename);
 const clientDistPath = path.join(__dirname, 'client', 'dist');
 const hasClientDist = fs.existsSync(clientDistPath);
 assertAuthConfiguration();
+const allowedOrigins = String(process.env.CLIENT_ORIGIN || '')
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean);
+const corsOrigin = allowedOrigins.length === 0 ? true : allowedOrigins.length === 1 ? allowedOrigins[0] : allowedOrigins;
 
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || true, credentials: true }));
+app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(express.json({ limit: '25mb' }));
 
 app.use((req, res, next) => {
@@ -80,15 +85,6 @@ app.use((req, res, next) => {
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
-    const hasCleanupCookie = /\bworktrack_exact_cache_cleared=1\b/.test(req.headers.cookie || '');
-    if (!hasCleanupCookie) {
-      res.set('Clear-Site-Data', '"cache", "storage"');
-      res.cookie('worktrack_exact_cache_cleared', '1', {
-        httpOnly: false,
-        sameSite: 'lax',
-        maxAge: 365 * 24 * 60 * 60 * 1000
-      });
-    }
   }
   next();
 });
@@ -299,7 +295,8 @@ app.get(/^\/(?!api\/|uploads\/).*/, (_req, res) => {
 </html>`);
 });
 
-app.use('/api', (_req, res) => {
+app.use('/api', (req, res) => {
+  console.log('404 API Not Found:', req.method, req.originalUrl);
   res.status(404).json({ success: false, message: 'API endpoint not found.' });
 });
 
