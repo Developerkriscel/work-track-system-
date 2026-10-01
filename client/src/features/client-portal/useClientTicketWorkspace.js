@@ -16,14 +16,29 @@ import {
   resolveClientRange,
   shortIsoDate,
   shortTicketDescription,
-  sortClientTickets,
   ticketLatestUpdate,
   ticketLatestUpdatePreview,
   ticketStatusTone
 } from '@/features/client-portal/services';
 import { useClientPortalResource } from '@/features/client-portal/useClientPortalResource';
 
-const EMPTY_ROWS = Object.freeze([]);
+const EMPTY_TICKET_RESULT = Object.freeze({
+  rows: [],
+  pagination: {
+    page: 1,
+    pageSize: 10,
+    total: 0,
+    totalPages: 1,
+    start: 0,
+    end: 0
+  },
+  counts: {
+    all: 0,
+    open: 0,
+    response: 0,
+    closed: 0
+  }
+});
 
 const RANGE_OPTIONS = Object.freeze([
   { value: 'all', label: 'All Time' },
@@ -59,24 +74,68 @@ export function useClientTicketWorkspace() {
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
   const [refreshToken, setRefreshToken] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSizeState] = useState(10);
+  const [search, setSearchState] = useState('');
+  const [sortKey, setSortKey] = useState('createdDate');
+  const [sortDirection, setSortDirection] = useState('desc');
 
   const loadResource = useCallback(async (clientId) => {
     const resolved = resolveClientRange(range, customStart, customEnd);
-    const payload = await fetchClientTickets(clientId, resolved.startDate, resolved.endDate, null);
-    return Array.isArray(payload.data) ? sortClientTickets(payload.data) : EMPTY_ROWS;
-  }, [customEnd, customStart, range, refreshToken]);
+    const payload = await fetchClientTickets(clientId, resolved.startDate, resolved.endDate, null, {
+      paginated: true,
+      statusGroup: activeTab,
+      page,
+      pageSize,
+      search,
+      sortKey,
+      sortDirection
+    });
+    return {
+      rows: Array.isArray(payload.data) ? payload.data : [],
+      pagination: payload.pagination || EMPTY_TICKET_RESULT.pagination,
+      counts: payload.counts || EMPTY_TICKET_RESULT.counts
+    };
+  }, [activeTab, customEnd, customStart, page, pageSize, range, refreshToken, search, sortDirection, sortKey]);
 
-  const { client, clientId, loading, error, value } = useClientPortalResource(loadResource, EMPTY_ROWS);
-  const groupedRows = useMemo(() => groupClientTickets(value), [value]);
+  const { client, clientId, loading, error, value } = useClientPortalResource(loadResource, EMPTY_TICKET_RESULT);
+  const rows = Array.isArray(value?.rows) ? value.rows : [];
 
   const tabCounts = useMemo(() => ({
-    all: groupedRows.all.length,
-    open: groupedRows.open.length,
-    response: groupedRows.response.length,
-    closed: groupedRows.closed.length
-  }), [groupedRows]);
+    all: value?.counts?.all || 0,
+    open: value?.counts?.open || 0,
+    response: value?.counts?.response || 0,
+    closed: value?.counts?.closed || 0
+  }), [value]);
 
-  const visibleRows = groupedRows[activeTab] || groupedRows.all;
+  const visibleRows = rows;
+  const pagination = value?.pagination || EMPTY_TICKET_RESULT.pagination;
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, range, customStart, customEnd, search, sortKey, sortDirection]);
+
+  const setPageSize = useCallback((value) => {
+    setPageSizeState(Number(value) || 10);
+    setPage(1);
+  }, []);
+
+  const setSearch = useCallback((value) => {
+    setSearchState(value);
+    setPage(1);
+  }, []);
+
+  const toggleSort = useCallback((key) => {
+    setSortKey((current) => {
+      if (current === key) {
+        setSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'));
+        return current;
+      }
+      setSortDirection('asc');
+      return key;
+    });
+    setPage(1);
+  }, []);
 
   const summaryItems = useMemo(() => ([
     { label: 'Total Tickets', value: tabCounts.all, tone: 'purple', Icon: Tickets },
@@ -228,7 +287,7 @@ export function useClientTicketWorkspace() {
     customStart,
     draftRows,
     error,
-    groupedRows,
+    groupedRows: groupClientTickets(rows),
     loading,
     message,
     modeOptions: MODE_CONFIG,
@@ -246,6 +305,15 @@ export function useClientTicketWorkspace() {
     summaryItems,
     tabCounts,
     tabOptions: TAB_CONFIG,
+    tablePagination: pagination,
+    tablePageSize: pageSize,
+    tableSearch: search,
+    tableSortDirection: sortDirection,
+    tableSortKey: sortKey,
+    setTablePage: setPage,
+    setTablePageSize: setPageSize,
+    setTableSearch: setSearch,
+    toggleTableSort: toggleSort,
     ticketPriorityTone: clientTicketPriorityTone,
     ticketStatusLabel: displayClientTicketStatus,
     ticketStatusTone,

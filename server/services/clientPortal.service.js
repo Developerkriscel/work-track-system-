@@ -1,5 +1,6 @@
 import { saveBase64File } from './fileStorage.service.js';
-import { insertRow, listRows, upsertRow } from './legacyStore.service.js';
+import { insertRow, listRows, stripInternalMetadata, upsertRow } from './legacyStore.service.js';
+import { LegacyModels } from '../models/legacyModels.js';
 
 const safe = (value) => String(value ?? '').trim();
 const eq = (left, right) => safe(left).toLowerCase() === safe(right).toLowerCase();
@@ -7,6 +8,189 @@ const first = (row, keys, fallback = '') => keys.map((key) => row?.[key]).find((
 const num = (value) => Number(String(value ?? 0).replace(/[^0-9.-]/g, '')) || 0;
 const ok = (payload = {}) => ({ success: true, ...payload });
 const fail = (message) => ({ success: false, message });
+const fromLegacyDoc = (doc) => doc ? { ...stripInternalMetadata(doc.data || {}), _id: String(doc._id), _legacyId: doc.legacyId } : null;
+const fromLegacyDocs = (docs = []) => docs.map(fromLegacyDoc).filter(Boolean);
+
+function idVariants(value) {
+  const raw = safe(value);
+  return Array.from(new Set([raw, raw.toUpperCase(), raw.toLowerCase()].filter(Boolean)));
+}
+
+function clientTicketClientQuery(clientId) {
+  const values = idVariants(clientId);
+  return {
+    $or: [
+      { 'data.Client_Id': { $in: values } },
+      { 'data.Client ID': { $in: values } },
+      { 'data.CustomerID': { $in: values } },
+      { 'data.clientId': { $in: values } }
+    ]
+  };
+}
+
+function ticketIdQuery(ticketId) {
+  const values = idVariants(ticketId);
+  return {
+    $or: [
+      { legacyId: { $in: values } },
+      { 'data.Ticket ID': { $in: values } },
+      { 'data.Task ID': { $in: values } },
+      { 'data.ID': { $in: values } },
+      { 'data.ticketId': { $in: values } },
+      { 'data.taskId': { $in: values } }
+    ]
+  };
+}
+
+function clientOriginTicketQuery() {
+  return {
+    $or: [
+      { 'data.Origin': /^client$/i },
+      { 'data.origin': /^client$/i },
+      { 'data.Client Ticket': /^(yes|true)$/i },
+      { 'data.clientTicket': /^(yes|true)$/i },
+      { 'data.Is Client Ticket': /^(yes|true)$/i },
+      { 'data.isClientTicket': /^(yes|true)$/i },
+      { 'data.Source': /client portal|^client$/i },
+      { 'data.source': /client portal|^client$/i },
+      { 'data.Ticket Source': /client portal|^client$/i },
+      { 'data.ticketSource': /client portal|^client$/i },
+      { 'data.Remarks': /created from (mern )?client portal/i },
+      { 'data.remarks': /created from (mern )?client portal/i }
+    ]
+  };
+}
+
+function ticketDateRangeQuery(startDate, endDate) {
+  if (!startDate || !endDate) return null;
+  const start = normalizedDate(startDate);
+  const end = normalizedDate(endDate);
+  return {
+    $or: ['Plan Date', 'Date', 'Timestamp', 'Created Date', 'Created At'].map((key) => ({
+      [`data.${key}`]: { $gte: start, $lte: `${end}T23:59:59.999Z` }
+    }))
+  };
+}
+
+function ticketProjection() {
+  return {
+    legacyId: 1,
+    'data.Ticket ID': 1,
+    'data.Task ID': 1,
+    'data.ID': 1,
+    'data.Client_Id': 1,
+    'data.Client ID': 1,
+    'data.CustomerID': 1,
+    'data.clientId': 1,
+    'data.Name': 1,
+    'data.Client Name': 1,
+    'data.Client': 1,
+    'data.Employee ID': 1,
+    'data.EmpID': 1,
+    'data.employeeId': 1,
+    'data.Employee Name': 1,
+    'data.User': 1,
+    'data.employeeName': 1,
+    'data.Task Category': 1,
+    'data.Category': 1,
+    'data.Priority': 1,
+    'data.Task Description': 1,
+    'data.Description': 1,
+    'data.Status': 1,
+    'data.Timestamp': 1,
+    'data.Date': 1,
+    'data.Plan Date': 1,
+    'data.Last Update Date': 1,
+    'data.Start Time': 1,
+    'data.End Time': 1,
+    'data.Total Duration': 1,
+    'data.Duration': 1,
+    'data.Remarks': 1,
+    'data.TAT': 1,
+    'data.When': 1,
+    'data.Task Approver': 1,
+    'data.Reassigned By': 1,
+    'data.Source': 1,
+    'data.Ticket Source': 1,
+    'data.Origin': 1,
+    'data.Client Ticket': 1,
+    'data.Attachments': 1,
+    'data.Attachment': 1,
+    'data.HasUnreadMessages': 1,
+    'data.HasUnreadAdminMessages': 1
+  };
+}
+
+function escapeRegex(value) {
+  return String(value ?? '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function clientTicketBaseAnd(clientId, { startDate = '', endDate = '' } = {}) {
+  const and = [clientTicketClientQuery(clientId), clientOriginTicketQuery()];
+  const range = ticketDateRangeQuery(startDate, endDate);
+  if (range) and.push(range);
+  return and;
+}
+
+function clientTicketSearchQuery(search = '') {
+  const query = safe(search);
+  if (!query) return null;
+  const pattern = new RegExp(escapeRegex(query), 'i');
+  return {
+    $or: [
+      { legacyId: pattern },
+      { 'data.Ticket ID': pattern },
+      { 'data.ID': pattern },
+      { 'data.Task Description': pattern },
+      { 'data.Description': pattern },
+      { 'data.Remarks': pattern },
+      { 'data.Status': pattern },
+      { 'data.Priority': pattern }
+    ]
+  };
+}
+
+function clientTicketStatusQuery(group = '') {
+  const value = safe(group).toLowerCase();
+  const responseQuery = { 'data.Status': /pending client response/i };
+  const closedQuery = {
+    $or: [
+      { 'data.Status': /closed/i },
+      { 'data.Status': /completed/i },
+      { 'data.Status': /resolved/i },
+      { 'data.Status': /done/i },
+      { 'data.Status': /approved/i },
+      { 'data.Status': /cancelled/i }
+    ]
+  };
+
+  if (value === 'response') return responseQuery;
+  if (value === 'closed') return closedQuery;
+  if (value === 'open') {
+    return {
+      $and: [
+        { 'data.Status': { $not: /pending client response/i } },
+        { 'data.Status': { $not: /closed|completed|resolved|done|approved|cancelled/i } }
+      ]
+    };
+  }
+  return null;
+}
+
+function clientTicketSort(sortKey = 'createdDate', sortDirection = 'desc') {
+  const dir = safe(sortDirection).toLowerCase() === 'asc' ? 1 : -1;
+  const keyMap = {
+    id: 'data.Ticket ID',
+    description: 'data.Task Description',
+    latestUpdate: 'data.Last Update Date',
+    status: 'data.Status',
+    priority: 'data.Priority',
+    createdDate: 'data.Timestamp',
+    expectedDate: 'data.Plan Date'
+  };
+  const key = keyMap[sortKey] || keyMap.createdDate;
+  return { [key]: dir, updatedAt: -1, 'data.Last Update Date': -1, 'data.Timestamp': -1 };
+}
 
 function parseReferenceNow(value) {
   if (!value) return new Date();
@@ -197,6 +381,100 @@ async function getRows() {
   return { tickets, clients, fms, social, invoices, messages };
 }
 
+async function findClientTicketRows(clientId, { startDate = '', endDate = '' } = {}) {
+  const and = clientTicketBaseAnd(clientId, { startDate, endDate });
+  const docs = await LegacyModels.Ticket.collection
+    .find({ $and: and }, { projection: ticketProjection() })
+    .sort({ 'data.Last Update Date': -1, 'data.Timestamp': -1, 'data.Plan Date': -1, updatedAt: -1 })
+    .toArray();
+  return fromLegacyDocs(docs).filter(isClientOriginTicket);
+}
+
+async function findClientTicketPage(clientId, {
+  startDate = '',
+  endDate = '',
+  statusGroup = 'all',
+  search = '',
+  page = 1,
+  pageSize = 10,
+  sortKey = 'createdDate',
+  sortDirection = 'desc'
+} = {}) {
+  const baseAnd = clientTicketBaseAnd(clientId, { startDate, endDate });
+  const searchQuery = clientTicketSearchQuery(search);
+  const statusQuery = clientTicketStatusQuery(statusGroup);
+  const filteredAnd = [...baseAnd];
+  if (searchQuery) filteredAnd.push(searchQuery);
+  if (statusQuery) filteredAnd.push(statusQuery);
+
+  const baseMatch = { $and: baseAnd };
+  const filteredMatch = { $and: filteredAnd };
+  const limit = Math.max(1, Math.min(100, Number(pageSize) || 10));
+  const safePage = Math.max(1, Number(page) || 1);
+  const skip = (safePage - 1) * limit;
+
+  const [docs, total, allCount, openCount, responseCount, closedCount] = await Promise.all([
+    LegacyModels.Ticket.collection
+      .find(filteredMatch, { projection: ticketProjection() })
+      .sort(clientTicketSort(sortKey, sortDirection))
+      .skip(skip)
+      .limit(limit)
+      .toArray(),
+    LegacyModels.Ticket.collection.countDocuments(filteredMatch),
+    LegacyModels.Ticket.collection.countDocuments(baseMatch),
+    LegacyModels.Ticket.collection.countDocuments({ $and: [...baseAnd, clientTicketStatusQuery('open')] }),
+    LegacyModels.Ticket.collection.countDocuments({ $and: [...baseAnd, clientTicketStatusQuery('response')] }),
+    LegacyModels.Ticket.collection.countDocuments({ $and: [...baseAnd, clientTicketStatusQuery('closed')] })
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const normalizedPage = Math.min(safePage, totalPages);
+  return {
+    rows: fromLegacyDocs(docs).filter(isClientOriginTicket),
+    pagination: {
+      page: normalizedPage,
+      pageSize: limit,
+      total,
+      totalPages,
+      start: total ? skip + 1 : 0,
+      end: Math.min(skip + docs.length, total)
+    },
+    counts: {
+      all: allCount,
+      open: openCount,
+      response: responseCount,
+      closed: closedCount
+    }
+  };
+}
+
+async function findClientTicket(ticketId, clientId) {
+  const docs = await LegacyModels.Ticket.collection
+    .find({ $and: [ticketIdQuery(ticketId), clientTicketClientQuery(clientId), clientOriginTicketQuery()] }, { projection: ticketProjection() })
+    .limit(5)
+    .toArray();
+  return fromLegacyDocs(docs).find((item) =>
+    eq(first(item, ['Ticket ID', 'Task ID', 'ID', 'ticketId', 'taskId']), ticketId)
+    && (!clientId || eq(first(item, ['Client_Id', 'Client ID', 'CustomerID', 'clientId']), clientId))
+    && isClientOriginTicket(item)
+  ) || null;
+}
+
+async function findTaskMessages(taskId) {
+  const values = idVariants(taskId);
+  const docs = await LegacyModels.Message.collection
+    .find({
+      $or: [
+        { 'data.TaskID': { $in: values } },
+        { 'data.Task ID': { $in: values } },
+        { 'data.ticketId': { $in: values } }
+      ]
+    }, { projection: { legacyId: 1, data: 1 } })
+    .sort({ 'data.Timestamp': 1, createdAt: 1 })
+    .toArray();
+  return fromLegacyDocs(docs);
+}
+
 async function checkPaymentRestriction(_clientId) {
   return { restricted: false, message: '' };
 }
@@ -243,14 +521,27 @@ export async function createBulkTicketsWithDetails(ticketList = [], clientInfo =
   return ok({ message: `${created.length} ticket(s) created successfully.`, data: created });
 }
 
-export async function getClientTickets(clientId, startDate, endDate, statusFilter = null) {
-  const data = await getRows();
-  let items = data.tickets
-    .filter((ticket) => eq(ticket.Client_Id, clientId) && isClientOriginTicket(ticket))
-    .map((ticket) => asTicketRow(ticket, data.clients));
-  if (startDate && endDate) {
-    items = items.filter((ticket) => dateInRange(first(ticket, ['Plan Date', 'Date', 'Timestamp']), startDate, endDate));
+export async function getClientTickets(clientId, startDate, endDate, statusFilter = null, options = {}) {
+  if (options?.paginated) {
+    const result = await findClientTicketPage(clientId, {
+      startDate,
+      endDate,
+      statusGroup: options.statusGroup || statusFilter || 'all',
+      search: options.search || '',
+      page: options.page || 1,
+      pageSize: options.pageSize || 10,
+      sortKey: options.sortKey || 'createdDate',
+      sortDirection: options.sortDirection || 'desc'
+    });
+    return ok({
+      data: result.rows.map((ticket) => asTicketRow(ticket)),
+      pagination: result.pagination,
+      counts: result.counts
+    });
   }
+
+  let items = (await findClientTicketRows(clientId, { startDate, endDate }))
+    .map((ticket) => asTicketRow(ticket));
   if (statusFilter === 'open') items = items.filter((ticket) => !isClosedStatus(ticket.Status));
   if (statusFilter === 'closed') items = items.filter((ticket) => isClosedStatus(ticket.Status));
   return ok({ data: items });
@@ -386,7 +677,7 @@ export async function getClientReportData(clientId, startDate, endDate) {
 }
 
 export async function updateTicketStatusByClient(ticketId, newStatus, remarks, clientId) {
-  const ticket = (await listRows('Ticket')).find((item) => eq(first(item, ['Ticket ID', 'ID', 'ticketId']), ticketId) && eq(first(item, ['Client_Id', 'Client ID', 'clientId']), clientId));
+  const ticket = await findClientTicket(ticketId, clientId);
   if (!ticket) return fail('Permission denied or Ticket not found.');
   const row = await upsertRow('Ticket', 'Ticket ID', ticketId, {
     'Ticket ID': ticketId,
@@ -400,8 +691,7 @@ export async function updateTicketStatusByClient(ticketId, newStatus, remarks, c
 
 export async function submitClientResponse(ticketId, remarks, attachment, clientInfo) {
   const clientId = clientInfo?.Client_Id || clientInfo?.['Client ID'] || '';
-  const ticketRows = await listRows('Ticket');
-  const existingTicket = ticketRows.find((item) => eq(first(item, ['Ticket ID', 'ID', 'ticketId']), ticketId) && eq(first(item, ['Client_Id', 'Client ID', 'clientId']), clientId));
+  const existingTicket = await findClientTicket(ticketId, clientId);
   if (!existingTicket) return fail('Permission denied or Ticket not found.');
   const savedAttachment =
     attachment?.base64 ? await saveBase64File(attachment, 'client_ticket_responses') : safe(attachment);
@@ -413,6 +703,8 @@ export async function submitClientResponse(ticketId, remarks, attachment, client
     TaskID: ticketId,
     Timestamp: timestamp,
     Sender: sender,
+    'Sender Type': 'client',
+    'Sender ID': clientId,
     Message: remarks || 'Client response submitted.',
     Attachment: savedAttachment
   };
@@ -434,30 +726,28 @@ export async function submitClientResponse(ticketId, remarks, attachment, client
 }
 
 export async function getTicketDetails(ticketId, clientId) {
-  const data = await getRows();
-  const ticket = data.tickets.find((item) => eq(item['Ticket ID'], ticketId) && (!clientId || eq(item.Client_Id, clientId)));
-  return ticket ? ok({ data: asTicketRow(ticket, data.clients) }) : fail('Permission denied or Ticket not found.');
+  const ticket = await findClientTicket(ticketId, clientId);
+  return ticket ? ok({ data: asTicketRow(ticket) }) : fail('Permission denied or Ticket not found.');
 }
 
 export async function getMessagesForTask(taskId, clientId) {
-  const ticketExists = (await listRows('Ticket')).some((item) => eq(first(item, ['Ticket ID', 'ID', 'ticketId']), taskId) && eq(first(item, ['Client_Id', 'Client ID', 'clientId']), clientId));
-  if (!ticketExists) return fail('Permission denied or Ticket not found.');
-  const data = await getRows();
-  const messages = data.messages
-    .filter((message) => eq(message.TaskID, taskId))
-    .sort((left, right) => (Date.parse(left.Timestamp) || 0) - (Date.parse(right.Timestamp) || 0));
+  const ticket = await findClientTicket(taskId, clientId);
+  if (!ticket) return fail('Permission denied or Ticket not found.');
+  const messages = await findTaskMessages(taskId);
   return ok({ data: messages, messages });
 }
 
 export async function postMessage(taskId, messageText, client) {
   const clientId = client?.Client_Id || client?.['Client ID'] || '';
-  const ticketExists = (await listRows('Ticket')).some((item) => eq(first(item, ['Ticket ID', 'ID', 'ticketId']), taskId) && eq(first(item, ['Client_Id', 'Client ID', 'clientId']), clientId));
-  if (!ticketExists) return fail('Permission denied or Ticket not found.');
+  const ticket = await findClientTicket(taskId, clientId);
+  if (!ticket) return fail('Permission denied or Ticket not found.');
   const row = {
     MessageID: `MSG_${Date.now()}`,
     TaskID: taskId,
     Timestamp: nowIso(),
     Sender: client?.['Client Name'] || 'Client',
+    'Sender Type': 'client',
+    'Sender ID': clientId,
     Message: messageText
   };
   await insertRow('Message', row);
@@ -471,8 +761,8 @@ export async function postMessage(taskId, messageText, client) {
 }
 
 export async function markTicketMessagesAsRead(taskId, clientId) {
-  const ticketExists = (await listRows('Ticket')).some((item) => eq(first(item, ['Ticket ID', 'ID', 'ticketId']), taskId) && eq(first(item, ['Client_Id', 'Client ID', 'clientId']), clientId));
-  if (!ticketExists) return fail('Permission denied or Ticket not found.');
+  const ticket = await findClientTicket(taskId, clientId);
+  if (!ticket) return fail('Permission denied or Ticket not found.');
   const update = clientId
     ? { 'Ticket ID': taskId, HasUnreadMessages: false }
     : { 'Ticket ID': taskId, HasUnreadAdminMessages: false };

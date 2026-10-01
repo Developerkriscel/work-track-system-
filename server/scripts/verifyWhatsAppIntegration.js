@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import { WhatsAppIntegration } from '../models/whatsappIntegration.model.js';
+import { WhatsAppContact } from '../models/whatsappContact.model.js';
+import { WhatsAppOutboundLog } from '../models/whatsappOutboundLog.model.js';
+import { sendWhatsAppText } from '../services/aknexusWhatsApp.service.js';
+import { effectiveIntegration, publicIntegration, normalizeIntegration, encryptToken, decryptToken, saveIntegration } from '../services/whatsappIntegration.service.js';
+process.env.WHATSAPP_CONFIG_ENCRYPTION_KEY = 'ab'.repeat(32);
+process.env.AKNEXUS_ACCESS_TOKEN = 'existing-secret';
+process.env.AKNEXUS_INSTANCE_ID = 'EXISTING';
+let stored = null;
+WhatsAppIntegration.findById = () => ({ lean: async () => stored });
+WhatsAppIntegration.findOneAndUpdate = (query, update) => ({ lean: async () => {
+  if (stored && query.revision !== stored.revision) return null;
+  stored = { ...update.$set, revision: (stored?.revision || 0) + 1 };
+  return stored;
+} });
+const original = await effectiveIntegration();
+assert.equal(original.source, 'environment');
+assert.equal(original.apiBaseUrl, 'https://app.aknexus.in/api');
+assert.equal(decryptToken(encryptToken('secret')), 'secret');
+assert(!JSON.stringify(publicIntegration(original)).includes('existing-secret'));
+assert(!('accessToken' in publicIntegration(original)));
+for (const url of ['http://example.com/api', 'https://127.0.0.1/api', 'https://localhost/api', 'https://user:pass@example.com/api', 'https://example.com/api?token=x', 'https://app.aknexus.in/api/send/']) assert.throws(() => normalizeIntegration({ ...original, apiBaseUrl: url }, original));
+assert.throws(() => normalizeIntegration({ ...original, provider: 'unsupported' }, original));
+assert.throws(() => normalizeIntegration({ ...original, provider: 'compatible', providerName: 'Next', apiBaseUrl: 'https://example.com/api', accessToken: '' }, original));
+await assert.rejects(saveIntegration({ ...original }, { sub: 'HR', role: 'HR' }), (e) => e.status === 403);
+await assert.rejects(saveIntegration({ ...original, revision: 99 }, { sub: 'SA', role: 'Super Admin' }), (e) => e.status === 409);
+await saveIntegration({ ...original, accessToken: '', instanceId: 'UPDATED' }, { sub: 'SA', role: 'Super Admin' });
+assert.equal((await effectiveIntegration()).accessToken, 'existing-secret');
+assert(!stored.encryptedToken.includes('existing-secret'));
+const current = await effectiveIntegration();
+await saveIntegration({ ...current, provider: 'compatible', providerName: 'Next Provider', apiBaseUrl: 'https://app.aknexus.in/alternate-api', accessToken: 'new-secret', senderNumber: '+919876543210' }, { sub: 'SA', role: 'Super Admin' }, { validateHost: async () => {} });
+assert.equal((await effectiveIntegration()).providerName, 'Next Provider');
+assert.equal((await effectiveIntegration()).accessToken, 'new-secret');
+assert.equal((await effectiveIntegration()).revision, 2);
+await assert.rejects(saveIntegration({ ...current, revision: 1 }, { sub: 'SA', role: 'Super Admin' }), (e) => e.status === 409);
+WhatsAppContact.findById = () => ({ lean: async () => ({ _id: 'aaaaaaaaaaaaaaaaaaaaaaaa', phone: '+919876543210', name: 'Test', employeeId: '', enabled: true, alertTypes: ['ticket'] }) });
+let recorded;
+WhatsAppOutboundLog.create = async (row) => { recorded = row; return { toObject: () => row }; };
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (url, options) => {
+  assert.equal(url, 'https://app.aknexus.in/alternate-api/send');
+  assert.equal(JSON.parse(options.body).access_token, 'new-secret');
+  assert.equal(JSON.parse(options.body).instance_id, 'UPDATED');
+  return Response.json({ status: 'success', message: 'accepted new-secret' });
+};
+try {
+  await sendWhatsAppText({ contactId: 'aaaaaaaaaaaaaaaaaaaaaaaa', message: 'Transport test', alertType: 'ticket' });
+  assert.equal(recorded.provider, 'Next Provider');
+  assert(!JSON.stringify(recorded).includes('new-secret'));
+} finally { globalThis.fetch = realFetch; }
+console.log('Integration passed: environment fallback, encrypted tokens, masked responses, URL validation, permissions, revision conflicts, token retention and provider switching. No real provider/database writes.');

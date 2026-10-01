@@ -3,6 +3,7 @@ import PDFDocument from 'pdfkit-table';
 import { LegacyModels } from '../models/legacyModels.js';
 import { listRows, registerStoreMutationListener } from './legacyStore.service.js';
 import { buildRedisKey, getJson, setJson } from './redisCache.service.js';
+import { getTeamAttendanceForReviewer } from './attendance.service.js';
 
 const closedTerms = ['closed', 'approved', 'cancelled', 'completed', 'done', 'resolved', 'paid'];
 const safe = (value = '') => String(value ?? '').trim();
@@ -19,7 +20,7 @@ const REPORT_CACHE_TTL_MS = Number(process.env.WORKTRACK_REPORT_CACHE_TTL_MS || 
 const reportMemoryCache = new Map();
 const reportInflight = new Map();
 const REPORT_VERSION_KEY = buildRedisKey('reports', 'version');
-const REPORT_CACHE_PREFIX = 'reports-cache';
+const REPORT_CACHE_PREFIX = 'reports-cache-v6';
 const reportRelevantModels = new Set([
   'Ticket',
   'FmsTask',
@@ -570,11 +571,34 @@ export async function exportReportForWeb(format = 'csv', sheetName = 'Report', e
       .map((task) => asFmsRow(task, userIndex))
       .filter((task) => matchesFmsFilters(task, filters));
 
+    let attendanceExportData = [];
+    if (/attendance/i.test(sheetName)) {
+      const attendanceResult = await getTeamAttendanceForReviewer(employeeId, startDate, endDate);
+      if (attendanceResult.success && attendanceResult.data) {
+        attendanceExportData = attendanceResult.data.filter((item) => {
+          if (!filters.employees || filters.employees.length === 0) return true;
+          return filters.employees.includes(item.employeeId);
+        }).map(item => ({
+          Date: item.dateLabel || item.date,
+          'Employee ID': item.employeeId || '-',
+          'Employee Name': item.employeeName || '-',
+          Role: item.role || '',
+          Department: item.department || '',
+          'Punch In': item.punchInTime || '-',
+          'Punch Out': item.punchOutTime || '-',
+          Status: item.status || '-',
+          'Departure Status': item.outStatus || '-',
+          Duration: item.duration || '-',
+          'Admin Remarks': item.adminRemarks || ''
+        }));
+      }
+    }
+
     const sheetKey = safe(sheetName).toLowerCase();
     const source =
       /ticket/.test(sheetKey) ? tickets :
       /fms/.test(sheetKey) ? fms :
-      /attendance/.test(sheetKey) ? data.attendance :
+      /attendance/.test(sheetKey) ? attendanceExportData :
       /expense/.test(sheetKey) ? data.expenses :
       /todo|to-do|to do/.test(sheetKey) ? data.todos :
       /leave/.test(sheetKey) ? data.leaves :
@@ -588,7 +612,97 @@ export async function exportReportForWeb(format = 'csv', sheetName = 'Report', e
     const fileBase = cleanFileName(sheetName, 'report');
 
     if (normalizedFormat === 'xlsx') {
-      const worksheet = XLSX.utils.json_to_sheet(source, { header: headers });
+      let worksheet;
+      if (/attendance/i.test(sheetName)) {
+        const getPunchInMinutes = (timeStr) => {
+          if (!timeStr || timeStr === '-') return -1;
+          const match = String(timeStr).match(/(\d+):(\d+)\s*(am|pm)/i);
+          if (match) {
+            let h = parseInt(match[1], 10);
+            const m = parseInt(match[2], 10);
+            const isPm = match[3].toLowerCase() === 'pm';
+            if (isPm && h < 12) h += 12;
+            if (!isPm && h === 12) h = 0;
+            return h * 60 + m;
+          }
+          const match2 = String(timeStr).match(/(\d+):(\d+)/);
+          if (match2) {
+            return parseInt(match2[1], 10) * 60 + parseInt(match2[2], 10);
+          }
+          return -1;
+        };
+
+        const getDurationHours = (durationStr) => {
+          if (!durationStr || durationStr === '-') return 0;
+          let hours = 0;
+          let mins = 0;
+          const hMatch = String(durationStr).match(/(\d+)h/i);
+          if (hMatch) hours = parseInt(hMatch[1], 10);
+          const mMatch = String(durationStr).match(/(\d+)m/i);
+          if (mMatch) mins = parseInt(mMatch[1], 10);
+          if (hMatch || mMatch) return hours + (mins / 60);
+
+          const parts = String(durationStr).split(':');
+          if (parts.length >= 2) return parseInt(parts[0], 10) + (parseInt(parts[1], 10) / 60);
+          return 0;
+        };
+
+
+        const aoa = [
+          ['Date', 'Employee ID', 'Employee Name', 'Punch IN Time', 'Punch OUT Time', 'Duration', 'Status'],
+          ...attendanceExportData.map(item => {
+            let finalStatus = item.Status;
+            
+            if (!/absent|weekly off|w/i.test(finalStatus)) {
+              const punchInMins = getPunchInMinutes(item['Punch In']);
+              const durHours = getDurationHours(item.Duration);
+              const hasPunchedOut = item['Punch Out'] && item['Punch Out'] !== '-';
+              const lateThreshold = 10 * 60 + 15; // 10:15 AM
+              
+              // Normal day: > 10:15 or < 8 hours
+              if (punchInMins > lateThreshold || (hasPunchedOut && durHours < 8)) {
+                finalStatus = 'Half Day';
+              } else if (/on time/i.test(finalStatus) || (hasPunchedOut && durHours >= 8 && punchInMins <= lateThreshold)) {
+                finalStatus = 'Present';
+              }
+            }
+
+            let formattedDate = item.Date;
+            if (item._rawDate) {
+              const d = new Date(item._rawDate);
+              if (!isNaN(d.getTime())) {
+                const year = d.getFullYear();
+                if (!String(formattedDate).includes(String(year))) {
+                  formattedDate = `${formattedDate}, ${year}`;
+                }
+              }
+            }
+
+            return [
+              formattedDate,
+              item['Employee ID'],
+              item['Employee Name'],
+              item['Punch In'],
+              item['Punch Out'],
+              item.Duration,
+              finalStatus
+            ];
+          })
+        ];
+        worksheet = XLSX.utils.aoa_to_sheet(aoa);
+        worksheet['!cols'] = [
+          { wch: 15 }, // Date
+          { wch: 15 }, // Employee ID
+          { wch: 25 }, // Employee Name
+          { wch: 15 }, // Punch In
+          { wch: 15 }, // Punch Out
+          { wch: 12 }, // Duration
+          { wch: 15 }  // Status
+        ];
+      } else {
+        worksheet = XLSX.utils.json_to_sheet(source, { header: headers });
+      }
+
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, fileBase.slice(0, 31) || 'Report');
       const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });

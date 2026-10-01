@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   createTicket,
   createBulkTickets,
@@ -16,26 +16,6 @@ import {
 } from '@/features/tickets/api';
 import { useAuth } from '@/features/auth/AuthProvider';
 
-function sortStatusWeight(status) {
-  const value = String(status || '').trim().toLowerCase();
-  
-  // Actionable tickets go to the top (1-9)
-  if (value === 'in progress') return 1;
-  if (value === 'open') return 2;
-  if (value === 'approved') return 3; // 'Approved' means approved by admin, ready to start!
-  if (value === 'paused') return 4;
-  if (value === 'rework' || value === 'reassigned' || value.includes('rework')) return 5;
-  
-  // Terminal or waiting tickets go to the very bottom (90+)
-  if (value === 'pending approval' || value.includes('pending')) return 90;
-  if (value === 'completed') return 91;
-  if (value === 'closed' || value === 'approved by client' || value === 'cancelled') return 92;
-  if (value.includes('approved')) return 93;
-  
-  // Any other status (e.g. Assigned, New, Not Started) should be treated as active and put above the terminal ones
-  return 10;
-}
-
 export const ticketStatusOptions = [
   'In Progress',
   'Open',
@@ -44,91 +24,6 @@ export const ticketStatusOptions = [
   'Pending Approval',
   'Closed'
 ];
-
-function normalizeDate(value) {
-  if (!value) return null;
-  const raw = String(value).trim();
-  const ymd = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (ymd) return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
-  const dmy = raw.match(/^(\d{2})-(\d{2})-(\d{4})$/);
-  if (dmy) return new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function filterTickets(tickets, filters) {
-  const clientIds = filters.clientIds;
-  const statuses = filters.statuses;
-  const search = filters.search.trim().toLowerCase();
-
-  function matchesPeriod(ticket) {
-    if (!filters.timePeriod || filters.timePeriod === 'All Time') return true;
-    const rawDate = ticket['Plan Date'] || ticket.Date || ticket.Timestamp;
-    const date = normalizeDate(rawDate);
-    if (!date) return false;
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const value = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const day = today.getDay();
-    const mondayOffset = day === 0 ? 6 : day - 1;
-    const startThisWeek = new Date(today);
-    startThisWeek.setDate(today.getDate() - mondayOffset);
-    const startLastWeek = new Date(startThisWeek);
-    startLastWeek.setDate(startThisWeek.getDate() - 7);
-    const endLastWeek = new Date(startThisWeek);
-    endLastWeek.setDate(startThisWeek.getDate() - 1);
-    const startThisMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const startLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const endLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-    if (filters.timePeriod === 'Today') return value.getTime() === today.getTime();
-    if (filters.timePeriod === 'This Week') return value >= startThisWeek && value <= today;
-    if (filters.timePeriod === 'Last Week') return value >= startLastWeek && value <= endLastWeek;
-    if (filters.timePeriod === 'This Month') return value >= startThisMonth && value <= today;
-    if (filters.timePeriod === 'Last Month') return value >= startLastMonth && value <= endLastMonth;
-    return true;
-  }
-
-  return tickets.filter((ticket) => {
-    const matchesClient =
-      !clientIds.length ||
-      clientIds.some((clientId) => [ticket.Client_Id, ticket['Client ID']].some((value) => String(value || '').toLowerCase() === String(clientId).toLowerCase()));
-
-    const ticketStatus = String(ticket.Status || '');
-    const matchesStatus = !statuses.length || statuses.some((status) => {
-      if (status === 'Rework / Reassigned') return /rework|reassigned/i.test(ticketStatus);
-      return status.trim().toLowerCase() === ticketStatus.trim().toLowerCase();
-    });
-
-    const matchesSearch =
-      !search ||
-      [
-        ticket['Ticket ID'],
-        ticket['Task Description'],
-        ticket.Name,
-        ticket['Employee Name'],
-        ticket.Status,
-        ticket.Priority
-      ]
-        .join(' ')
-        .toLowerCase()
-        .includes(search);
-
-    return matchesClient && matchesStatus && matchesSearch && matchesPeriod(ticket);
-  });
-}
-
-function sortTickets(tickets) {
-  return [...tickets].sort((a, b) => {
-    const statusDiff = sortStatusWeight(a.Status) - sortStatusWeight(b.Status);
-    if (statusDiff !== 0) return statusDiff;
-    const dateA = normalizeDate(a['Plan Date'])?.getTime() || 0;
-    const dateB = normalizeDate(b['Plan Date'])?.getTime() || 0;
-    if (dateB !== dateA) return dateB - dateA;
-    const startA = String(a['Start Time'] || '');
-    const startB = String(b['Start Time'] || '');
-    return startB.localeCompare(startA);
-  });
-}
 
 export function useTicketSystemData() {
   const { user } = useAuth();
@@ -141,6 +36,8 @@ export function useTicketSystemData() {
   const [filters, setFilters] = useState({
     clientIds: [],
     statuses: [],
+    frequencies: [],
+    employeeIds: [],
     search: '',
     timePeriod: 'All Time'
   });
@@ -165,6 +62,7 @@ export function useTicketSystemData() {
     }
 
     let alive = true;
+    const controller = new AbortController();
 
     async function load() {
       setState((current) => ({ ...current, loading: true, error: null }));
@@ -174,8 +72,9 @@ export function useTicketSystemData() {
           pageSize: pagination.pageSize,
           viewMode: activeTab,
           filters: appliedFilters
-        });
+        }, controller.signal);
         if (!alive) return;
+        if (payload.success === false) throw new Error(payload.message || 'Failed to load tickets.');
         const nextPagination = payload.pagination || {};
         setState({
           loading: false,
@@ -193,6 +92,7 @@ export function useTicketSystemData() {
         }));
       } catch (error) {
         if (!alive) return;
+        setPagination((current) => ({ ...current, total: 0, totalPages: 1, start: 0, end: 0 }));
         setState({
           loading: false,
           error: error.message || 'Failed to load ticket system.',
@@ -204,32 +104,9 @@ export function useTicketSystemData() {
     load();
     return () => {
       alive = false;
+      controller.abort();
     };
   }, [employeeId, refreshKey, activeTab, appliedFilters, pagination.page, pagination.pageSize]);
-
-  useEffect(() => {
-    if (!employeeId || activeTab !== 'my' || appliedFilters.search || appliedFilters.clientIds.length || appliedFilters.statuses.length || appliedFilters.timePeriod !== 'All Time') {
-      return undefined;
-    }
-    const role = String(user?.Role || user?.role || '').toLowerCase();
-    if (!['super admin', 'admin', 'manager', 'hr'].includes(role)) {
-      return undefined;
-    }
-    const timer = setTimeout(() => {
-      void fetchTicketSystemData(employeeId, {
-        page: 1,
-        pageSize: 10,
-        viewMode: 'team',
-        filters: {
-          clientIds: [],
-          statuses: [],
-          search: '',
-          timePeriod: 'All Time'
-        }
-      }).catch(() => null);
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [employeeId, activeTab, appliedFilters, user]);
 
   const rawTickets = state.payload?.tickets || [];
   const clients = state.payload?.clients?.length
@@ -239,24 +116,25 @@ export function useTicketSystemData() {
   const allUsers = state.payload?.allUsers || state.payload?.dropdowns?.allUsers || users;
   const categories = state.payload?.categories || [];
   const clientOriginRawTickets = state.payload?.clientOriginTickets || [];
+  const rawAutoTickets = state.payload?.autoTickets || [];
   const rawBuddyTickets = state.payload?.buddyTickets || [];
 
-  const filteredTickets = useMemo(
-    () => sortTickets(filterTickets(rawTickets, appliedFilters)),
-    [rawTickets, appliedFilters]
-  );
-  const filteredClientOriginTickets = useMemo(
-    () => sortTickets(filterTickets(clientOriginRawTickets, appliedFilters)),
-    [clientOriginRawTickets, appliedFilters]
-  );
-  const filteredBuddyTickets = useMemo(
-    () => sortTickets(filterTickets(rawBuddyTickets, appliedFilters)),
-    [rawBuddyTickets, appliedFilters]
-  );
+  // The server filters, sorts and paginates the whole scope. Filtering a page again
+  // can hide rows while retaining the server total.
+  const filteredTickets = rawTickets;
+  const filteredClientOriginTickets = clientOriginRawTickets;
+  const filteredAutoTickets = rawAutoTickets;
+  const filteredBuddyTickets = rawBuddyTickets;
 
   function applyFilters() {
     setPagination((current) => ({ ...current, page: 1 }));
     setAppliedFilters(filters);
+  }
+
+  function applySpecificFilters(newFilters) {
+    setFilters(newFilters);
+    setPagination((current) => ({ ...current, page: 1 }));
+    setAppliedFilters(newFilters);
   }
 
   function resetFilters() {
@@ -267,7 +145,9 @@ export function useTicketSystemData() {
   }
 
   function changeActiveTab(nextTab) {
-    setPagination((current) => ({ ...current, page: 1 }));
+    if (nextTab === activeTab) return;
+    setState((current) => ({ ...current, loading: true }));
+    setPagination((current) => ({ ...current, page: 1, total: 0, totalPages: 1, start: 0, end: 0 }));
     setActiveTab(nextTab);
   }
 
@@ -413,16 +293,18 @@ export function useTicketSystemData() {
     allUsers,
     categories,
     tickets: filteredTickets,
+    autoTickets: filteredAutoTickets,
     buddyTickets: filteredBuddyTickets,
     clientOriginTickets: filteredClientOriginTickets,
     canViewClientTickets: Boolean(state.payload?.canViewClientTickets),
-    counts: state.payload?.counts || { my: 0, team: 0, client: 0, buddy: 0 },
+    counts: state.payload?.counts || { my: 0, team: 0, client: 0, auto: 0, buddy: 0 },
     pagination,
     setTicketPage: changeTicketPage,
     setTicketPageSize: changeTicketPageSize,
     filters,
     setFilters,
     applyFilters,
+    applySpecificFilters,
     resetFilters,
     reload,
     submitNewTicket,

@@ -23,6 +23,7 @@ const TYPE_COLORS = {
   Ticket:     { bg: '#e0e7ff', text: '#3730a3', dot: '#6366f1' },
   Attendance: { bg: '#fff7ed', text: '#c2410c', dot: '#f97316' },
   Todo:       { bg: '#f0fdf4', text: '#15803d', dot: '#4ade80' },
+  'To-Do':    { bg: '#f0fdf4', text: '#15803d', dot: '#4ade80' },
 };
 
 // Map notification type → app route
@@ -35,6 +36,7 @@ const TYPE_ROUTES = {
   Ticket:     '/ticket-system',
   Attendance: '/attendance',
   Todo:       '/todo',
+  'To-Do':    '/todo',
 };
 
 function getTypeStyle(type = '') {
@@ -54,7 +56,16 @@ function ArrowIcon() {
   );
 }
 
-export function NotificationPanel({ title = 'Notifications', items = [], loading = false, error = '', onRefresh, userRole = '', isClientPanel = false }) {
+export function NotificationPanel({
+  title = 'Notifications',
+  items = [],
+  loading = false,
+  error = '',
+  onRefresh,
+  onClosePanel,
+  userRole = '',
+  isClientPanel = false
+}) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('All');
 
@@ -81,6 +92,14 @@ export function NotificationPanel({ title = 'Notifications', items = [], loading
       return true;
     });
   }, [items, activeTab]);
+
+  const openNotificationTarget = (item) => {
+    const route = getRoute(item.type);
+    if (route) {
+      navigate(route);
+    }
+    onClosePanel?.();
+  };
 
   return (
     <div className="notification-panel">
@@ -133,13 +152,13 @@ export function NotificationPanel({ title = 'Notifications', items = [], loading
 
               return (
                 <article
-                  key={`${item.id || item.Message || 'notification'}-${index}`}
-                  className={`notification-card${isClickable ? ' notification-card--clickable' : ''}${item.isNew ? ' notification-card--new' : ' notification-card--seen'}`}
-                  onClick={isClickable ? () => navigate(route) : undefined}
+                key={`${item.id || item.Message || 'notification'}-${index}`}
+                className={`notification-card${isClickable ? ' notification-card--clickable' : ''}${item.isNew ? ' notification-card--new' : ' notification-card--seen'}`}
+                  onClick={isClickable ? () => openNotificationTarget(item) : () => onClosePanel?.()}
                   title={isClickable ? `Go to ${item.type}` : undefined}
                   role={isClickable ? 'button' : undefined}
                   tabIndex={isClickable ? 0 : undefined}
-                  onKeyDown={isClickable ? (e) => e.key === 'Enter' && navigate(route) : undefined}
+                  onKeyDown={isClickable ? (e) => e.key === 'Enter' && openNotificationTarget(item) : undefined}
                 >
                   <div className="notification-card__accent" style={{ background: typeStyle.dot }} />
                   <div className="notification-card__inner">

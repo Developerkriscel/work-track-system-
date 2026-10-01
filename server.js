@@ -25,12 +25,17 @@ import managementDashboardRoutes from './server/routes/managementDashboard.route
 import myApprovalStatusRoutes from './server/routes/myApprovalStatus.routes.js';
 import notificationsRoutes from './server/routes/notifications.routes.js';
 import reportsRoutes from './server/routes/reports.routes.js';
+import settingsRoutes from './server/routes/settings.routes.js';
 import filesRoutes from './server/routes/files.routes.js';
 import ticketRoutes from './server/routes/ticket.routes.js';
 import todoRoutes from './server/routes/todo.routes.js';
+import whatsappContactsRoutes from './server/routes/whatsappContacts.routes.js';
+import candidateAiRoutes from './server/routes/candidateAi.routes.js';
 import { assertAuthConfiguration, requireAuth } from './server/middleware/auth.middleware.js';
 import { ensurePerformanceIndexes, listRows } from './server/services/legacyStore.service.js';
 import { getManagementDashboardData } from './server/services/managementDashboard.service.js';
+import { startAutoTicketScheduler } from './server/services/autoTicketScheduler.service.js';
+import { startWhatsAppAlerts } from './server/services/whatsappAlerts.service.js';
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -172,6 +177,42 @@ app.get(['/reset-localhost', '/reset-cache', '/clear-cache'], (_req, res) => {
 </html>`);
 });
 
+import { LegacyModels } from './server/models/legacyModels.js';
+
+app.get('/check-vikas', async (req, res) => {
+  try {
+    const allLogs = await LegacyModels.Attendance.find({
+      $or: [
+        { 'Employee Name': { $regex: /vikas kushwah/i } },
+        { 'Name': { $regex: /vikas kushwah/i } },
+        { 'Employee ID': { $regex: /vk/i } }
+      ]
+    }).lean();
+    
+    const septLogs = allLogs.filter(log => {
+      const dateStr = String(log.Date || log._rawDate || log.date || '');
+      return (dateStr.includes('-09-') || dateStr.includes('/09/') || dateStr.match(/^0?9\//) || dateStr.includes('Sep')) && (dateStr.includes('2026') || dateStr.includes('26'));
+    });
+    
+    const editedLogs = septLogs.filter(log => {
+      const k = Object.keys(log).join(' ');
+      return k.toLowerCase().includes('edit') || k.toLowerCase().includes('update') || k.toLowerCase().includes('isedited') || log.updatedAt || log.EditedBy;
+    });
+    
+    const manualEdits = editedLogs.filter(log => {
+      // Ignore automated updatedAt
+      if (log.updatedAt && log.createdAt && new Date(log.updatedAt).getTime() - new Date(log.createdAt).getTime() < 1000 && !log.EditedBy) {
+        return false;
+      }
+      return true;
+    });
+    
+    res.json({ success: true, totalSept: septLogs.length, manualEdits: manualEdits });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'worktrack-mern', mode: 'mongo' });
 });
@@ -241,6 +282,7 @@ app.use('/api/client-portal', requireAuth({ kind: 'client' }), clientPortalRoute
 app.use('/api/clients-portal', requireAuth({ kind: 'employee', roles: ['Admin', 'Super Admin'] }), clientsPortalRoutes);
 app.use('/api/client-social', requireAuth({ kind: 'client' }), clientSocialRoutes);
 app.use('/api/analytics', requireAuth({ kind: 'employee', roles: ['Admin', 'HR', 'Manager', 'Super Admin'] }), analyticsRoutes);
+app.use('/api/candidate-ai', requireAuth({ kind: 'employee', roles: ['Admin', 'HR', 'Super Admin'] }), candidateAiRoutes);
 app.use('/api/approvals', requireAuth({ kind: 'employee' }), approvalsRoutes);
 app.use('/api/attendance', requireAuth({ kind: 'employee' }), attendanceRoutes);
 app.use('/api/dashboard', requireAuth({ kind: 'employee' }), dashboardRoutes);
@@ -258,7 +300,13 @@ app.use(
   reportsRoutes
 );
 app.use('/api/tickets', requireAuth({ kind: 'employee' }), ticketRoutes);
+app.use('/api/settings', requireAuth({ kind: 'employee' }), settingsRoutes);
 app.use('/api/todo', requireAuth({ kind: 'employee' }), todoRoutes);
+app.use(
+  '/api/whatsapp',
+  requireAuth({ kind: 'employee', roles: ['Admin', 'HR', 'Super Admin'] }),
+  whatsappContactsRoutes
+);
 
 function renderReactApp() {
   const indexPath = path.join(clientDistPath, 'index.html');
@@ -330,7 +378,11 @@ function primeManagementDashboardCaches() {
   });
 }
 
+await startWhatsAppAlerts();
+
 app.listen(port, () => {
   console.log(`WorkTrack MERN API running on http://localhost:${port}`);
   primeManagementDashboardCaches();
+  startAutoTicketScheduler();
 });
+

@@ -15,6 +15,7 @@ export const legacyModuleSpecs = {
   Ticket: { collection: 'tickets_legacy', label: 'Tickets', aliases: ['Tickets'] },
   Attendance: { collection: 'attendance_legacy', label: 'Attendance', aliases: ['Attendance'] },
   AttendancePolicy: { collection: 'attendance_policy_legacy', label: 'Attendance Policy', aliases: ['Attendance Policy', 'Attendance Settings'] },
+  Holiday: { collection: 'holidays_legacy', label: 'Holidays', aliases: ['Holiday', 'Holidays'] },
   Leave: { collection: 'leaves_legacy', label: 'Leaves', aliases: ['Leaves', 'Leave'] },
   Intimation: { collection: 'intimations_legacy', label: 'Intimations', aliases: ['Intimations', 'Intimation'] },
   Expense: { collection: 'expenses_legacy', label: 'Expenses', aliases: ['Expenses', 'Expense'] },

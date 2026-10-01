@@ -13,6 +13,8 @@ import {
   updateAttendanceLocationPolicy
 } from '../services/attendance.service.js';
 
+import { LegacyModels } from '../models/legacyModels.js';
+
 const router = express.Router();
 
 router.post('/list', async (req, res) => {

@@ -21,7 +21,8 @@ export function DashboardPage() {
     canViewTeamDashboard,
     taskPage,
     setTaskPage,
-    tasksLoading
+    tasksLoading,
+    loading
   } = useDashboardData();
 
   const dashboardUser = data?.currentUser || data?.user || currentUser || null;
@@ -53,9 +54,12 @@ export function DashboardPage() {
         </div>
       ) : null}
 
+      {loading ? <div className="dashboard-banner" role="status" aria-live="polite">Loading dashboard…</div> : null}
+      <div aria-busy={loading} style={loading ? { opacity: 0.5, pointerEvents: 'none' } : undefined}>
       <DashboardKpiGrid kpis={kpis} />
       <DashboardMiniStats kpis={kpis} />
       <DashboardChartsSection kpis={kpis} lineChart={lineChart} barChart={barChart} />
+      </div>
       <DashboardTasksSection
         tasks={todaysTasks}
         showOwner={viewMode === 'team'}

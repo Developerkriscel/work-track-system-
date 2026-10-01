@@ -44,85 +44,21 @@ export function useDashboardData() {
       return undefined;
     }
 
-    setTaskPage(1);
     let alive = true;
-
-    async function load() {
-      setState((current) => ({
-        ...current,
-        loading: true,
-        error: null
-      }));
-
-      try {
-        const payload = await fetchDashboardData(employeeId, range, viewMode, {
-          includeTasks: false,
-          includeCollections: false
-        });
-        if (!alive) return;
-        setState({
-          loading: false,
-          tasksLoading: true,
-          error: null,
-          payload,
-          tasksPayload: null
-        });
-      } catch (error) {
-        if (!alive) return;
-        setState({
-          loading: false,
-          tasksLoading: false,
-          error: error.message || 'Failed to load dashboard data.',
-          payload: null,
-          tasksPayload: null
-        });
-      }
-    }
-
-    load();
-    return () => {
-      alive = false;
-    };
-  }, [employeeId, range, viewMode]);
-
-  useEffect(() => {
-    if (!employeeId) return undefined;
-
-    let alive = true;
-
-    async function loadTasks() {
-      setState((current) => ({
-        ...current,
-        tasksLoading: true
-      }));
-
-      try {
-        const tasksPayload = await fetchDashboardData(employeeId, range, viewMode, {
-          includeTasks: true,
-          includeCollections: false,
-          taskPage,
-          taskPageSize: 20
-        });
-        if (!alive) return;
-        setState((current) => ({
-          ...current,
-          tasksLoading: false,
-          tasksPayload
-        }));
-      } catch (error) {
-        if (!alive) return;
-        setState((current) => ({
-          ...current,
-          tasksLoading: false,
-          error: current.error || error.message || 'Failed to load dashboard tasks.'
-        }));
-      }
-    }
-
-    loadTasks();
-    return () => {
-      alive = false;
-    };
+    const controller = new AbortController();
+    setState((current) => ({ ...current, loading: true, tasksLoading: true, error: null }));
+    fetchDashboardData(employeeId, range, viewMode, {
+      includeTasks: true, includeCollections: false, includeSummary: true,
+      taskPage, taskPageSize: 20
+    }, controller.signal).then((payload) => {
+      if (!alive) return;
+      if (payload.success === false) throw new Error(payload.message || 'Dashboard could not load.');
+      setState({ loading: false, tasksLoading: false, error: null, payload, tasksPayload: payload });
+    }).catch((error) => {
+      if (!alive) return;
+      setState({ loading: false, tasksLoading: false, error: error.message || 'Failed to load dashboard.', payload: null, tasksPayload: null });
+    });
+    return () => { alive = false; controller.abort(); };
   }, [employeeId, range, viewMode, taskPage]);
 
   const data = useMemo(() => {
@@ -147,9 +83,9 @@ export function useDashboardData() {
     employeeId,
     currentUser: user || null,
     range,
-    setRange,
+    setRange: (next) => { setTaskPage(1); setRange(next); },
     viewMode,
-    setViewMode,
+    setViewMode: (next) => { setTaskPage(1); setViewMode(next); },
     taskPage,
     setTaskPage,
     canViewTeamDashboard,

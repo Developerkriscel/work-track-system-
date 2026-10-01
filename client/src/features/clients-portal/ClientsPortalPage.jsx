@@ -39,7 +39,7 @@ export function ClientsPortalPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   return (
-    <section className="page-card">
+    <section className="page-card clients-portal-page">
       <ClientsPortalHeader
         employeeLabel={`${currentUser?.['Employee Name'] || currentUser?.Name || 'Employee'}${employeeId ? ` | ${employeeId}` : ''}`}
         onRefresh={refresh}

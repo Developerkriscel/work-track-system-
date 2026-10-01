@@ -4,7 +4,7 @@ export function AttendanceRangeToolbar({
   onViewChange
 }) {
   return (
-    <div className="attendance-section-head">
+    <div className="attendance-section-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
       <div className="attendance-section-tabs">
         <button
           type="button"

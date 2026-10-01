@@ -2,19 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   exportReportForWeb,
   fetchFmsReportData,
-  fetchTicketReportData
+  fetchTicketReportData,
+  fetchAttendanceReportData
 } from '@/features/reports/api';
 import { useAuth } from '@/features/auth/AuthProvider';
 
-const rangeOptions = [
-  { value: 'today', label: 'Today' },
-  { value: 'week', label: 'This Week' },
-  { value: 'last_week', label: 'Last Week' },
-  { value: 'month', label: 'This Month' },
-  { value: 'last_month', label: 'Last Month' },
-  { value: 'all', label: 'All Time' },
-  { value: 'custom', label: 'Custom' }
-];
+// Removed rangeBounds and rangeOptions as user requested direct Start/End dates
 
 const initialTicketFilters = { priority: '', user: '', status: '', search: '' };
 const initialFmsFilters = { status: '', search: '' };
@@ -24,51 +17,6 @@ function toYmd(date) {
   const month = `${date.getMonth() + 1}`.padStart(2, '0');
   const day = `${date.getDate()}`.padStart(2, '0');
   return `${year}-${month}-${day}`;
-}
-
-function getTodayReference() {
-  return new Date();
-}
-
-function rangeBounds(range, customStart, customEnd) {
-  const now = getTodayReference();
-  const current = new Date(now);
-  current.setHours(12, 0, 0, 0);
-
-  switch (range) {
-    case 'today':
-      return { startDate: toYmd(current), endDate: toYmd(current) };
-    case 'week': {
-      const day = current.getDay();
-      const offset = day === 0 ? 6 : day - 1;
-      const start = new Date(current);
-      start.setDate(current.getDate() - offset);
-      return { startDate: toYmd(start), endDate: toYmd(current) };
-    }
-    case 'last_week': {
-      const day = current.getDay();
-      const offset = day === 0 ? 6 : day - 1;
-      const end = new Date(current);
-      end.setDate(current.getDate() - offset - 1);
-      const start = new Date(end);
-      start.setDate(end.getDate() - 6);
-      return { startDate: toYmd(start), endDate: toYmd(end) };
-    }
-    case 'month': {
-      const start = new Date(current.getFullYear(), current.getMonth(), 1, 12);
-      return { startDate: toYmd(start), endDate: toYmd(current) };
-    }
-    case 'last_month': {
-      const start = new Date(current.getFullYear(), current.getMonth() - 1, 1, 12);
-      const end = new Date(current.getFullYear(), current.getMonth(), 0, 12);
-      return { startDate: toYmd(start), endDate: toYmd(end) };
-    }
-    case 'custom':
-      return { startDate: customStart || '', endDate: customEnd || '' };
-    case 'all':
-    default:
-      return { startDate: '', endDate: '' };
-  }
 }
 
 function parseMaybeStringPayload(payload) {
@@ -112,16 +60,22 @@ export function useReportsData() {
   const normalizedRole = String(role || '').trim().toLowerCase();
   const isManagerOnly = normalizedRole === 'manager';
   const [activeTab, setActiveTab] = useState(isManagerOnly ? 'tickets' : 'management');
-  const [range, setRange] = useState('month');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
+  
+  const [customStart, setCustomStart] = useState(() => {
+    const d = new Date();
+    return toYmd(new Date(d.getFullYear(), d.getMonth(), 1));
+  });
+  const [customEnd, setCustomEnd] = useState(() => toYmd(new Date()));
   const [ticketFilters, setTicketFilters] = useState(initialTicketFilters);
   const [fmsFilters, setFmsFilters] = useState(initialFmsFilters);
+  const [attendanceFilters, setAttendanceFilters] = useState({ employees: [] }); // array of employee IDs
   const [state, setState] = useState({
     loading: true,
     error: null,
     tickets: [],
-    fms: []
+    fms: [],
+    attendance: [],
+    attendanceUsers: []
   });
   const [message, setMessage] = useState(null);
   const [downloading, setDownloading] = useState(false);
@@ -134,8 +88,8 @@ export function useReportsData() {
   }, [activeTab, isManagerOnly]);
 
   const bounds = useMemo(
-    () => rangeBounds(range, customStart, customEnd),
-    [range, customStart, customEnd]
+    () => ({ startDate: customStart || '', endDate: customEnd || '' }),
+    [customStart, customEnd]
   );
 
   useEffect(() => {
@@ -144,7 +98,9 @@ export function useReportsData() {
         loading: false,
         error: null,
         tickets: [],
-        fms: []
+        fms: [],
+        attendance: [],
+        attendanceUsers: []
       });
       return undefined;
     }
@@ -156,7 +112,9 @@ export function useReportsData() {
         loading: false,
         error: null,
         tickets: [],
-        fms: []
+        fms: [],
+        attendance: [],
+        attendanceUsers: []
       });
       return undefined;
     }
@@ -165,21 +123,25 @@ export function useReportsData() {
       setState((current) => ({ ...current, loading: true, error: null }));
       setMessage(null);
       try {
-        const [ticketPayloadRaw, fmsPayloadRaw] = await Promise.all([
+        const [ticketPayloadRaw, fmsPayloadRaw, attendancePayloadRaw] = await Promise.all([
           fetchTicketReportData(employeeId, bounds.startDate, bounds.endDate),
-          fetchFmsReportData(employeeId, role, bounds.startDate, bounds.endDate)
+          fetchFmsReportData(employeeId, role, bounds.startDate, bounds.endDate),
+          fetchAttendanceReportData(bounds.startDate, bounds.endDate)
         ]);
 
         if (!alive) return;
 
         const ticketPayload = parseMaybeStringPayload(ticketPayloadRaw);
         const fmsPayload = parseMaybeStringPayload(fmsPayloadRaw);
+        const attendancePayload = parseMaybeStringPayload(attendancePayloadRaw);
 
         setState({
           loading: false,
           error: null,
           tickets: safeArray(ticketPayload?.data),
-          fms: safeArray(fmsPayload?.data)
+          fms: safeArray(fmsPayload?.data),
+          attendance: safeArray(attendancePayload?.data),
+          attendanceUsers: safeArray(attendancePayload?.users)
         });
       } catch (error) {
         if (!alive) return;
@@ -187,7 +149,9 @@ export function useReportsData() {
           loading: false,
           error: error.message || 'Failed to load reports.',
           tickets: [],
-          fms: []
+          fms: [],
+          attendance: [],
+          attendanceUsers: []
         });
       }
     }
@@ -275,6 +239,14 @@ export function useReportsData() {
     });
   }, [state.fms, fmsFilters]);
 
+  const filteredAttendance = useMemo(() => {
+    return state.attendance.filter((item) => {
+      // If no employees selected, show all available to the reviewer
+      if (!attendanceFilters.employees || attendanceFilters.employees.length === 0) return true;
+      return attendanceFilters.employees.includes(item.employeeId);
+    });
+  }, [state.attendance, attendanceFilters]);
+
   function refresh() {
     refreshIndex.current += 1;
     setState((current) => ({ ...current }));
@@ -288,14 +260,28 @@ export function useReportsData() {
     setFmsFilters(initialFmsFilters);
   }
 
+  function resetAttendanceFilters() {
+    setAttendanceFilters({ employees: [] });
+  }
+
   async function download(format) {
     setDownloading(true);
     setMessage(null);
     try {
-      const sheetName = activeTab === 'tickets' ? 'Tickets_Report' : 'FMS_Report';
-      const filters = activeTab === 'tickets'
-        ? { ...ticketFilters }
-        : { ...fmsFilters };
+      let sheetName = 'Report';
+      let filters = {};
+
+      if (activeTab === 'tickets') {
+        sheetName = 'Tickets_Report';
+        filters = { ...ticketFilters };
+      } else if (activeTab === 'fms') {
+        sheetName = 'FMS_Report';
+        filters = { ...fmsFilters };
+      } else if (activeTab === 'attendance') {
+        sheetName = 'Attendance_Report';
+        filters = { ...attendanceFilters };
+      }
+
       const payload = await exportReportForWeb(
         format,
         sheetName,
@@ -311,15 +297,27 @@ export function useReportsData() {
       }
 
       if (typeof window !== 'undefined') {
+        const binaryString = window.atob(payload.base64Data);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: mimeTypeForFormat(format) });
+        const url = URL.createObjectURL(blob);
+        
         const link = window.document.createElement('a');
-        link.href = `data:${mimeTypeForFormat(format)};base64,${payload.base64Data}`;
+        link.href = url;
         link.download = payload.fileName || `worktrack-report.${extensionForFormat(format)}`;
         link.click();
+        
+        setTimeout(() => URL.revokeObjectURL(url), 100);
       }
 
+      const reportName = activeTab === 'tickets' ? 'Ticket' : activeTab === 'fms' ? 'FMS' : 'Attendance';
       setMessage({
         tone: 'success',
-        text: `${activeTab === 'tickets' ? 'Ticket' : 'FMS'} report exported successfully.`
+        text: `${reportName} report exported successfully.`
       });
       return payload;
     } catch (error) {
@@ -338,9 +336,6 @@ export function useReportsData() {
     isManagerOnly,
     activeTab,
     setActiveTab,
-    range,
-    setRange,
-    rangeOptions,
     customStart,
     setCustomStart,
     customEnd,
@@ -362,6 +357,11 @@ export function useReportsData() {
     fmsFilters,
     setFmsFilters,
     resetFmsFilters,
+    attendance: filteredAttendance,
+    attendanceUsers: state.attendanceUsers,
+    attendanceFilters,
+    setAttendanceFilters,
+    resetAttendanceFilters,
     refresh,
     download
   };

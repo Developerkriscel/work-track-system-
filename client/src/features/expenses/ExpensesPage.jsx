@@ -42,7 +42,7 @@ export function ExpensesPage() {
   }
 
   return (
-    <section className="page-card">
+    <section className="page-card expenses-page">
       <ExpensesHeader
         currentUser={currentUser}
         employeeId={employeeId}

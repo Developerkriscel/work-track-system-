@@ -705,10 +705,24 @@ function filterFmsRows(rows = [], filters = {}) {
   });
 }
 
+function parseFmsSortDate(value) {
+  const raw = safe(value);
+  if (!raw || raw === '-') return 0;
+  // Already ISO yyyy-mm-dd format
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return new Date(raw).getTime() || 0;
+  // dd-Mon-yyyy or dd/Mon/yyyy format e.g. "20-Aug-2026"
+  const parsed = new Date(raw);
+  return isNaN(parsed) ? 0 : parsed.getTime();
+}
+
 function sortFmsRows(rows = []) {
   return [...rows].sort((left, right) => {
+    // Completed tasks always go to the bottom
     if (left._completed !== right._completed) return Number(left._completed) - Number(right._completed);
-    return safe(first(right, ['planDate', 'Plan Date', 'Date'])).localeCompare(safe(first(left, ['planDate', 'Plan Date', 'Date'])));
+    // Among same group: newer Plan Date first (descending)
+    const leftDate = parseFmsSortDate(first(left, ['planDate', 'Plan Date', 'Date']));
+    const rightDate = parseFmsSortDate(first(right, ['planDate', 'Plan Date', 'Date']));
+    return rightDate - leftDate;
   });
 }
 
@@ -987,7 +1001,7 @@ async function getFmsPagedRows(employeeId, options) {
     const [docs, total, tabCountEntries, categoryDocs, employeeDocs] = await Promise.all([
       findRowsByFilter('FmsTask', fmsStoredTaskQuery(activeQuery), {
         projection: fmsTaskProjection(),
-        sort: { 'data.Plan Date': 1, createdAt: 1 },
+        sort: { 'data.Plan Date': -1, 'data.planDate': -1, 'data.Date': -1, createdAt: -1 },
         skip,
         limit: options.pageSize
       }),

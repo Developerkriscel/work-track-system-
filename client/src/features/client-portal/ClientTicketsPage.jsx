@@ -51,9 +51,18 @@ export function ClientTicketsPage() {
     summaryItems,
     tabCounts,
     tabOptions,
+    tablePageSize,
+    tablePagination,
+    tableSearch,
+    tableSortDirection,
+    tableSortKey,
     ticketPriorityTone,
     ticketStatusLabel,
     ticketStatusTone,
+    setTablePage,
+    setTablePageSize,
+    setTableSearch,
+    toggleTableSort,
     visibleRows,
     updateStatus,
     addDraftRow,
@@ -206,6 +215,15 @@ export function ClientTicketsPage() {
               statusTone={ticketStatusTone}
               ticketPriorityTone={ticketPriorityTone}
               submitting={submitting}
+              serverPagination={tablePagination}
+              serverPageSize={tablePageSize}
+              serverSearch={tableSearch}
+              serverSortDirection={tableSortDirection}
+              serverSortKey={tableSortKey}
+              onServerPageChange={setTablePage}
+              onServerPageSizeChange={setTablePageSize}
+              onServerSearchChange={setTableSearch}
+              onServerSort={toggleTableSort}
             />
       </article>
 

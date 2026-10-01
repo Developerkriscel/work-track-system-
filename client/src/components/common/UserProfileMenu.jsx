@@ -191,7 +191,11 @@ export function UserProfileMenu({
             <span className="upm-badge">{notificationCount > 9 ? '9+' : notificationCount}</span>
           )}
         </button>
-        {notificationsOpen ? notificationPanel : null}
+        {notificationPanel ? (
+          <div className={`upm-notification-shell${notificationsOpen ? ' upm-notification-shell--open' : ''}`}>
+            {notificationPanel}
+          </div>
+        ) : null}
       </div>
 
       {/* ── user pill trigger ── */}

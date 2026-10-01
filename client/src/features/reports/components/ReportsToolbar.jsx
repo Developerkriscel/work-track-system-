@@ -14,9 +14,6 @@ export function ReportsToolbar({
   isManagerOnly,
   activeTab,
   onTabChange,
-  range,
-  onRangeChange,
-  rangeOptions,
   customStart,
   onCustomStartChange,
   customEnd,
@@ -44,6 +41,13 @@ export function ReportsToolbar({
             >
               Team FMS
             </button>
+            <button
+              type="button"
+              className={`reports-main-tab-btn${activeTab === 'attendance' ? ' reports-main-tab-btn--active' : ''}`}
+              onClick={() => onTabChange('attendance')}
+            >
+              Attendance Report
+            </button>
           </>
         ) : (
           <>
@@ -52,6 +56,9 @@ export function ReportsToolbar({
             </button>
             <button type="button" className={`reports-main-tab-btn${activeTab === 'tickets' ? ' reports-main-tab-btn--active' : ''}`} onClick={() => onTabChange('tickets')}>
               Tickets Report
+            </button>
+            <button type="button" className={`reports-main-tab-btn${activeTab === 'attendance' ? ' reports-main-tab-btn--active' : ''}`} onClick={() => onTabChange('attendance')}>
+              Attendance Report
             </button>
           </>
         )}

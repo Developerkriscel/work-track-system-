@@ -23,7 +23,6 @@ export function AttendanceEntryPanel({
       <div className="migration-panel__row">
         <div>
           <h2>New Attendance Entry</h2>
-          <p className="attendance-entry-panel__subtitle">Capture a live photo, location, and submit punch in or punch out.</p>
         </div>
         <button type="button" className="inline-action inline-action--ghost" onClick={onClose}>
           Close

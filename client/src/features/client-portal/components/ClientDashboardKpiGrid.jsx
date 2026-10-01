@@ -12,7 +12,7 @@ export function ClientDashboardKpiGrid({ items = [] }) {
             type="button"
             key={item.key || item.label}
             className={`client-dashboard-kpi-card client-dashboard-kpi-card--${item.accent || 'blue'}`}
-            style={{ cursor: item.path ? 'pointer' : 'default', border: 'none', textAlign: 'left', width: '100%', display: 'block', padding: 0 }}
+            style={{ cursor: item.path ? 'pointer' : 'default', border: 'none', textAlign: 'left', width: '100%' }}
             onClick={() => item.path && navigate(item.path)}
           >
             <div className={`client-dashboard-kpi-card__icon client-dashboard-kpi-card__icon--${item.accent || 'blue'}`}>

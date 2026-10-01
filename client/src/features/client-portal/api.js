@@ -9,14 +9,15 @@ export async function fetchClientDashboardData(clientId) {
   });
 }
 
-export async function fetchClientTickets(clientId, startDate = null, endDate = null, statusFilter = null) {
+export async function fetchClientTickets(clientId, startDate = null, endDate = null, statusFilter = null, options = {}) {
   return httpClient('/api/client-portal/tickets', {
     method: 'POST',
     body: JSON.stringify({
       clientId,
       startDate,
       endDate,
-      statusFilter
+      statusFilter,
+      ...options
     })
   });
 }

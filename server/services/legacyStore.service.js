@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { emitRowSaved } from './rowEvents.service.js';
 import { LegacyModels } from '../models/legacyModels.js';
 import { buildRedisKey, deleteByPrefix, deleteKey, getJson, setJson } from './redisCache.service.js';
 
@@ -345,7 +346,9 @@ export async function ensurePerformanceIndexes() {
     Ticket: [
       [{ 'data.Employee ID': 1, 'data.Status': 1, 'data.Plan Date': -1 }, { background: true }],
       [{ 'data.Task Approver': 1, 'data.Status': 1, 'data.Plan Date': -1 }, { background: true }],
-      [{ 'data.Client_Id': 1, 'data.Status': 1, 'data.Plan Date': -1 }, { background: true }]
+      [{ 'data.Client_Id': 1, 'data.Status': 1, 'data.Plan Date': -1 }, { background: true }],
+      [{ 'data.Client_Id': 1, 'data.Origin': 1, 'data.Last Update Date': -1 }, { background: true }],
+      [{ 'data.Client_Id': 1, 'data.Client Ticket': 1, 'data.Last Update Date': -1 }, { background: true }]
     ],
     FmsTask: [
       [{ 'data.Employee ID': 1, 'data.Status': 1, 'data.Plan Date': -1 }, { background: true }],
@@ -357,7 +360,11 @@ export async function ensurePerformanceIndexes() {
     Attendance: [
       [{ 'data.Employee ID': 1, 'data.Date': -1 }, { background: true }],
       [{ 'data.Employee ID': 1, 'data.Status': 1, 'data.Date': -1 }, { background: true }],
-      [{ 'data.Task Approver': 1, 'data.Status': 1, 'data.Date': -1 }, { background: true }]
+      [{ 'data.Task Approver': 1, 'data.Status': 1, 'data.Date': -1 }, { background: true }],
+      [{ 'data.Status': 1, 'data.Date': -1, createdAt: -1 }, { background: true }],
+      [{ 'data.Admin Approval': 1, 'data.Date': -1, createdAt: -1 }, { background: true }],
+      [{ 'data.Employee ID': 1, 'data.Admin Approval': 1, 'data.Date': -1 }, { background: true }],
+      [{ 'data.EmpID': 1, 'data.Status': 1, 'data.Date': -1 }, { background: true }]
     ],
     Leave: [
       [{ 'data.Employee ID': 1, 'data.Status': 1, 'data.Start Date': -1 }, { background: true }],
@@ -434,6 +441,7 @@ const legacyIdKeyMap = {
     Ticket: ['Ticket ID', 'Task ID', 'ID', 'ticketId', 'taskId'],
     Attendance: ['AttendanceID', 'ID', 'attendanceId'],
     AttendancePolicy: ['PolicyID', 'ID', 'policyId', 'AttendancePolicyID'],
+    Holiday: ['HolidayID', 'Holiday ID', 'ID', 'holidayId'],
     Leave: ['LeaveID', 'Leave ID', 'ID', 'leaveId'],
     Intimation: ['IntimationID', 'Intimation ID', 'ID', 'intimationId'],
     Expense: ['ExpenseID', 'Expense ID', 'ID', 'expenseId'],
@@ -577,10 +585,12 @@ export async function insertRow(modelName, row) {
       await Model.deleteMany({ legacyId, _id: { $ne: existingDoc._id } });
     }
     touchStoreMutation(modelName);
+    await emitRowSaved(modelName, existingDoc?.data || null, next);
     return next;
   }
   await Model.create({ legacyId, data: cleanRow });
   touchStoreMutation(modelName);
+  await emitRowSaved(modelName, null, cleanRow);
   return cleanRow;
 }
 
@@ -612,6 +622,7 @@ export async function upsertRow(modelName, key, value, updateData) {
     await Model.deleteMany({ legacyId, _id: { $ne: existingDoc._id } });
   }
   touchStoreMutation(modelName);
+  await emitRowSaved(modelName, existing, next);
   return next;
 }
 

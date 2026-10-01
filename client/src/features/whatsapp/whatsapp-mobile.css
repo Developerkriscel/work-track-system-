@@ -1,0 +1,72 @@
+.wa-page .wa-chat-back { display: none; }
+
+@media (max-width: 900px) {
+  .app-shell--whatsapp .shell-main__inner { zoom: 1; min-width: 0; }
+  .wa-page { min-width: 0; font-size: 14px; }
+  .wa-page .wa-chat-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    height: 72vh;
+    height: 72dvh;
+    min-height: 360px;
+    max-height: 760px;
+    overflow: hidden;
+  }
+  .wa-page .wa-chat-sidebar,
+  .wa-page .wa-chat-panel { height: 100%; min-height: 0; border: 0; }
+  .wa-page .wa-chat-panel { display: none; }
+  .wa-page .wa-chat-shell--conversation .wa-chat-sidebar { display: none; }
+  .wa-page .wa-chat-shell--conversation .wa-chat-panel { display: flex; }
+  .wa-page .wa-chat-back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    min-width: 44px;
+    min-height: 44px;
+    border: 0;
+    border-radius: 12px;
+    color: #e9edef;
+    background: #2a3942;
+    font-size: 22px;
+  }
+  .wa-page .wa-chat-topbar { gap: 10px; padding: 10px 12px; }
+  .wa-page .wa-chat-identity { width: 100%; min-width: 0; gap: 8px; }
+  .wa-page .wa-chat-identity > div { min-width: 0; flex: 1; }
+  .wa-page .wa-chat-topbar h2 { font-size: 16px; overflow-wrap: anywhere; }
+  .wa-page .wa-chat-topbar p { font-size: 12px; overflow-wrap: anywhere; }
+  .wa-page .wa-chat-tools { display: flex; flex-wrap: wrap; width: 100%; gap: 8px; }
+  .wa-page .wa-chat-tools :is(input, select) { min-width: 0; width: 0; flex: 1 1 120px; height: 44px; font-size: 14px; }
+  .wa-page .wa-chat-tools button { min-height: 44px; }
+  .wa-page .wa-chat-body { padding: 16px 12px; overscroll-behavior: contain; }
+  .wa-page .wa-chat-list { overscroll-behavior: contain; }
+  .wa-page .wa-chat-bubble { width: min(94%, 560px); max-width: 100%; box-sizing: border-box; }
+  .wa-page .wa-chat-bubble p { font-size: 14px; overflow-wrap: anywhere; }
+  .wa-page .wa-chat-bubble footer { flex-wrap: wrap; overflow-wrap: anywhere; }
+  .wa-page .wa-chat-empty { width: 100%; max-width: 300px; padding: 12px; box-sizing: border-box; }
+  .wa-page .wa-chat-composer { padding: 10px 12px; gap: 8px; }
+  .wa-page .wa-chat-composer button { min-height: 44px; font-size: 13px; }
+  .wa-page .wa-chat-composer span { font-size: 11px; text-align: center; }
+  .wa-page .wa-chat-search input { height: 44px; font-size: 16px; }
+  .wa-page .wa-chat-chips button { min-height: 40px; font-size: 12px; }
+  .wa-page .wa-chat-icon-btn { width: 44px; height: 44px; }
+}
+
+@media (max-width: 650px) {
+  .wa-page { gap: 12px; padding-top: 4px; }
+  .wa-page .wa-heading h1 { font-size: 23px; flex-wrap: wrap; gap: 8px; }
+  .wa-page .wa-heading-actions { gap: 8px; }
+  .wa-page .wa-stat { min-height: 74px; padding: 12px 10px; gap: 8px; }
+  .wa-page .wa-stat > div { min-width: 0; }
+  .wa-page .wa-stat-icon { width: 30px; height: 30px; }
+  .wa-page .wa-stat span { font-size: 12px; }
+  .wa-page .wa-stat strong { font-size: 25px; }
+  .wa-page .wa-stat small { font-size: 10px; }
+  .wa-page .wa-tabs { padding-inline: 10px; gap: 12px; }
+  .wa-page .wa-tabs > button { font-size: 12px; padding-block: 15px; gap: 5px; }
+  .wa-page .wa-feedback { overflow-wrap: anywhere; }
+  .wa-page .wa-table { table-layout: auto; }
+  .wa-page .wa-table th { font-size: 10px; }
+  .wa-page .wa-filters :is(input, select) { font-size: 16px; min-height: 44px; }
+}

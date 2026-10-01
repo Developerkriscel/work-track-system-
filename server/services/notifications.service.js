@@ -336,12 +336,10 @@ export async function getEmployeeNotifications(employeeId, lastCheckTimestamp = 
     ] = await Promise.all([
       listRecentRows('Ticket', {
         $or: [
-          { 'data.Employee ID': { $in: scopeOwnerIds } },
-          { 'data.EmpID': { $in: scopeOwnerIds } },
-          { 'data.User ID': { $in: scopeOwnerIds } },
-          { 'data.employeeId': { $in: scopeOwnerIds } },
-          { 'data.Task Approver': scope.employeeId },
-          { 'data.Task Approver': approverRegex }
+          { 'data.Employee ID': scope.employeeId },
+          { 'data.EmpID': scope.employeeId },
+          { 'data.User ID': scope.employeeId },
+          { 'data.employeeId': scope.employeeId }
         ]
       }, TICKET_PROJECTION),
       listRecentRows('Leave', scope.role === 'Super Admin' || scope.role === 'HR'
@@ -412,11 +410,8 @@ export async function getEmployeeNotifications(employeeId, lastCheckTimestamp = 
     tickets.forEach((ticket) => {
       const ticketId = first(ticket, ['Ticket ID', 'ID', 'ticketId']);
       const ownerId = safe(first(ticket, ['Employee ID', 'User ID', 'employeeId', 'EmpID'])).toUpperCase();
-      const approvers = splitIds(first(ticket, ['Task Approver', 'taskApprover']));
       const isMine = ownerId === scope.employeeId;
-      const isApprover = approvers.includes(scope.employeeId.toLowerCase());
-    const isTeam = scope.managedIds.has(ownerId);
-    const visible = scope.isElevated ? (isMine || isApprover || isTeam) : (isMine || isApprover);
+    const visible = isMine;
     if (!visible) return;
 
     pushIfVisible(notificationRecord({

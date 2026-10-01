@@ -1,36 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
 import { StatusPill } from '@/components/common/StatusPill';
 import { formatApprovalDate, toneForApprovalStatus } from '@/features/approvals/services/approvalsPresentation';
 
-function usePagedRows(rows = [], pageSize = 20) {
-  const [page, setPage] = useState(1);
-  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
-  useEffect(() => {
-    setPage(1);
-  }, [rows, pageSize]);
-  const safePage = Math.min(page, pageCount);
-  const pageRows = useMemo(() => {
-    const start = (safePage - 1) * pageSize;
-    return rows.slice(start, start + pageSize);
-  }, [pageSize, rows, safePage]);
-  return { page: safePage, pageCount, pageRows, setPage };
-}
-
-function ApprovalPager({ page, pageCount, total, onPageChange }) {
-  if (total <= 20) return null;
-  const first = total ? (page - 1) * 20 + 1 : 0;
-  const last = Math.min(page * 20, total);
+function LoadingRow({ colSpan, label }) {
   return (
-    <div className="react-data-table__footer">
-      <span className="react-data-table__info">Showing {first} to {last} of {total} entries</span>
-      <div className="react-data-table__pager">
-        <button type="button" disabled={page <= 1} onClick={() => onPageChange(1)} aria-label="First page">«</button>
-        <button type="button" disabled={page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))} aria-label="Previous page">‹</button>
-        <span className="react-data-table__pager-current">{page}</span>
-        <button type="button" disabled={page >= pageCount} onClick={() => onPageChange(Math.min(pageCount, page + 1))} aria-label="Next page">›</button>
-        <button type="button" disabled={page >= pageCount} onClick={() => onPageChange(pageCount)} aria-label="Last page">»</button>
-      </div>
-    </div>
+    <tr>
+      <td colSpan={colSpan} className="dashboard-table__empty approval-table__loading">
+        <span className="approval-loader__spinner" aria-hidden="true" />
+        <span>{label}</span>
+      </td>
+    </tr>
   );
 }
 
@@ -72,10 +50,8 @@ function TicketActions({ row, approvers, submitting, onRequestAction }) {
   );
 }
 
-export function TicketApprovalTable({ rows, approvers, submitting, onRequestAction }) {
-  const { page, pageCount, pageRows, setPage } = usePagedRows(rows, 20);
+export function TicketApprovalTable({ rows, loading = false, approvers, submitting, onRequestAction, onViewDetails }) {
   return (
-    <>
       <div className="dashboard-table-wrap">
         <table className="dashboard-table approval-table">
           <thead>
@@ -88,12 +64,21 @@ export function TicketApprovalTable({ rows, approvers, submitting, onRequestActi
             </tr>
           </thead>
           <tbody>
-            {rows.length ? (
-              pageRows.map((row) => (
+            {loading ? (
+              <LoadingRow colSpan={5} label="Loading ticket approvals..." />
+            ) : rows.length ? (
+              rows.map((row) => (
               <tr key={row['Ticket ID']}>
                 <td data-label="Ticket & User">
                   <div className="approval-user-cell">
-                    <span className="ticket-id-chip">{row['Ticket ID']}</span>
+                    <button
+                      type="button"
+                      className="ticket-id-chip ticket-id-chip--clickable"
+                      onClick={() => onViewDetails && onViewDetails(row)}
+                      title="View ticket details"
+                    >
+                      {row['Ticket ID']}
+                    </button>
                     <strong>{row['Employee Name'] || row['Employee ID'] || '-'}</strong>
                     <span style={{ fontSize: '0.85em', color: 'var(--text-secondary)' }}>
                       {row.Name || row['Client Name'] || row['Client ID'] || '-'}
@@ -147,7 +132,5 @@ export function TicketApprovalTable({ rows, approvers, submitting, onRequestActi
           </tbody>
         </table>
       </div>
-      <ApprovalPager page={page} pageCount={pageCount} total={rows.length} onPageChange={setPage} />
-    </>
   );
 }

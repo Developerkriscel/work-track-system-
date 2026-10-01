@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { changeEmployeePassword, updateEmployeeProfile } from '@/features/auth/api';
+import { deleteHoliday, fetchHolidays, saveHoliday } from '@/features/settings/api';
 import { toPreviewUrl } from '@/lib/fileLinks';
 import './settings.css';
 
@@ -9,6 +10,19 @@ function getInitials(name) {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0][0].toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function normalizeRole(role) {
+  return String(role || '').trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+}
+
+function hasRole(role, roles) {
+  const normalized = normalizeRole(role);
+  const compact = normalized.replace(/\s+/g, '');
+  return roles.some((allowed) => {
+    const allowedNormalized = normalizeRole(allowed);
+    return allowedNormalized === normalized || allowedNormalized.replace(/\s+/g, '') === compact;
+  });
 }
 
 function UploadIcon() {
@@ -67,6 +81,7 @@ export function SettingsPage() {
   const avatarUrl = user?.Avatar || user?.Photo || null;
   const employeeId = user?.['Employee ID'] || user?.employeeId;
   const role = user?.Role || 'User';
+  const canManageHolidays = hasRole(role, ['Admin', 'Company Admin', 'Super Admin']);
   const department = user?.Department || 'N/A';
 
   const initialEmail = user?.Email || user?.email || '';
@@ -78,6 +93,9 @@ export function SettingsPage() {
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState({ type: '', text: '' });
   const [avatarVersion, setAvatarVersion] = useState(0);
+  const [holidayState, setHolidayState] = useState({ loading: false, error: '', success: '', rows: [] });
+  const [holidayForm, setHolidayForm] = useState({ HolidayID: '', Date: '', Name: '', Description: '' });
+  const [savingHoliday, setSavingHoliday] = useState(false);
 
   const avatarSrc = avatarUrl
     ? `${toPreviewUrl(avatarUrl)}${toPreviewUrl(avatarUrl).includes('?') ? '&' : '?'}v=${avatarVersion}`
@@ -91,6 +109,66 @@ export function SettingsPage() {
     setUploadSuccess('');
     setIsEditingProfile(false);
   }, [employeeId, initialEmail, initialPhone]);
+
+  const loadHolidays = async () => {
+    if (!canManageHolidays) return;
+    setHolidayState((current) => ({ ...current, loading: true, error: '' }));
+    try {
+      const payload = await fetchHolidays();
+      setHolidayState({ loading: false, error: '', success: '', rows: payload.data || [] });
+    } catch (error) {
+      setHolidayState((current) => ({ ...current, loading: false, error: error.message || 'Failed to load holidays.' }));
+    }
+  };
+
+  useEffect(() => {
+    loadHolidays();
+  }, [canManageHolidays]);
+
+
+  const handleHolidaySubmit = async (event) => {
+    event.preventDefault();
+    if (!holidayForm.Date || !holidayForm.Name.trim()) {
+      setHolidayState((current) => ({ ...current, error: 'Holiday date and name are required.', success: '' }));
+      return;
+    }
+    setSavingHoliday(true);
+    setHolidayState((current) => ({ ...current, error: '', success: '' }));
+    try {
+      await saveHoliday(holidayForm);
+      setHolidayForm({ HolidayID: '', Date: '', Name: '', Description: '' });
+      const payload = await fetchHolidays();
+      setHolidayState({ loading: false, error: '', success: 'Holiday saved successfully.', rows: payload.data || [] });
+    } catch (error) {
+      setHolidayState((current) => ({ ...current, error: error.message || 'Failed to save holiday.', success: '' }));
+    } finally {
+      setSavingHoliday(false);
+    }
+  };
+
+  const handleHolidayEdit = (holiday) => {
+    setHolidayForm({
+      HolidayID: holiday.HolidayID || holiday['Holiday ID'] || holiday.ID || '',
+      Date: holiday.Date || holiday['Holiday Date'] || '',
+      Name: holiday.Name || holiday['Holiday Name'] || '',
+      Description: holiday.Description || ''
+    });
+    setHolidayState((current) => ({ ...current, error: '', success: '' }));
+  };
+
+  const handleHolidayDelete = async (holiday) => {
+    const id = holiday.HolidayID || holiday['Holiday ID'] || holiday.ID;
+    if (!id) return;
+    setHolidayState((current) => ({ ...current, error: '', success: '' }));
+    try {
+      await deleteHoliday(id);
+      const payload = await fetchHolidays();
+      setHolidayState({ loading: false, error: '', success: 'Holiday deleted successfully.', rows: payload.data || [] });
+      if (holidayForm.HolidayID === id) setHolidayForm({ HolidayID: '', Date: '', Name: '', Description: '' });
+    } catch (error) {
+      setHolidayState((current) => ({ ...current, error: error.message || 'Failed to delete holiday.', success: '' }));
+    }
+  };
 
   // Avatar Upload Logic
   const handleFileChange = async (e) => {
@@ -174,7 +252,8 @@ export function SettingsPage() {
 
   return (
     <div className="settings-page">
-      <div className="settings-card">
+
+      <div className="settings-card" id="settings-profile">
         <div className="settings-header">
           <h2>Profile Settings</h2>
         </div>
@@ -304,7 +383,7 @@ export function SettingsPage() {
         </form>
       </div>
 
-      <div className="settings-card">
+      <div className="settings-card" id="settings-security">
         <div className="settings-header">
           <h2>Security</h2>
           <p>Update your password</p>
@@ -380,6 +459,61 @@ export function SettingsPage() {
           {pwSuccess && <div className="settings-message settings-message--success">{pwSuccess}</div>}
         </form>
       </div>
+
+      {canManageHolidays && (
+        <div className="settings-card" id="settings-holidays">
+          <div className="settings-header">
+            <h2>Holiday Settings</h2>
+            <p>Add company holidays. On holiday dates, WhatsApp alerts are skipped and attendance shows Holiday.</p>
+          </div>
+
+          <form className="settings-form settings-holiday-form" onSubmit={handleHolidaySubmit}>
+            <input type="hidden" value={holidayForm.HolidayID} readOnly />
+            <div className="settings-form-group">
+              <label>Holiday Date</label>
+              <input type="date" className="settings-input" value={holidayForm.Date} onChange={(event) => setHolidayForm((current) => ({ ...current, Date: event.target.value }))} />
+            </div>
+            <div className="settings-form-group">
+              <label>Holiday Name</label>
+              <input type="text" className="settings-input" value={holidayForm.Name} onChange={(event) => setHolidayForm((current) => ({ ...current, Name: event.target.value }))} placeholder="e.g. Diwali, Independence Day" />
+            </div>
+            <div className="settings-form-group">
+              <label>Description</label>
+              <input type="text" className="settings-input" value={holidayForm.Description} onChange={(event) => setHolidayForm((current) => ({ ...current, Description: event.target.value }))} placeholder="Optional note" />
+            </div>
+            <div className="settings-holiday-actions">
+              <button type="submit" className="settings-submit" disabled={savingHoliday}>{savingHoliday ? 'Saving...' : holidayForm.HolidayID ? 'Update Holiday' : 'Add Holiday'}</button>
+              {holidayForm.HolidayID && <button type="button" className="settings-logout-btn settings-secondary-btn" onClick={() => setHolidayForm({ HolidayID: '', Date: '', Name: '', Description: '' })}>Cancel Edit</button>}
+            </div>
+            {holidayState.error && <div className="settings-message settings-message--error">{holidayState.error}</div>}
+            {holidayState.success && <div className="settings-message settings-message--success">{holidayState.success}</div>}
+          </form>
+
+          <div className="settings-holiday-list">
+            {holidayState.loading ? (
+              <div className="settings-holiday-empty">Loading holidays...</div>
+            ) : holidayState.rows.length ? (
+              holidayState.rows.map((holiday) => {
+                const id = holiday.HolidayID || holiday['Holiday ID'] || holiday.ID;
+                return (
+                  <div className="settings-holiday-row" key={id || holiday.Date}>
+                    <div>
+                      <strong>{holiday.Name || holiday['Holiday Name'] || 'Holiday'}</strong>
+                      <span>{holiday.Date || holiday['Holiday Date']} {holiday.Description ? ' - ' + holiday.Description : ''}</span>
+                    </div>
+                    <div className="settings-holiday-row-actions">
+                      <button type="button" onClick={() => handleHolidayEdit(holiday)}>Edit</button>
+                      <button type="button" onClick={() => handleHolidayDelete(holiday)}>Delete</button>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="settings-holiday-empty">No holidays added yet.</div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="settings-card settings-danger-card">
         <div className="settings-header">

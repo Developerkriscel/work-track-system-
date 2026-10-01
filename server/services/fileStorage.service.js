@@ -13,6 +13,14 @@ const safe = (value = '') => String(value ?? '').trim();
 
 let cachedClient = null;
 
+function hmac(key, value, encoding) {
+  return crypto.createHmac('sha256', key).update(value).digest(encoding);
+}
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
 function getMissingEnvVars() {
   return REQUIRED_R2_VARS.filter((key) => !safe(process.env[key]));
 }
@@ -187,6 +195,39 @@ export async function saveBase64File(dataObj = {}, folderName = 'general') {
   const base64 = safe(dataObj.base64 || dataObj.data || dataObj.content);
   if (!base64) return '';
   return uploadBase64File(dataObj, folderName);
+}
+
+export function getPresignedFileUrl(fileUrl = '', expiresSeconds = 600) {
+  assertR2Configured();
+  const key = getStoredFileKey(fileUrl);
+  if (!key) return '';
+  const endpoint = new URL(safe(process.env.R2_ENDPOINT).replace(/\/+$/, ''));
+  const bucket = bucketName();
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const date = amzDate.slice(0, 8);
+  const region = 'auto';
+  const service = 's3';
+  const credentialScope = `${date}/${region}/${service}/aws4_request`;
+  const credential = `${safe(process.env.R2_ACCESS_KEY_ID)}/${credentialScope}`;
+  const canonicalUri = `/${encodeURIComponent(bucket)}/${key.split('/').map(encodeURIComponent).join('/')}`;
+  const params = new URLSearchParams({
+    'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+    'X-Amz-Credential': credential,
+    'X-Amz-Date': amzDate,
+    'X-Amz-Expires': String(Math.max(60, Math.min(3600, Number(expiresSeconds) || 600))),
+    'X-Amz-SignedHeaders': 'host'
+  });
+  const canonicalQuery = [...params.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, value]) => `${encodeURIComponent(name)}=${encodeURIComponent(value)}`)
+    .join('&');
+  const canonicalHeaders = `host:${endpoint.host}\n`;
+  const canonicalRequest = ['GET', canonicalUri, canonicalQuery, canonicalHeaders, 'host', 'UNSIGNED-PAYLOAD'].join('\n');
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, credentialScope, sha256(canonicalRequest)].join('\n');
+  const signingKey = hmac(hmac(hmac(hmac(`AWS4${safe(process.env.R2_SECRET_ACCESS_KEY)}`, date), region), service), 'aws4_request');
+  const signature = hmac(signingKey, stringToSign, 'hex');
+  return `${endpoint.origin}${canonicalUri}?${canonicalQuery}&X-Amz-Signature=${signature}`;
 }
 
 export async function deleteStoredFile(fileUrl = '') {

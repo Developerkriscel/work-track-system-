@@ -59,7 +59,7 @@ export function TodoPage() {
   };
 
   return (
-    <section className="page-card">
+    <section className="page-card todo-page">
       <TodoHeader currentUser={currentUser} employeeId={employeeId} onRefresh={refresh} />
 
       {error ? (

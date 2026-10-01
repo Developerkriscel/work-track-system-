@@ -7,6 +7,13 @@ export async function fetchTicketReportData(employeeId, startDate, endDate) {
   });
 }
 
+export async function fetchAttendanceReportData(startDate, endDate) {
+  return httpClient('/api/attendance/team/list', {
+    method: 'POST',
+    body: JSON.stringify({ startDate, endDate })
+  });
+}
+
 export async function fetchFmsReportData(employeeId, role, startDate, endDate) {
   return httpClient('/api/reports/fms', {
     method: 'POST',

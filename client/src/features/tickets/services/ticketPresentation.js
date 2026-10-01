@@ -8,6 +8,15 @@ export function todayYmd() {
 
 export function formatPlanDate(value) {
   if (!value) return '-';
+  const raw = String(value).trim();
+  const ymd = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (ymd) {
+    return `${String(ymd[3]).padStart(2, '0')}-${String(ymd[2]).padStart(2, '0')}-${ymd[1]}`;
+  }
+  const dmy = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (dmy) {
+    return `${String(dmy[1]).padStart(2, '0')}-${String(dmy[2]).padStart(2, '0')}-${dmy[3]}`;
+  }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '-';
   const day = `${date.getDate()}`.padStart(2, '0');

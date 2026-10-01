@@ -110,10 +110,28 @@ export function groupClientTickets(rows) {
   return { all, open, response, closed };
 }
 
+function clientStatusSortWeight(status) {
+  const value = String(status || '').trim().toLowerCase();
+  // Only In Progress floats to the very top
+  if (value === 'in progress') return 0;
+  // Terminal / waiting tickets sink to the bottom
+  if (value.includes('pending') || value.includes('approval')) return 90;
+  if (value.includes('completed') || value.includes('resolved') || value.includes('done')) return 91;
+  if (value.includes('closed') || value.includes('cancelled') || value.includes('auto-approved')) return 92;
+  if (value.includes('approved')) return 93;
+  // All other active statuses (Open, Paused, Rework, Reassigned, etc.)
+  // share the same weight — sort purely by Created Date
+  return 1;
+}
+
 export function sortClientTickets(rows) {
   return [...rows].sort((left, right) => {
-    const leftDate = toMidnightTimestamp(left?.['Plan Date'] || left?.Date || left?.Timestamp) || 0;
-    const rightDate = toMidnightTimestamp(right?.['Plan Date'] || right?.Date || right?.Timestamp) || 0;
+    // 1. In Progress tickets always come first
+    const statusDiff = clientStatusSortWeight(left?.Status) - clientStatusSortWeight(right?.Status);
+    if (statusDiff !== 0) return statusDiff;
+    // 2. Within same status group — sort by Created Date (newest first)
+    const leftDate = toMidnightTimestamp(left?.Timestamp || left?.createdAt || left?.Date) || 0;
+    const rightDate = toMidnightTimestamp(right?.Timestamp || right?.createdAt || right?.Date) || 0;
     return rightDate - leftDate;
   });
 }

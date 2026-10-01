@@ -12,10 +12,33 @@ import {
   reassignTicket,
   updateTicket,
   updateTicketSchedule,
-  transferTicketApproval
+  transferTicketApproval,
+  saveAutoTicket,
+  deleteAutoTicket
 } from '../services/ticket.service.js';
 
 const router = express.Router();
+
+router.get('/delete-generated-autos', async (req, res) => {
+  try {
+    const { LegacyModels } = await import('../models/legacyModels.js');
+    const TicketModel = LegacyModels.Ticket;
+    const todayStr = new Date().toLocaleDateString('en-US');
+    const query = {
+      'data.Ticket ID': { $regex: /^TKT-/ },
+      'data.Timestamp': todayStr,
+      'data.Auto Ticket': { $nin: ['Yes', 'yes'] },
+      'data.Is Auto Ticket': { $nin: ['Yes', 'yes'] }
+    };
+    const count = await TicketModel.countDocuments(query);
+    if (count > 0) {
+      await TicketModel.deleteMany(query);
+    }
+    res.json({ deleted: count });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 router.get('/debug-buddy', async (req, res) => {
   try {
@@ -163,6 +186,28 @@ router.post('/messages/post', async (req, res) => {
 router.post('/messages/read', async (req, res) => {
   try {
     res.json(await markTicketMessagesAsRead(req.body.ticketId, '', req.auth.sub, req.auth.role));
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/auto-ticket/save', async (req, res) => {
+  try {
+    const payload = req.body.ticketPayload || {};
+    if (!payload['Creator ID']) payload['Creator ID'] = req.auth.sub;
+    const result = await saveAutoTicket(payload);
+    if (!result.success) return res.status(400).json(result);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/auto-ticket/delete', async (req, res) => {
+  try {
+    const result = await deleteAutoTicket(req.body.ticketId);
+    if (!result.success) return res.status(400).json(result);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

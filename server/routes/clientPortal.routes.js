@@ -25,8 +25,27 @@ router.post('/dashboard', async (req, res) => {
 
 router.post('/tickets', async (req, res) => {
   try {
-    const { startDate, endDate, statusFilter } = req.body;
-    res.json(await getClientTickets(req.auth.sub, startDate, endDate, statusFilter));
+    const {
+      startDate,
+      endDate,
+      statusFilter,
+      statusGroup,
+      page,
+      pageSize,
+      search,
+      sortKey,
+      sortDirection,
+      paginated
+    } = req.body;
+    res.json(await getClientTickets(req.auth.sub, startDate, endDate, statusFilter, {
+      paginated,
+      statusGroup,
+      page,
+      pageSize,
+      search,
+      sortKey,
+      sortDirection
+    }));
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

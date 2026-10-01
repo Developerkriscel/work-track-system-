@@ -172,6 +172,10 @@
 
 .shell-main__inner {
   /* Keep the navigation at full size while compacting only the workspace. */
+  zoom: 0.63;
+}
+
+.app-shell--whatsapp .shell-main__inner {
   zoom: 0.7;
 }
 
@@ -522,6 +526,42 @@
   overflow: hidden;
   z-index: 200;
   animation: upm-pop 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.upm-notification-shell {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 220;
+  pointer-events: none;
+}
+
+.upm-notification-shell .notification-panel {
+  position: relative;
+  top: auto;
+  right: auto;
+  transform: translateX(20px) scale(0.985);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease,
+    visibility 0s linear 0.28s;
+}
+
+.upm-notification-shell--open {
+  pointer-events: auto;
+}
+
+.upm-notification-shell--open .notification-panel {
+  transform: translateX(0) scale(1);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease;
 }
 
 @keyframes upm-pop {
@@ -970,11 +1010,17 @@
 
 .notification-card--seen .notification-card__message {
   font-weight: 500;
+  color: #1e293b;
 }
 
 .notification-card--new {
   border-color: rgba(52, 99, 235, 0.32);
   box-shadow: 0 8px 20px rgba(52, 99, 235, 0.06), 0 1px 3px rgba(17, 24, 39, 0.02);
+}
+
+.notification-card--new .notification-card__message {
+  color: #15803d;
+  font-weight: 800;
 }
 
 .notification-card__message {
@@ -1042,6 +1088,14 @@
 }
 [data-theme="dark"] .notification-panel__header h3,
 [data-theme="dark"] .notification-card__message {
+  color: #f0f4ff;
+}
+
+[data-theme="dark"] .notification-card--new .notification-card__message {
+  color: #4ade80;
+}
+
+[data-theme="dark"] .notification-card--seen .notification-card__message {
   color: #f0f4ff;
 }
 [data-theme="dark"] .notification-panel__refresh {

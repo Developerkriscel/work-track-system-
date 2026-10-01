@@ -57,8 +57,12 @@ export function ClientTicketDetailsDialog({
             <strong>{ticket['Task Category'] || ticket.Category || 'N/A'}</strong>
           </div>
           <div>
-            <span className="kv-grid__label">Given Date</span>
-            <strong>{formatDate(ticket.Timestamp || ticket.Date || ticket['Plan Date'])}</strong>
+            <span className="kv-grid__label">Created Date</span>
+            <strong>{formatDate(ticket.Timestamp || ticket.Date || ticket.createdAt)}</strong>
+          </div>
+          <div>
+            <span className="kv-grid__label">Expected Date</span>
+            <strong>{formatDate(ticket['Plan Date'] || ticket.completionDate)}</strong>
           </div>
         </div>
 

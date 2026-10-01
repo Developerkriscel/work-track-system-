@@ -35,3 +35,10 @@ ref-requests-header-crop.png
 dist/
 build/
 coverage/
+
+*.tar.gz
+temp_sheet.csv
+raw_*.txt
+*.py
+*.pyc
+artifacts/

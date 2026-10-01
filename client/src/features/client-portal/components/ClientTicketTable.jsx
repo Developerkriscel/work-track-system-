@@ -35,7 +35,16 @@ export function ClientTicketTable({
   statusLabel,
   statusTone,
   ticketPriorityTone,
-  submitting
+  submitting,
+  serverPagination = null,
+  serverPageSize = null,
+  serverSearch = '',
+  serverSortDirection = null,
+  serverSortKey = null,
+  onServerPageChange = null,
+  onServerPageSizeChange = null,
+  onServerSearchChange = null,
+  onServerSort = null
 }) {
   const columns = [
     {
@@ -71,14 +80,24 @@ export function ClientTicketTable({
           searchValue: (row) => row.Priority || ''
         }]),
     {
-      key: 'date',
-      label: 'Date',
+      key: 'createdDate',
+      label: 'Created Date',
       sortValue: (row) => {
-        const value = row.Date || row['Plan Date'] || row.Timestamp;
+        const value = row.Timestamp || row.createdAt || row.Date;
         const timestamp = value ? new Date(value).getTime() : 0;
         return Number.isNaN(timestamp) ? 0 : timestamp;
       },
-      searchValue: (row) => formatDate(row.Date || row['Plan Date'] || row.Timestamp)
+      searchValue: (row) => formatDate(row.Timestamp || row.createdAt || row.Date)
+    },
+    {
+      key: 'expectedDate',
+      label: 'Expected Date',
+      sortValue: (row) => {
+        const value = row['Plan Date'] || row.completionDate;
+        const timestamp = value ? new Date(value).getTime() : 0;
+        return Number.isNaN(timestamp) ? 0 : timestamp;
+      },
+      searchValue: (row) => formatDate(row['Plan Date'] || row.completionDate)
     },
     {
       key: 'actions',
@@ -89,6 +108,13 @@ export function ClientTicketTable({
     }
   ];
 
+  const localState = useDataTableState(rows, columns, {
+    initialSortKey: 'createdDate',
+    initialSortDirection: 'desc',
+    initialPageSize: 10
+  });
+
+  const serverPaged = Boolean(serverPagination && onServerPageChange && onServerPageSizeChange);
   const {
     pageInfo,
     pageSize,
@@ -100,11 +126,20 @@ export function ClientTicketTable({
     sortKey,
     toggleSort,
     visibleRows
-  } = useDataTableState(rows, columns, {
-    initialSortKey: 'date',
-    initialSortDirection: 'desc',
-    initialPageSize: 10
-  });
+  } = serverPaged
+    ? {
+        pageInfo: serverPagination,
+        pageSize: serverPageSize || serverPagination.pageSize || 10,
+        search: serverSearch || '',
+        setPage: onServerPageChange,
+        setPageSize: onServerPageSizeChange,
+        setSearch: onServerSearchChange || (() => {}),
+        sortDirection: serverSortDirection || 'desc',
+        sortKey: serverSortKey || 'createdDate',
+        toggleSort: onServerSort || (() => {}),
+        visibleRows: rows
+      }
+    : localState;
 
   const colSpan = columns.length;
 
@@ -130,7 +165,9 @@ export function ClientTicketTable({
               const canApprove = normalizedStatus.includes('pending approval') && statusLabel(row) !== 'Auto-Approved';
               const canReopen = normalizedStatus.includes('pending approval') && statusLabel(row) !== 'Auto-Approved';
               const showsClosedIndicator = statusLabel(row) === 'Auto-Approved' || normalizedStatus.includes('closed') || normalizedStatus.includes('completed');
-              const rowClassName = row.HasUnreadMessages ? 'client-ticket-table__row client-ticket-table__row--unread' : 'client-ticket-table__row';
+              const rawUnreadVal = row.HasUnreadMessages;
+              const rowHasUnread = rawUnreadVal === true || (typeof rawUnreadVal === 'string' && rawUnreadVal.trim().toUpperCase() === 'TRUE');
+              const rowClassName = rowHasUnread ? 'client-ticket-table__row client-ticket-table__row--unread' : 'client-ticket-table__row';
 
               return (
                 <tr key={ticketId} className={rowClassName}>
@@ -153,7 +190,8 @@ export function ClientTicketTable({
                       </span>
                     </td>
                   )}
-                  <td data-label="Date">{formatDate(row.Date || row['Plan Date'] || row.Timestamp)}</td>
+                  <td data-label="Created Date">{formatDate(row.Timestamp || row.createdAt || row.Date)}</td>
+                  <td data-label="Expected Date">{formatDate(row['Plan Date'] || row.completionDate)}</td>
                   <td data-label="Action">
                     <div className="ticket-actions client-ticket-table__actions">
                       {canRespond ? (
@@ -168,7 +206,10 @@ export function ClientTicketTable({
                         </button>
                       ) : null}
                       {(() => {
-                        const hasUnread = row.HasUnreadMessages === true || String(row.HasUnreadMessages).toUpperCase() === 'TRUE';
+                        const rawUnread = row.HasUnreadMessages;
+                        const hasUnread = rawUnread === true
+                          || (typeof rawUnread === 'string'
+                            && rawUnread.trim().toUpperCase() === 'TRUE');
                         return (
                           <button
                             type="button"

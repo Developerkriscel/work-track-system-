@@ -3,13 +3,14 @@ import { listRows, registerStoreMutationListener, stripInternalMetadata } from '
 import { buildRedisKey, getJson, setJson } from './redisCache.service.js';
 
 const closedTerms = ['closed', 'approved', 'cancelled', 'completed', 'done', 'resolved', 'paid'];
-const DASHBOARD_CACHE_SCHEMA_VERSION = 2;
+const DASHBOARD_CACHE_SCHEMA_VERSION = 4;
 const DASHBOARD_CACHE_TTL_MS = Number(process.env.WORKTRACK_DASHBOARD_CACHE_TTL_MS || 10000);
 const DASHBOARD_SNAPSHOT_TTL_MS = Number(process.env.WORKTRACK_DASHBOARD_SNAPSHOT_TTL_MS || 60000);
 const dashboardCache = new Map();
 const dashboardSnapshotCache = new Map();
 const dashboardSnapshotRefreshes = new Map();
 const dashboardPrimeJobs = new Map();
+const dashboardComputations = new Map();
 let dashboardCacheVersion = 0;
 const safe = (value = '') => String(value ?? '').trim();
 const eq = (left, right) => safe(left).toLowerCase() === safe(right).toLowerCase();
@@ -25,6 +26,7 @@ const userName = (row = {}) => first(row, ['Employee Name', 'Name', 'name'], use
 const userRole = (row = {}) => safe(first(row, ['Role', 'role', 'Designation'], 'User')).toLowerCase();
 const teamDashboardRoles = new Set(['super admin', 'admin', 'hr', 'manager']);
 const DEFAULT_DASHBOARD_TASKS_PAGE_SIZE = 20;
+const DASHBOARD_TIME_ZONE = 'Asia/Kolkata';
 
 function clearDashboardCaches() {
   dashboardCacheVersion += 1;
@@ -32,8 +34,8 @@ function clearDashboardCaches() {
   dashboardSnapshotCache.clear();
 }
 
-registerStoreMutationListener(() => {
-  clearDashboardCaches();
+registerStoreMutationListener((model) => {
+  if (['User', 'Ticket', 'FmsTask', 'Todo', 'Expense', 'Leave', 'TicketHistory'].includes(model)) clearDashboardCaches();
 });
 
 function parseReferenceNow(value) {
@@ -45,9 +47,14 @@ function parseReferenceNow(value) {
 const referenceNow = () => parseReferenceNow(process.env.WORKTRACK_REFERENCE_DATE);
 
 function localDate(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: DASHBOARD_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  const mapped = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const { year, month, day } = mapped;
   return `${year}-${month}-${day}`;
 }
 
@@ -56,33 +63,52 @@ function today() {
 }
 
 function normalizedDate(value) {
-  if (!value) return today();
+  if (!value) return '';
   const raw = safe(value);
   if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  const shortSlashDate = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/);
+  if (shortSlashDate) {
+    const firstPart = Number(shortSlashDate[1]);
+    const secondPart = Number(shortSlashDate[2]);
+    const year = `20${shortSlashDate[3]}`;
+    if (firstPart > 12 && secondPart <= 12) {
+      return `${year}-${String(secondPart).padStart(2, '0')}-${String(firstPart).padStart(2, '0')}`;
+    }
+    return `${year}-${String(firstPart).padStart(2, '0')}-${String(secondPart).padStart(2, '0')}`;
+  }
+  const namedDate = raw.match(/^(\d{1,2})[-\s]([A-Za-z]{3,9})[-\s](\d{4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/);
+  if (namedDate) {
+    const monthIndex = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+      .findIndex((monthName) => namedDate[2].toLowerCase().startsWith(monthName));
+    if (monthIndex >= 0) {
+      return `${namedDate[3]}-${String(monthIndex + 1).padStart(2, '0')}-${String(Number(namedDate[1])).padStart(2, '0')}`;
+    }
+  }
   const calendarDate = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/);
   if (calendarDate) {
     const firstPart = Number(calendarDate[1]);
     const secondPart = Number(calendarDate[2]);
     const year = calendarDate[3];
 
-    if (raw.includes('/')) {
-      // Google Sheet imports are primarily stored as M/D/YYYY in the current dataset.
-      return `${year}-${String(firstPart).padStart(2, '0')}-${String(secondPart).padStart(2, '0')}`;
-    }
-
     if (firstPart > 12 && secondPart <= 12) {
       return `${year}-${String(secondPart).padStart(2, '0')}-${String(firstPart).padStart(2, '0')}`;
+    }
+
+    if (secondPart > 12 && firstPart <= 12) {
+      return `${year}-${String(firstPart).padStart(2, '0')}-${String(secondPart).padStart(2, '0')}`;
     }
 
     return `${year}-${String(firstPart).padStart(2, '0')}-${String(secondPart).padStart(2, '0')}`;
   }
   const parsed = new Date(raw);
-  return Number.isNaN(parsed.getTime()) ? raw : localDate(parsed);
+  return Number.isNaN(parsed.getTime()) ? '' : localDate(parsed);
 }
 
 function dateInRange(value, start, end) {
-  if (!start || !end || !value) return true;
+  if (!start || !end) return true;
+  if (!value) return false;
   const date = normalizedDate(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
   return date >= start && date <= end;
 }
 
@@ -92,10 +118,14 @@ function addDays(date, days) {
   return copy;
 }
 
+function dateFromYmd(value) {
+  return new Date(`${value}T12:00:00+05:30`);
+}
+
 function workingDaysBetween(start, end) {
   if (!start || !end) return 0;
-  const from = new Date(`${start}T00:00:00`);
-  const to = new Date(`${end}T00:00:00`);
+  const from = dateFromYmd(start);
+  const to = dateFromYmd(end);
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from > to) return 0;
   let count = 0;
   for (const cursor = new Date(from); cursor <= to; cursor.setDate(cursor.getDate() + 1)) {
@@ -109,8 +139,7 @@ function ymd(date) {
 }
 
 function rangeForFilter(range = 'today') {
-  const now = referenceNow();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfToday = dateFromYmd(today());
   const key = safe(range).toLowerCase().replace(/-/g, '_');
   if (key === 'yesterday') {
     const date = addDays(startOfToday, -1);
@@ -196,11 +225,24 @@ function csvContainsQuery(field, value) {
 
 function scopedDateQuery(fields = [], start, end) {
   if (!start || !end || !fields.length) return null;
-  const inclusiveEnd = `${end}T23:59:59.999Z`;
+  // Legacy imports contain ISO, US/Indian numeric and named-month dates.
+  // Prefilter conservatively; normalizedDate remains the final authority.
+  const variants = [];
+  for (const date = new Date(`${start}T12:00:00Z`); date.toISOString().slice(0, 10) <= end; date.setUTCDate(date.getUTCDate() + 1)) {
+    const y = date.getUTCFullYear(); const m = date.getUTCMonth() + 1; const d = date.getUTCDate();
+    variants.push(date.toISOString().slice(0, 10));
+    variants.push(`0?${m}[/.\\-]0?${d}[/.\\-](?:${y}|${String(y).slice(2)})`, `0?${d}[/.\\-]0?${m}[/.\\-](?:${y}|${String(y).slice(2)})`);
+    const month = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+    variants.push(`0?${d}[-\\s]${month}[a-z]*[-\\s]${y}`);
+  }
+  const matching = new RegExp(`^\\s*(?:${variants.join('|')})(?:$|[T\\s])`, 'i');
+  const common = /^\s*(?:\d{4}-\d{2}-\d{2}|\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}|\d{1,2}[-\s][a-z]{3,9}[-\s]\d{4})(?:$|[T\s])/i;
   return {
-    $or: fields.map((field) => ({
-      [field]: { $gte: start, $lte: inclusiveEnd }
-    }))
+    $or: fields.flatMap((field) => [
+      { [field]: matching },
+      { [field]: { $type: 'date' } },
+      { $and: [{ [field]: { $type: 'string', $regex: /\S/ } }, { [field]: { $not: common } }] }
+    ])
   };
 }
 
@@ -254,7 +296,7 @@ function taskOwnerName(task, users = []) {
 
 function normalizeTicketForDashboard(ticket, users) {
   const status = first(ticket, ['Status'], 'Open');
-  const date = first(ticket, ['Plan Date', 'Date', 'Timestamp', 'Due Date'], today());
+  const date = first(ticket, ['Plan Date', 'planDate', 'Date', 'date', 'Due Date', 'dueDate', 'Timestamp', 'timestamp', 'Created At', 'createdAt', 'Last Update Date', 'lastUpdateDate']);
   return {
     ID: first(ticket, ['Ticket ID', 'Task ID', 'ID']),
     Type: 'Ticket',
@@ -269,7 +311,7 @@ function normalizeTicketForDashboard(ticket, users) {
 
 function normalizeFmsForDashboard(task, users) {
   const status = first(task, ['Status'], first(task, ['Done Date', 'actualDate']) ? 'Completed' : 'Pending');
-  const date = first(task, ['Plan Date', 'Date'], today());
+  const date = first(task, ['Plan Date', 'planDate', 'Date', 'date', 'Created At', 'createdAt', 'Last Update Date', 'lastUpdateDate']);
   return {
     ID: first(task, ['Task ID', 'ID', 'rowId']),
     Type: 'FMS',
@@ -283,7 +325,7 @@ function normalizeFmsForDashboard(task, users) {
 }
 
 function normalizeTodoForDashboard(todo, users) {
-  const date = first(todo, ['Due Date', 'Date'], today());
+  const date = first(todo, ['Due Date', 'dueDate', 'Date', 'date', 'Created At', 'createdAt', 'Last Update Date', 'lastUpdateDate']);
   return {
     ID: first(todo, ['Task ID', 'TodoID', 'ID']),
     Type: 'To-Do',
@@ -362,36 +404,18 @@ function buildDashboardScope(employeeId, normalizedViewMode, user, initialTeamMe
 
 function buildDashboardDataQueries({ employeeId, scopedEmployeeIds, ticketHistoryBaseQuery, start, end }) {
   const employeeQuery = buildEmployeeQuery(scopedEmployeeIds);
-  const ticketBaseQuery = scopedEmployeeIds.length > 1 ? employeeQuery : selfTicketQuery(employeeId);
-  const selectedTicketQuery = combineAndQueries(
-    ticketBaseQuery,
-    scopedDateQuery(['data.Date', 'data.Plan Date'], start, end)
-  );
-  const selectedFmsQuery = combineAndQueries(
-    employeeQuery,
-    scopedDateQuery(['data.Date', 'data.Plan Date', 'data.actualDate', 'data.Done Date'], start, end)
-  );
-  const selectedTodoQuery = combineAndQueries(
-    employeeQuery,
-    scopedDateQuery(['data.Date', 'data.Due Date'], start, end)
-  );
-  const selectedExpenseQuery = combineAndQueries(
-    employeeQuery,
-    scopedDateQuery(['data.Date', 'data.Timestamp'], start, end)
-  );
-  const selectedHistoryQuery = combineAndQueries(
-    ticketHistoryBaseQuery,
-    scopedDateQuery(['data.Timestamp', 'data.Date', 'data.Created At'], start, end)
-  );
+  const ticketBaseQuery = scopedEmployeeIds.length === 1 && eq(scopedEmployeeIds[0], employeeId) ? selfTicketQuery(employeeId) : employeeQuery;
+  const ticketDates = ['Plan Date', 'planDate', 'Date', 'date', 'Due Date', 'dueDate', 'Timestamp', 'timestamp', 'Created At', 'createdAt', 'Last Update Date', 'lastUpdateDate'].map((key) => `data.${key}`);
+  const fmsDates = ['Plan Date', 'planDate', 'Date', 'date', 'Created At', 'createdAt', 'Last Update Date', 'lastUpdateDate'].map((key) => `data.${key}`);
+  const todoDates = ['Due Date', 'dueDate', 'Date', 'date', 'Created At', 'createdAt', 'Last Update Date', 'lastUpdateDate'].map((key) => `data.${key}`);
+  const selectedTicketQuery = combineAndQueries(ticketBaseQuery, scopedDateQuery(ticketDates, start, end));
+  const selectedFmsQuery = combineAndQueries(employeeQuery, scopedDateQuery(fmsDates, start, end));
+  const selectedTodoQuery = combineAndQueries(employeeQuery, scopedDateQuery(todoDates, start, end));
+  const selectedExpenseQuery = combineAndQueries(employeeQuery, scopedDateQuery(['Date', 'date', 'Created At', 'createdAt', 'Timestamp', 'timestamp'].map((key) => `data.${key}`), start, end));
+  const selectedHistoryQuery = combineAndQueries(ticketHistoryBaseQuery, scopedDateQuery(['data.Timestamp', 'data.Date', 'data.Created At'], start, end));
   const chartRange = lastSevenDayRange();
-  const chartTicketQuery = combineAndQueries(
-    ticketBaseQuery,
-    scopedDateQuery(['data.Date', 'data.Plan Date'], chartRange.start, chartRange.end)
-  );
-  const chartFmsQuery = combineAndQueries(
-    employeeQuery,
-    scopedDateQuery(['data.Date', 'data.Plan Date', 'data.actualDate', 'data.Done Date'], chartRange.start, chartRange.end)
-  );
+  const chartTicketQuery = combineAndQueries(ticketBaseQuery, scopedDateQuery(ticketDates, chartRange.start, chartRange.end));
+  const chartFmsQuery = combineAndQueries(employeeQuery, scopedDateQuery(fmsDates, chartRange.start, chartRange.end));
 
   return {
     employeeQuery,
@@ -424,7 +448,7 @@ function paginateDashboardTasks(rows = [], page = 1, pageSize = DEFAULT_DASHBOAR
 }
 
 function buildDashboardSnapshotKey(employeeId = '', filterRange = 'today', viewMode = 'my') {
-  return `${safe(employeeId).toLowerCase()}::${safe(filterRange || 'today').toLowerCase()}::${safe(viewMode || 'my').toLowerCase()}`;
+  return `${dashboardCacheVersion}::${today()}::${safe(employeeId).toLowerCase()}::${safe(filterRange || 'today').toLowerCase()}::${safe(viewMode || 'my').toLowerCase()}`;
 }
 
 function dashboardPayloadRedisKey(cacheKey) {
@@ -487,7 +511,7 @@ function buildDashboardSnapshotData({
   const scopedTickets = allTickets.filter((task) => dateInRange(task.Date, start, end));
   const scopedFms = allFms.filter((task) => dateInRange(task.Date, start, end));
   const scopedTodos = allTodos.filter((task) => dateInRange(task.Date, start, end));
-  const scopedExpenses = expenses.filter((expense) => dateInRange(first(expense, ['Date', 'Created At', 'Timestamp']), start, end));
+  const scopedExpenses = expenses.filter((expense) => dateInRange(first(expense, ['Date', 'date', 'Created At', 'createdAt', 'Timestamp', 'timestamp']), start, end));
 
   const allTasks = [...allTickets, ...allFms, ...allTodos];
   const dashboardTickets = scopedTickets;
@@ -606,6 +630,15 @@ function buildDashboardSnapshotData({
 }
 
 async function computeDashboardSnapshot(employeeId, filterRange, normalizedViewMode) {
+  const key = [dashboardCacheVersion, today(), employeeId, filterRange, normalizedViewMode].join('::');
+  if (dashboardComputations.has(key)) return dashboardComputations.get(key);
+  const pending = computeDashboardSnapshotUncached(employeeId, filterRange, normalizedViewMode)
+    .finally(() => dashboardComputations.delete(key));
+  dashboardComputations.set(key, pending);
+  return pending;
+}
+
+async function computeDashboardSnapshotUncached(employeeId, filterRange, normalizedViewMode) {
   const { start, end } = rangeForFilter(filterRange);
   const userQuery = {
     $or: [
@@ -653,9 +686,17 @@ async function computeDashboardSnapshot(employeeId, filterRange, normalizedViewM
     'data.Assigned To': 1,
     'data.Status': 1,
     'data.Plan Date': 1,
+    'data.planDate': 1,
     'data.Date': 1,
+    'data.date': 1,
     'data.Timestamp': 1,
+    'data.timestamp': 1,
     'data.Due Date': 1,
+    'data.dueDate': 1,
+    'data.Created At': 1,
+    'data.createdAt': 1,
+    'data.Last Update Date': 1,
+    'data.lastUpdateDate': 1,
     'data.TAT': 1,
     'data.When': 1,
     'data.TAT Minutes': 1,
@@ -687,7 +728,13 @@ async function computeDashboardSnapshot(employeeId, filterRange, normalizedViewM
     'data.employeeId': 1,
     'data.EmpID': 1,
     'data.Amount': 1,
-    'data.Expense Amount': 1
+    'data.Expense Amount': 1,
+    'data.Date': 1,
+    'data.date': 1,
+    'data.Timestamp': 1,
+    'data.timestamp': 1,
+    'data.Created At': 1,
+    'data.createdAt': 1
   };
   const [user, initialTeamMembers] = await Promise.all([
     findDataRow('User', userQuery, userProjection),
@@ -718,7 +765,7 @@ async function computeDashboardSnapshot(employeeId, filterRange, normalizedViewM
     end
   });
 
-  const [tickets, fms, todos, expenses, pendingLeaveCount, ticketHistory] = await Promise.all([
+  const [tickets, fms, todos, expenses, pendingLeaveCount, ticketHistory, chartTickets, chartFms] = await Promise.all([
     listDataRows('Ticket', selectedTicketQuery, dashboardTaskProjection),
     listDataRows('FmsTask', selectedFmsQuery, dashboardTaskProjection),
     listDataRows('Todo', selectedTodoQuery, dashboardTaskProjection),
@@ -729,10 +776,7 @@ async function computeDashboardSnapshot(employeeId, filterRange, normalizedViewM
         { $or: [{ 'data.Status': /pending/i }, { 'data.status': /pending/i }, { 'data.Admin Approval': /pending/i }] }
       ]
     }),
-    listDataRows('TicketHistory', selectedHistoryQuery, historyProjection)
-  ]);
-
-  const [chartTickets, chartFms] = await Promise.all([
+    listDataRows('TicketHistory', selectedHistoryQuery, historyProjection),
     listDataRows('Ticket', chartTicketQuery, dashboardTaskProjection),
     listDataRows('FmsTask', chartFmsQuery, dashboardTaskProjection)
   ]);
@@ -811,9 +855,17 @@ async function computeDashboardTasksPayload(employeeId, filterRange, normalizedV
     'data.Assigned To': 1,
     'data.Status': 1,
     'data.Plan Date': 1,
+    'data.planDate': 1,
     'data.Date': 1,
+    'data.date': 1,
     'data.Timestamp': 1,
+    'data.timestamp': 1,
     'data.Due Date': 1,
+    'data.dueDate': 1,
+    'data.Created At': 1,
+    'data.createdAt': 1,
+    'data.Last Update Date': 1,
+    'data.lastUpdateDate': 1,
     'data.TAT': 1,
     'data.When': 1,
     'data.TAT Minutes': 1,
@@ -943,7 +995,7 @@ export async function getDashboardData(employeeId, filterRange, viewMode = 'my',
   const includeCollections = options.includeCollections !== false;
   const taskPage = Math.max(1, Number(options.taskPage || options.page || 1) || 1);
   const taskPageSize = Math.min(50, Math.max(10, Number(options.taskPageSize || options.pageSize || DEFAULT_DASHBOARD_TASKS_PAGE_SIZE) || DEFAULT_DASHBOARD_TASKS_PAGE_SIZE));
-  const cacheKey = `${buildDashboardSnapshotKey(employeeId, filterRange, normalizedViewMode)}::${includeTasks ? 'tasks' : 'summary'}::${includeCollections ? 'collections' : 'compact'}::${taskPage}::${taskPageSize}`;
+  const cacheKey = `${buildDashboardSnapshotKey(employeeId, filterRange, normalizedViewMode)}::${includeTasks ? 'tasks' : 'summary'}::${includeCollections ? 'collections' : 'compact'}::${taskPage}::${taskPageSize}${options.includeSummary ? '::combined' : ''}`;
   const cacheVersion = dashboardCacheVersion;
   const cached = dashboardCache.get(cacheKey);
   if (cached && Date.now() - cached.createdAt < DASHBOARD_CACHE_TTL_MS) {
@@ -956,7 +1008,7 @@ export async function getDashboardData(employeeId, filterRange, viewMode = 'my',
     return redisPayload.payload;
   }
 
-  if (includeTasks && !includeCollections) {
+  if (includeTasks && !includeCollections && !options.includeSummary) {
     const payload = await computeDashboardTasksPayload(employeeId, filterRange, normalizedViewMode, {
       taskPage,
       taskPageSize

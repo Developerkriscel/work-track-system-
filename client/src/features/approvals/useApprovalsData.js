@@ -17,7 +17,21 @@ const DEFAULT_FILTERS = Object.freeze({
   status: ''
 });
 
-const PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 200;
+const ATTENDANCE_PAGE_SIZE = 25;
+
+function pageSizeForTab(tab) {
+  return tab === 'attendance' ? ATTENDANCE_PAGE_SIZE : DEFAULT_PAGE_SIZE;
+}
+
+function emptyPaginationState() {
+  return {
+    tickets: { page: 1, pageSize: DEFAULT_PAGE_SIZE, total: 0, hasMore: false },
+    leaves: { page: 1, pageSize: DEFAULT_PAGE_SIZE, total: 0, hasMore: false },
+    intimations: { page: 1, pageSize: DEFAULT_PAGE_SIZE, total: 0, hasMore: false },
+    attendance: { page: 1, pageSize: ATTENDANCE_PAGE_SIZE, total: 0, hasMore: false }
+  };
+}
 
 function emptyTabFilters() {
   return {
@@ -65,6 +79,7 @@ export function useApprovalsData() {
     intimations: [],
     attendance: []
   });
+  const [pagination, setPagination] = useState(() => emptyPaginationState());
   const refreshRef = useRef(0);
   const loadTokenRef = useRef(0);
 
@@ -74,6 +89,7 @@ export function useApprovalsData() {
       setRowsLoading(false);
       setCounts(normalizeCounts());
       setRowsState({ tickets: [], leaves: [], intimations: [], attendance: [] });
+      setPagination(emptyPaginationState());
       setUserOptions([]);
       setTicketCategories([]);
       return undefined;
@@ -96,6 +112,7 @@ export function useApprovalsData() {
         setError(loadError.message || 'Failed to load approvals.');
         setCounts(normalizeCounts());
         setRowsState({ tickets: [], leaves: [], intimations: [], attendance: [] });
+        setPagination(emptyPaginationState());
         setUserOptions([]);
         setTicketCategories([]);
       } finally {
@@ -130,55 +147,57 @@ export function useApprovalsData() {
   }, []);
 
   useEffect(() => {
-    if (!employeeId || summaryLoading) return undefined;
+    if (!employeeId) return undefined;
 
     const token = loadTokenRef.current + 1;
     loadTokenRef.current = token;
     let cancelled = false;
 
-    async function loadRowsProgressively() {
+    async function loadRowsPage() {
       setRowsLoading(true);
       setError(null);
       setRowsState((current) => ({ ...current, [activeTab]: [] }));
 
       const activeFilters = filters[activeTab] || DEFAULT_FILTERS;
-      let page = 1;
-      let shouldContinue = true;
-
+      const activePagination = pagination[activeTab] || emptyPaginationState()[activeTab];
+      const requestedPage = Math.max(1, Number(activePagination.page || 1));
+      const requestedPageSize = pageSizeForTab(activeTab);
       try {
-        while (!cancelled && shouldContinue) {
-          const payload = await fetchPendingApprovals(employeeId, {
-            mode: 'rows',
-            tab: activeTab,
-            page,
-            pageSize: PAGE_SIZE,
-            filters: activeFilters
-          });
-          if (cancelled || loadTokenRef.current !== token) return;
+        const payload = await fetchPendingApprovals(employeeId, {
+          mode: 'rows',
+          tab: activeTab,
+          page: requestedPage,
+          pageSize: requestedPageSize,
+          filters: activeFilters
+        });
+        if (cancelled || loadTokenRef.current !== token) return;
 
-          const nextRows = safeArray(payload.rows);
-          const pagination = payload.pagination || {};
-          if (activeTab === 'tickets' && Array.isArray(payload.ticketCategories)) {
-            setTicketCategories(payload.ticketCategories);
-          }
-          setRowsState((current) => ({
-            ...current,
-            [activeTab]: page === 1 ? nextRows : [...current[activeTab], ...nextRows]
-          }));
-
-          shouldContinue = Boolean(pagination.hasMore);
-          page += 1;
-
-          if (shouldContinue) {
-            await new Promise((resolve) => {
-              setTimeout(resolve, 0);
-            });
-          }
+        const nextRows = safeArray(payload.rows);
+        if (activeTab === 'tickets' && Array.isArray(payload.ticketCategories)) {
+          setTicketCategories(payload.ticketCategories);
         }
+        setRowsState((current) => ({
+          ...current,
+          [activeTab]: nextRows
+        }));
+        const pageMeta = payload.pagination || {};
+        setPagination((current) => ({
+          ...current,
+          [activeTab]: {
+            page: Number(pageMeta.page || requestedPage),
+            pageSize: Number(pageMeta.pageSize || requestedPageSize),
+            total: Number(pageMeta.total || nextRows.length),
+            hasMore: Boolean(pageMeta.hasMore)
+          }
+        }));
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError.message || 'Failed to load approvals.');
           setRowsState((current) => ({ ...current, [activeTab]: [] }));
+          setPagination((current) => ({
+            ...current,
+            [activeTab]: { ...current[activeTab], total: 0, hasMore: false }
+          }));
         }
       } finally {
         if (!cancelled && loadTokenRef.current === token) {
@@ -187,11 +206,11 @@ export function useApprovalsData() {
       }
     }
 
-    loadRowsProgressively();
+    loadRowsPage();
     return () => {
       cancelled = true;
     };
-  }, [employeeId, activeTab, filters, summaryLoading]);
+  }, [employeeId, activeTab, filters, pagination[activeTab]?.page]);
 
   function updateFilter(tab, patch) {
     setFilters((current) => ({
@@ -201,6 +220,10 @@ export function useApprovalsData() {
         ...patch
       }
     }));
+    setPagination((current) => ({
+      ...current,
+      [tab]: { ...current[tab], page: 1 }
+    }));
   }
 
   function resetFilter(tab) {
@@ -208,28 +231,61 @@ export function useApprovalsData() {
       ...current,
       [tab]: { ...DEFAULT_FILTERS }
     }));
+    setPagination((current) => ({
+      ...current,
+      [tab]: { ...current[tab], page: 1 }
+    }));
+  }
+
+  function selectTab(tab) {
+    setActiveTab(tab);
+  }
+
+  function setApprovalPage(tab, page) {
+    const nextPage = Math.max(1, Number(page || 1));
+    setPagination((current) => ({
+      ...current,
+      [tab]: { ...current[tab], page: nextPage }
+    }));
   }
 
   function refresh() {
     refreshRef.current += 1;
     setRowsState({ tickets: [], leaves: [], intimations: [], attendance: [] });
+    setPagination(emptyPaginationState());
     setSummaryLoading(true);
   }
 
-  function keepApprovedItemVisible(tab) {
-    setFilters((current) => {
-      if (!current?.[tab] || current[tab].status !== 'pending') return current;
-      return {
-        ...current,
-        [tab]: {
-          ...current[tab],
-          status: ''
-        }
-      };
-    });
+  function rowMatchesAction(tab, row = {}, id = '') {
+    const target = String(id || '').trim().toLowerCase();
+    if (!target) return false;
+    if (tab === 'tickets') return [row['Ticket ID'], row.ID, row.ticketId].some((value) => String(value || '').trim().toLowerCase() === target);
+    if (tab === 'leaves') return [row.LeaveID, row['Leave ID'], row.ID, row.leaveId, ...(row.LeaveIDs || []), ...(row._groupedLeaveIds || [])].some((value) => String(value || '').trim().toLowerCase() === target);
+    if (tab === 'intimations') return [row.IntimationID, row['Intimation ID'], row.ID, row.intimationId].some((value) => String(value || '').trim().toLowerCase() === target);
+    if (tab === 'attendance') return [row.AttendanceID, row.ID, row.attendanceId, row._groupKey].some((value) => String(value || '').trim().toLowerCase() === target);
+    return false;
   }
 
-  async function runAction(action, successMessage) {
+  function applyLocalAction(tab, id) {
+    if (!tab || !id) return;
+    setRowsState((current) => {
+      const existing = safeArray(current[tab]);
+      return { ...current, [tab]: existing.filter((row) => !rowMatchesAction(tab, row, id)) };
+    });
+    setCounts((current) => ({
+      ...current,
+      [tab]: Math.max(0, Number(current?.[tab] || 0) - 1)
+    }));
+    setPagination((current) => ({
+      ...current,
+      [tab]: {
+        ...current[tab],
+        total: Math.max(0, Number(current?.[tab]?.total || 0) - 1)
+      }
+    }));
+  }
+
+  async function runAction(action, successMessage, localUpdate) {
     setSubmitting(true);
     setMessage(null);
     try {
@@ -238,7 +294,8 @@ export function useApprovalsData() {
         tone: result.success ? 'success' : 'danger',
         text: result.success ? successMessage : result.message
       });
-      if (result.success) refresh();
+      if (result.success && typeof localUpdate === 'function') localUpdate(result);
+      else if (result.success) refresh();
       return result;
     } catch (actionError) {
       const result = { success: false, message: actionError.message || 'Action failed.' };
@@ -261,14 +318,12 @@ export function useApprovalsData() {
         ...(payload.newPunchIn ? { newPunchIn: payload.newPunchIn } : {}),
         ...(payload.newPunchOut ? { newPunchOut: payload.newPunchOut } : {})
       }),
-      `${type} approved successfully.`
-    ).then((result) => {
-      if (result?.success) {
+      `${type} approved successfully.`,
+      () => {
         const tab = /leave/i.test(type) ? 'leaves' : /intimation/i.test(type) ? 'intimations' : /attendance/i.test(type) ? 'attendance' : '';
-        if (tab) keepApprovedItemVisible(tab);
+        if (tab) applyLocalAction(tab, id);
       }
-      return result;
-    });
+    );
   }
 
   function rejectItem(type, id, values = {}) {
@@ -281,34 +336,35 @@ export function useApprovalsData() {
         action: 'Rejected',
         remarks: payload.remarks || ''
       }),
-      `${type} rejected successfully.`
-    ).then((result) => {
-      if (result?.success) {
+      `${type} rejected successfully.`,
+      () => {
         const tab = /leave/i.test(type) ? 'leaves' : /intimation/i.test(type) ? 'intimations' : /attendance/i.test(type) ? 'attendance' : '';
-        if (tab) keepApprovedItemVisible(tab);
+        if (tab) applyLocalAction(tab, id);
       }
-      return result;
-    });
+    );
   }
 
   function approveTicket(ticketId, remarks = '') {
     return runAction(
       () => submitTicketApproval(ticketId, employeeId, 'Approve', remarks),
-      `Ticket ${ticketId} approved successfully.`
+      `Ticket ${ticketId} approved successfully.`,
+      () => applyLocalAction('tickets', ticketId)
     );
   }
 
   function reworkTicket(ticketId, remarks = '') {
     return runAction(
       () => submitTicketApproval(ticketId, employeeId, 'Reject', remarks),
-      `Ticket ${ticketId} sent for rework.`
+      `Ticket ${ticketId} sent for rework.`,
+      () => applyLocalAction('tickets', ticketId)
     );
   }
 
   function moveTicketApproval(ticketId, targetManagerId, remarks = '') {
     return runAction(
       () => transferTicketApproval(ticketId, targetManagerId, employeeId, remarks),
-      `Approval transferred for ${ticketId}.`
+      `Approval transferred for ${ticketId}.`,
+      () => applyLocalAction('tickets', ticketId)
     );
   }
 
@@ -316,9 +372,11 @@ export function useApprovalsData() {
     employeeId,
     currentUser: user || null,
     activeTab,
-    setActiveTab,
+    setActiveTab: selectTab,
     loading: summaryLoading,
     rowsLoading,
+    pagination,
+    setApprovalPage,
     error,
     clearError: () => setError(null),
     submitting,

@@ -10,7 +10,7 @@ import {
   updateTeamAttendance
 } from '@/features/attendance/api';
 import { useAuth } from '@/features/auth/AuthProvider';
-import { todayYmd } from '@/features/attendance/services/attendancePresentation';
+import { todayYmd, parseTimeToDate, computeAttendanceDayStatus } from '@/features/attendance/services/attendancePresentation';
 
 export function toYmd(date) {
   if (date instanceof Date && Number.isNaN(date.getTime())) return todayYmd();
@@ -81,15 +81,6 @@ function formatDateLabel(ymd) {
   });
 }
 
-function parseTimeToDate(ymd, displayTime) {
-  if (!displayTime) return null;
-  const raw = String(displayTime).trim();
-  const parsed = /T|GMT|UTC|\d{4}-\d{2}-\d{2}/i.test(raw)
-    ? new Date(raw)
-    : new Date(`${ymd}T${raw.replace(/\s+/g, '')}+05:30`);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
 function normalizeDateKey(value) {
   const raw = String(value || '').trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
@@ -99,29 +90,24 @@ function normalizeDateKey(value) {
   return Number.isNaN(parsed.getTime()) ? raw : toYmd(parsed);
 }
 
-function attendanceStatus(group, punchIn) {
-  if (!punchIn) {
-    const day = new Date(`${group.date}T00:00:00`).getDay();
-    return day === 0 ? 'Weekly Off' : 'Absent';
-  }
-
-  const punchTime = parseTimeToDate(group.date, punchIn.Time || punchIn['Punch In']);
-  if (!punchTime) return 'Present';
-  const shiftStart = new Date(`${group.date}T10:00:00+05:30`);
-  const difference = (punchTime.getTime() - shiftStart.getTime()) / 60000;
-  if (difference < 0) return 'Early';
-  if (difference <= 15) return 'On Time';
-  if (difference <= 60) return 'Late';
-  return 'Very Late';
+function attendanceStatus(group, punchIn, punchOut) {
+  const inVal = punchIn?.['Punch In'] || punchIn?.Time || punchIn?.InTime;
+  const outVal = punchOut?.['Punch Out'] || punchOut?.Time || punchOut?.OutTime;
+  return computeAttendanceDayStatus({
+    date: group.date,
+    punchInValue: inVal,
+    punchOutValue: outVal,
+    rawStatus: group.status || punchIn?.status || punchIn?.Status
+  });
 }
 
 function departureStatus(group, punchOut, punchIn) {
   if (!punchOut) return null;
-  const punchTime = parseTimeToDate(group.date, punchOut.Time || punchOut['Punch Out']);
+  const punchTime = parseTimeToDate(group.date, punchOut.Time || punchOut['Punch Out'] || punchOut.OutTime, 'Punch Out');
   if (!punchTime) return null;
 
   if (punchIn) {
-    const inTime = parseTimeToDate(group.date, punchIn.Time || punchIn['Punch In']);
+    const inTime = parseTimeToDate(group.date, punchIn.Time || punchIn['Punch In'] || punchIn.InTime, 'Punch In');
     if (inTime && (punchTime.getTime() - inTime.getTime()) / 60000 >= 480) {
       return 'On Time Departure';
     }
@@ -196,7 +182,7 @@ export function groupAttendanceRows(rows, bounds) {
       ...group,
       punchIn,
       punchOut,
-      status: attendanceStatus({ date: group.date }, punchIn),
+      status: attendanceStatus({ date: group.date }, punchIn, punchOut),
       outStatus: departureStatus({ date: group.date }, punchOut, punchIn),
       duration: durationLabel(inAt, outAt) !== '-'
         ? durationLabel(inAt, outAt)

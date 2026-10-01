@@ -29,6 +29,9 @@ export function AttendanceLocationPolicyCard({ policy, canEdit, loading, saving,
         latitude: formatNumber(loc.latitude || ''),
         longitude: formatNumber(loc.longitude || ''),
         radiusMeters: formatNumber(loc.radiusMeters || 200) || 200,
+        addedBy: loc.addedBy || '',
+        addedByName: loc.addedByName || '',
+        updatedAt: loc.updatedAt || ''
       }));
     }
 
@@ -84,7 +87,7 @@ export function AttendanceLocationPolicyCard({ policy, canEdit, loading, saving,
   const addLocation = () => {
     setForm(current => ({
       ...current,
-      locations: [...current.locations, { officeName: '', latitude: '', longitude: '', radiusMeters: 200 }]
+      locations: [...current.locations, { officeName: '', latitude: '', longitude: '', radiusMeters: 200, addedBy: '', addedByName: '' }]
     }));
   };
 
@@ -147,7 +150,7 @@ export function AttendanceLocationPolicyCard({ policy, canEdit, loading, saving,
                 <input
                   value={loc.officeName}
                   onChange={(event) => updateLocation(index, 'officeName', event.target.value)}
-                  placeholder="Kriscel Tech Office"
+                  placeholder="e.g. Kriscel Tech Office"
                   style={{ background: '#ffffff' }}
                 />
               </label>
@@ -168,7 +171,7 @@ export function AttendanceLocationPolicyCard({ policy, canEdit, loading, saving,
                 <input
                   value={loc.latitude}
                   onChange={(event) => updateLocation(index, 'latitude', event.target.value)}
-                  placeholder="26.2183"
+                  placeholder="e.g. 28.5473"
                   style={{ background: '#ffffff' }}
                 />
               </label>
@@ -177,13 +180,21 @@ export function AttendanceLocationPolicyCard({ policy, canEdit, loading, saving,
                 <input
                   value={loc.longitude}
                   onChange={(event) => updateLocation(index, 'longitude', event.target.value)}
-                  placeholder="78.1828"
+                  placeholder="e.g. 77.0479"
                   style={{ background: '#ffffff' }}
                 />
               </label>
             </div>
             
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px' }}>
+              <div>
+                {loc.addedBy && (
+                  <div style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic' }}>
+                    Last updated by {loc.addedByName ? `${loc.addedByName} (${loc.addedBy})` : loc.addedBy}
+                    {loc.updatedAt && ` on ${new Date(loc.updatedAt).toLocaleDateString()} at ${new Date(loc.updatedAt).toLocaleTimeString()}`}
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 className="attendance-cta attendance-cta--gray"

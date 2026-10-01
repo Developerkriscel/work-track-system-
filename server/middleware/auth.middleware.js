@@ -59,8 +59,15 @@ export function requireAuth(options = {}) {
     if (options.kind && claims.kind !== options.kind) {
       return res.status(403).json({ success: false, message: 'This account type cannot access this resource.' });
     }
-    if (options.roles?.length && !options.roles.some((role) => String(role).toLowerCase() === String(claims.role || '').toLowerCase())) {
+    if (options.roles?.length) {
+      const normalizeRole = (role) => String(role || '').trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+      const compactRole = (role) => normalizeRole(role).replace(/\s+/g, '');
+      const claimRole = normalizeRole(claims.role);
+      const claimRoleCompact = compactRole(claims.role);
+      const allowed = options.roles.some((role) => normalizeRole(role) === claimRole || compactRole(role) === claimRoleCompact);
+      if (!allowed) {
       return res.status(403).json({ success: false, message: 'Your account does not have permission for this resource.' });
+      }
     }
     req.auth = claims;
     return next();

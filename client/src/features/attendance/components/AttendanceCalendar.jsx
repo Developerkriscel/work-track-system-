@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { formatPunchTime, todayYmd } from '@/features/attendance/services/attendancePresentation';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { formatPunchTime, todayYmd, computeAttendanceDayStatus } from '@/features/attendance/services/attendancePresentation';
 
 function normalizeDateKey(value) {
   const raw = String(value || '').trim();
@@ -24,48 +24,92 @@ function firstValue(...values) {
   return values.find((value) => String(value ?? '').trim()) ?? '';
 }
 
+function rowAction(row = {}) {
+  return String(row.Action || row.action || '').trim().toLowerCase();
+}
+
+function isPunchOutAction(row = {}) {
+  return /punch\s*out/.test(rowAction(row));
+}
+
+function isPunchInAction(row = {}) {
+  return /punch\s*in/.test(rowAction(row));
+}
+
+function punchInValue(row = {}) {
+  return firstValue(
+    row.punchIn?.['Punch In'],
+    row.punchIn?.InTime,
+    row.punchIn?.inTime,
+    row.punchIn?.['Punch In Time'],
+    row.punchIn?.Time,
+    row.punchInTime,
+    row['Punch In'],
+    row.InTime,
+    row.inTime,
+    row['Punch In Time'],
+    isPunchOutAction(row) ? '' : row.Time
+  );
+}
+
+function punchOutValue(row = {}) {
+  return firstValue(
+    row.punchOut?.['Punch Out'],
+    row.punchOut?.OutTime,
+    row.punchOut?.outTime,
+    row.punchOut?.['Punch Out Time'],
+    row.punchOut?.Time,
+    row.punchOutTime,
+    row['Punch Out'],
+    row.OutTime,
+    row.outTime,
+    row['Punch Out Time'],
+    isPunchInAction(row) ? '' : row.Time
+  );
+}
+
+function mergeAttendanceDayRows(existing = {}, incoming = {}) {
+  return {
+    ...existing,
+    ...incoming,
+    punchIn: existing.punchIn || incoming.punchIn || (punchInValue(incoming) ? incoming : null),
+    punchOut: existing.punchOut || incoming.punchOut || (punchOutValue(incoming) ? incoming : null),
+    punchInTime: firstValue(existing.punchInTime, incoming.punchInTime, punchInValue(existing), punchInValue(incoming)),
+    punchOutTime: firstValue(existing.punchOutTime, incoming.punchOutTime, punchOutValue(existing), punchOutValue(incoming))
+  };
+}
+
 function hasAttendancePunch(row) {
   if (!row) return false;
-  return Boolean(firstValue(
-    row.punchIn?.Time,
-    row.punchIn?.['Punch In'],
-    row.punchOut?.Time,
-    row.punchOut?.['Punch Out'],
-    row.punchInTime,
-    row.punchOutTime,
-    row['Punch In'],
-    row['Punch Out'],
-    row.Time
-  ));
+  return Boolean(firstValue(punchInValue(row), punchOutValue(row)));
 }
 
 function isPlaceholderAttendanceRow(row) {
   if (!row || hasAttendancePunch(row)) return false;
   const status = String(row.status || row.Status || '').trim().toLowerCase();
-  return status.includes('absent') || status.includes('weekly off') || status.includes('unknown');
+  return status.includes('absent') || status.includes('weekly off') || status.includes('unknown') || status.includes('holiday');
 }
 
 function attendanceRowRank(row) {
   if (!row) return 0;
+  if (/holiday/i.test(String(row.status || row.Status || '')) || row.isHoliday) return 4;
   if (hasAttendancePunch(row)) return 3;
   if (!isPlaceholderAttendanceRow(row) && String(row.status || row.Status || '').trim()) return 2;
   return 1;
 }
 
 function resolveCellStatus(row, dateStr) {
-  const rawStatus = String(row?.status || row?.Status || '').trim();
-  const hasPunch = hasAttendancePunch(row);
-  if (!hasPunch && isPlaceholderAttendanceRow(row) && dateStr > todayYmd()) return 'Unknown';
-  if (hasPunch && (!rawStatus || /absent|weekly off|unknown/i.test(rawStatus))) return 'Present';
-  if (hasPunch && !/present|on time|late|early|half/i.test(rawStatus)) return 'Present';
-  if (rawStatus) return rawStatus;
-  if (hasPunch) return 'Present';
-  const isSunday = new Date(`${dateStr}T00:00:00`).getDay() === 0;
-  return isSunday ? 'Weekly Off' : 'Absent';
+  return computeAttendanceDayStatus({
+    date: dateStr,
+    punchInValue: punchInValue(row),
+    punchOutValue: punchOutValue(row),
+    rawStatus: row?.status || row?.Status,
+    isHoliday: Boolean(row?.isHoliday || /holiday/i.test(String(row?.status || row?.Status || '')))
+  });
 }
 
 export function AttendanceCalendar({ rows = [], onMonthChange }) {
-  const currentMonthDate = useMemo(() => {
+  const seedMonthDate = useMemo(() => {
     if (rows.length > 0) {
       const firstKnownDate = rows
         .map((row) => normalizeDateKey(row.date || row.Date))
@@ -78,17 +122,19 @@ export function AttendanceCalendar({ rows = [], onMonthChange }) {
     return new Date();
   }, [rows]);
 
-  const [monthOffset, setMonthOffset] = useState(0);
+  const [viewMonthDate, setViewMonthDate] = useState(seedMonthDate);
+  const hasLockedInitialMonthRef = useRef(rows.length > 0);
 
   useEffect(() => {
-    setMonthOffset(0);
-  }, [rows]);
+    if (hasLockedInitialMonthRef.current || rows.length === 0) return;
+    setViewMonthDate(seedMonthDate);
+    hasLockedInitialMonthRef.current = true;
+  }, [rows, seedMonthDate]);
 
   const displayDate = useMemo(() => {
-    const d = new Date(currentMonthDate);
-    d.setMonth(d.getMonth() + monthOffset);
+    const d = new Date(viewMonthDate);
     return d;
-  }, [currentMonthDate, monthOffset]);
+  }, [viewMonthDate]);
 
   const year = displayDate.getFullYear();
   const month = displayDate.getMonth();
@@ -123,7 +169,11 @@ export function AttendanceCalendar({ rows = [], onMonthChange }) {
       const existingRank = attendanceRowRank(existing);
       const incomingRank = attendanceRowRank(row);
       if (incomingRank > existingRank) {
-        map.set(key, row);
+        map.set(key, mergeAttendanceDayRows(existing, row));
+        return;
+      }
+      if (incomingRank === existingRank && hasAttendancePunch(row)) {
+        map.set(key, mergeAttendanceDayRows(existing, row));
         return;
       }
       if (incomingRank === existingRank && !hasAttendancePunch(existing) && !isPlaceholderAttendanceRow(row)) {
@@ -158,8 +208,8 @@ export function AttendanceCalendar({ rows = [], onMonthChange }) {
       day: i,
       date: dateStr,
       status: status,
-      punchIn: formatTime(firstValue(rowObj?.punchIn?.Time, rowObj?.punchIn?.['Punch In'], rowObj?.punchInTime, rowObj?.['Punch In'], rowObj?.Time)),
-      punchOut: formatTime(firstValue(rowObj?.punchOut?.Time, rowObj?.punchOut?.['Punch Out'], rowObj?.punchOutTime, rowObj?.['Punch Out']))
+      punchIn: formatTime(punchInValue(rowObj)),
+      punchOut: formatTime(punchOutValue(rowObj))
     });
   }
 
@@ -222,7 +272,14 @@ export function AttendanceCalendar({ rows = [], onMonthChange }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
             type="button"
-            onClick={() => setMonthOffset(prev => prev - 1)}
+            onClick={() => {
+              hasLockedInitialMonthRef.current = true;
+              setViewMonthDate((prev) => {
+                const next = new Date(prev);
+                next.setMonth(next.getMonth() - 1);
+                return next;
+              });
+            }}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', color: '#64748b', cursor: 'pointer', transition: 'all 0.2s ease' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#0f172a'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#64748b'; }}
@@ -237,7 +294,15 @@ export function AttendanceCalendar({ rows = [], onMonthChange }) {
           <button
             type="button"
             disabled={isCurrentMonthOrFuture}
-            onClick={() => setMonthOffset(prev => prev + 1)}
+            onClick={() => {
+              if (isCurrentMonthOrFuture) return;
+              hasLockedInitialMonthRef.current = true;
+              setViewMonthDate((prev) => {
+                const next = new Date(prev);
+                next.setMonth(next.getMonth() + 1);
+                return next;
+              });
+            }}
             style={{ 
               display: 'flex', alignItems: 'center', justifyContent: 'center', 
               width: '32px', height: '32px', borderRadius: '8px', 
@@ -341,8 +406,9 @@ export function AttendanceCalendar({ rows = [], onMonthChange }) {
                     {dayObj.status}
                   </span>
                   {(dayObj.punchIn || dayObj.punchOut) && (
-                    <div style={{ fontSize: '12px', fontWeight: '800', color: colors.text, opacity: 1, textAlign: 'center', marginTop: '6px', whiteSpace: 'nowrap', letterSpacing: '0.02em' }}>
-                      {dayObj.punchIn || '--'} - {dayObj.punchOut || '--'}
+                    <div style={{ fontSize: '11px', fontWeight: '800', color: colors.text, opacity: 1, textAlign: 'center', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '2px', lineHeight: '1.2' }}>
+                      <span>In: {dayObj.punchIn || '--'}</span>
+                      <span>Out: {dayObj.punchOut || '--'}</span>
                     </div>
                   )}
                 </div>
@@ -354,3 +420,4 @@ export function AttendanceCalendar({ rows = [], onMonthChange }) {
     </div>
   );
 }
+

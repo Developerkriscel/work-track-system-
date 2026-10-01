@@ -16,6 +16,7 @@ import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { ExpensesPage } from '@/features/expenses/ExpensesPage';
 import { FmsPage } from '@/features/fms/FmsPage';
 import { FormsPortalPage } from '@/features/forms-portal/FormsPortalPage';
+import { CandidateAiPage } from '@/features/candidate-ai/CandidateAiPage';
 import { ApprovalsPage } from '@/features/approvals/ApprovalsPage';
 import { MyApprovalStatusPage } from '@/features/my-approval-status/MyApprovalStatusPage';
 import { ManagementDashboardPage } from '@/features/management-dashboard/ManagementDashboardPage';
@@ -24,12 +25,23 @@ import { SettingsPage } from '@/features/settings/SettingsPage';
 import { TicketSystemPage } from '@/features/tickets/TicketSystemPage';
 import { TodoPage } from '@/features/todo/TodoPage';
 import { PeopleMasterPage } from '@/features/people-master/PeopleMasterPage';
+import { WhatsAppPage } from '@/features/whatsapp/WhatsAppPage';
 import { migrationModules } from '@/lib/constants/migrationModules';
 
 const placeholder = (copy) => ({
   eyebrow: 'WorkTrack Workspace',
   description: copy
 });
+
+const normalizeRole = (role) => String(role || '').trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+const hasRole = (user, roles) => {
+  const normalized = normalizeRole(user?.Role || user?.role || '');
+  const compact = normalized.replace(/\s+/g, '');
+  return roles.some((role) => {
+    const allowed = normalizeRole(role);
+    return allowed === normalized || allowed.replace(/\s+/g, '') === compact;
+  });
+};
 
 export const appRoutes = [
   {
@@ -105,6 +117,16 @@ export const appRoutes = [
     iconColor: '#a78bfa',
     page: { ...placeholder('Open assigned forms, search by department or category, and manage access where permitted.'), ...migrationModules.formsPortal },
     element: <FormsPortalPage />
+  },
+  {
+    path: '/candidate-ai',
+    key: 'candidateAi',
+    title: 'AI Hiring',
+    icon: Users,
+    iconColor: '#22c55e',
+    accessCheck: (user) => hasRole(user, ['HR', 'Admin', 'Company Admin', 'Super Admin']),
+    page: placeholder('Analyze resumes and candidate details with AI to shortlist the best fit.'),
+    element: <CandidateAiPage />
   },
   {
     path: '/todo',
@@ -186,6 +208,16 @@ export const appRoutes = [
     accessCheck: (user) => Boolean(user?.access?.canManageUsers),
     page: { ...placeholder('Manage user accounts, roles, reporting lines, approvers, and user access settings.'), ...migrationModules.admin },
     element: <PeopleMasterPage initialTab="users" />
+  },
+  {
+    path: '/whatsapp',
+    key: 'whatsapp',
+    title: 'WhatsApp Center',
+    icon: FileText,
+    iconColor: '#34d399',
+    accessCheck: (user) => /^(admin|hr|super admin)$/i.test(String(user?.Role || user?.role || '').trim()),
+    page: placeholder('Manage WhatsApp contacts and review employee alert history.'),
+    element: <WhatsAppPage />
   },
   {
     path: '/settings',

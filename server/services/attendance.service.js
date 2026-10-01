@@ -12,6 +12,7 @@ import {
 } from './legacyStore.service.js';
 import { LegacyModels } from '../models/legacyModels.js';
 import { buildRedisKey, deleteByPrefix, getJson, setJson } from './redisCache.service.js';
+import { holidayDateOf, holidayNameOf, isActiveHoliday } from './holiday.service.js';
 
 const safe = (value) => String(value ?? '').trim();
 const eq = (left, right) => safe(left).toLowerCase() === safe(right).toLowerCase();
@@ -108,20 +109,58 @@ function nowIso() {
   return referenceNow().toISOString();
 }
 
-function normalizedDate(value) {
-  if (!value) return today();
+function escapeRegex(value = '') {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function uniqueValues(values = []) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function ymd(year, month, day) {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function normalizedDateCandidates(value) {
+  if (!value) return [today()];
   const raw = safe(value);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-  const dmy = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
-  if (dmy) return `${dmy[3]}-${String(dmy[2]).padStart(2, '0')}-${String(dmy[1]).padStart(2, '0')}`;
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return [raw.slice(0, 10)];
+
+  const numeric = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm)?)?$/i);
+  if (numeric) {
+    const left = Number(numeric[1]);
+    const right = Number(numeric[2]);
+    const year = numeric[3].length === 2 ? `20${numeric[3]}` : numeric[3];
+    const dates = [];
+    if (left >= 1 && left <= 31 && right >= 1 && right <= 12) dates.push(ymd(year, right, left));
+    if (right >= 1 && right <= 31 && left >= 1 && left <= 12) dates.push(ymd(year, left, right));
+    return uniqueValues(dates);
+  }
+
+  const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  const dayMonthName = raw.match(/^(\d{1,2})[-\s]([A-Za-z]{3,9})[-\s](\d{4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/);
+  if (dayMonthName) {
+    const monthIndex = monthNames.findIndex((monthName) => dayMonthName[2].toLowerCase().startsWith(monthName));
+    if (monthIndex >= 0) return [ymd(dayMonthName[3], monthIndex + 1, Number(dayMonthName[1]))];
+  }
+
+  const monthNameDay = raw.match(/^([A-Za-z]{3,9})[-\s](\d{1,2})[-,\s]+(\d{4})(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/);
+  if (monthNameDay) {
+    const monthIndex = monthNames.findIndex((monthName) => monthNameDay[1].toLowerCase().startsWith(monthName));
+    if (monthIndex >= 0) return [ymd(monthNameDay[3], monthIndex + 1, Number(monthNameDay[2]))];
+  }
+
   const parsed = new Date(raw);
-  return Number.isNaN(parsed.getTime()) ? raw : localDate(parsed);
+  return Number.isNaN(parsed.getTime()) ? [raw] : [localDate(parsed)];
+}
+
+function normalizedDate(value) {
+  return normalizedDateCandidates(value)[0] || safe(value);
 }
 
 function dateInRange(value, start, end) {
   if (!start || !end || !value) return true;
-  const date = normalizedDate(value);
-  return date >= start && date <= end;
+  return normalizedDateCandidates(value).some((date) => date >= start && date <= end);
 }
 
 function timestampForAttendance(dateValue, timeValue, action = 'Punch In') {
@@ -411,20 +450,83 @@ function durationLabel(start, end) {
   return `${hours}h ${minutes}m`;
 }
 
-function computeAttendanceStatus(dateValue, punchInRow) {
-  if (!punchInRow) {
+function holidayMapFromRows(rows = []) {
+  const map = new Map();
+  for (const row of rows || []) {
+    if (!isActiveHoliday(row)) continue;
+    const date = holidayDateOf(row);
+    if (date) map.set(date, { date, name: holidayNameOf(row), row });
+  }
+  return map;
+}
+
+function holidayForDate(holidayMap = new Map(), dateValue) {
+  return holidayMap.get(normalizedDate(dateValue));
+}
+
+async function loadHolidayRowsForRange(startDate, endDate) {
+  const start = normalizedDate(startDate || today());
+  const end = normalizedDate(endDate || startDate || today());
+  return (await listRows('Holiday')).filter((row) => {
+    const holidayDate = holidayDateOf(row);
+    return isActiveHoliday(row) && Boolean(holidayDate) && dateInRange(holidayDate, start, end);
+  });
+}
+
+function holidayAttendanceRows(holidayRows = [], startDate, endDate) {
+  const start = normalizedDate(startDate || today());
+  const end = normalizedDate(endDate || startDate || today());
+  return holidayRows
+    .filter((row) => holidayDateOf(row) && dateInRange(holidayDateOf(row), start, end))
+    .map((row) => ({
+      AttendanceID: `HOLIDAY_${holidayDateOf(row)}`,
+      Date: holidayDateOf(row),
+      Action: 'Holiday',
+      Time: '',
+      'Punch In': '',
+      'Punch Out': '',
+      Status: 'Holiday',
+      status: 'Holiday',
+      holidayName: holidayNameOf(row),
+      isHoliday: true
+    }));
+}
+
+function computeAttendanceStatus(dateValue, punchInRow, holidayMap = new Map(), punchOutRow = null) {
+  if (holidayForDate(holidayMap, dateValue)) return 'Holiday';
+  if (!punchInRow && !punchOutRow) {
     const day = new Date(`${normalizedDate(dateValue)}T00:00:00`).getDay();
     return day === 0 ? 'Weekly Off' : 'Absent';
   }
 
-  const punchTime = new Date(timestampForAttendance(dateValue, first(punchInRow, ['Punch In', 'Time']), 'Punch In'));
-  if (Number.isNaN(punchTime.getTime())) return 'Present';
-  const shiftStart = new Date(`${normalizedDate(dateValue)}T10:00:00+05:30`);
-  const difference = (punchTime.getTime() - shiftStart.getTime()) / 60000;
-  if (difference < 0) return 'Early';
-  if (difference <= 15) return 'On Time';
-  if (difference <= 60) return 'Late';
-  return 'Very Late';
+  const inTime = punchInRow ? new Date(timestampForAttendance(dateValue, first(punchInRow, ['Punch In', 'Time']), 'Punch In')) : null;
+  const outTime = punchOutRow ? new Date(timestampForAttendance(dateValue, first(punchOutRow, ['Punch Out', 'Time']), 'Punch Out')) : null;
+
+  if (inTime && !Number.isNaN(inTime.getTime())) {
+    const shiftStartGrace = new Date(`${normalizedDate(dateValue)}T10:15:00+05:30`);
+    const isLateIn = inTime.getTime() > shiftStartGrace.getTime();
+
+    if (isLateIn) {
+      return 'Half Day';
+    }
+
+    if (outTime && !Number.isNaN(outTime.getTime())) {
+      const workedMinutes = (outTime.getTime() - inTime.getTime()) / 60000;
+      if (workedMinutes < 480) { // < 8 hours
+        return 'Half Day';
+      }
+    }
+
+    const shiftStart = new Date(`${normalizedDate(dateValue)}T10:00:00+05:30`);
+    if (inTime.getTime() < shiftStart.getTime()) {
+      return 'Early';
+    }
+    return 'On Time';
+  }
+
+  if (outTime) return 'Half Day';
+
+  return 'Present';
 }
 
 function computeDepartureStatus(dateValue, punchInRow, punchOutRow) {
@@ -450,6 +552,53 @@ function computeDepartureStatus(dateValue, punchInRow, punchOutRow) {
   return 'Late Departure';
 }
 
+function personLabelFromId(users = [], value = '') {
+  const id = safe(value).toUpperCase();
+  if (!id) return '';
+  const user = users.find((item) => [userId(item), first(item, ['User ID', 'employeeId', 'EmpID'])]
+    .some((candidate) => safe(candidate).toUpperCase() === id));
+  return user ? first(user, ['Employee Name', 'Name'], id) : id;
+}
+
+function extractEditedName(remark = '') {
+  const match = safe(remark).match(/edited by\s+(.+?)(?:\s+on\s+|$)/i);
+  return match ? safe(match[1]) : '';
+}
+
+function attendanceRemarkItems(rows = [], users = []) {
+  const seen = new Set();
+  const items = [];
+  const push = (type, text) => {
+    const value = safe(text);
+    if (!value) return;
+    const key = `${type}:${value.toLowerCase()}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    items.push({ type, text: value });
+  };
+
+  for (const row of rows.filter(Boolean)) {
+    const approval = first(row, ['Admin Approval', 'adminApproval']);
+    const remark = first(row, ['Admin Remarks', 'adminRemarks']);
+    const approvedBy = first(row, ['Approved By', 'approvedBy', 'Approved By Name', 'approvedByName']) ||
+      personLabelFromId(users, first(row, ['Approved By ID', 'approvedById', 'Admin ID', 'adminId', 'AdminID']));
+    const editedBy = first(row, ['Edited By', 'editedBy', 'Edited By Name', 'editedByName']) ||
+      extractEditedName(remark) ||
+      personLabelFromId(users, first(row, ['Edited By ID', 'editedById', 'Admin ID', 'adminId', 'AdminID']));
+    const hasEditSignal = /edit|edited|correct/i.test(remark) || Boolean(first(row, ['newPunchIn', 'newPunchOut', 'New Punch In', 'New Punch Out']));
+    const hasApprovalSignal = /approved/i.test(approval) || (/approved/i.test(remark) && !/edit|edited|correct/i.test(remark));
+
+    if (hasApprovalSignal && !/edit|edited|correct/i.test(remark)) {
+      push('approved', approvedBy ? `Approved by ${approvedBy}` : 'Approved');
+    }
+    if (hasEditSignal) {
+      push('edited', editedBy ? `Edited by ${editedBy}` : 'Edited');
+    }
+  }
+
+  return items;
+}
+
 function teamAttendanceAccessSet(reviewer = {}, users = []) {
   if (!canManageTeamAttendance(reviewer)) return new Set();
   const role = safe(first(reviewer, ['Role', 'role'], ''));
@@ -473,7 +622,8 @@ function dateWithinRange(dateValue, startDate, endDate) {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{4}-\d{2}-\d{2}$/.test(start) && /^\d{4}-\d{2}-\d{2}$/.test(end) && start <= date && date <= end;
 }
 
-function buildTeamAttendanceGroups(attendanceRows, users, allowedIds, startDate, endDate) {
+function buildTeamAttendanceGroups(attendanceRows, users, allowedIds, startDate, endDate, holidayRows = []) {
+  const holidayMap = holidayMapFromRows(holidayRows);
   const userMap = new Map(users.map((user) => [safe(userId(user)).toUpperCase(), user]));
   const groups = new Map();
 
@@ -562,6 +712,7 @@ function buildTeamAttendanceGroups(attendanceRows, users, allowedIds, startDate,
       const punchOut = group.punchesOut.sort((left, right) => attendanceEventTime(right) - attendanceEventTime(left))[0] || null;
       const inDate = punchIn ? new Date(timestampForAttendance(group.date, first(punchIn, ['Punch In', 'Time']), 'Punch In')) : null;
       const outDate = punchOut ? new Date(timestampForAttendance(group.date, first(punchOut, ['Punch Out', 'Time']), 'Punch Out')) : null;
+      const adminRemarkItems = attendanceRemarkItems([...group.punchesIn, ...group.punchesOut], users);
 
       return {
         id: group.id,
@@ -577,15 +728,18 @@ function buildTeamAttendanceGroups(attendanceRows, users, allowedIds, startDate,
         punchOutTime: first(punchOut, ['Punch Out']),
         punchInSourceId: punchIn?._sourceLegacyId || '',
         punchOutSourceId: punchOut?._sourceLegacyId || '',
-        status: computeAttendanceStatus(group.date, punchIn),
+        status: computeAttendanceStatus(group.date, punchIn, holidayMap, punchOut),
+        holidayName: holidayForDate(holidayMap, group.date)?.name || '',
+        isHoliday: Boolean(holidayForDate(holidayMap, group.date)),
         outStatus: computeDepartureStatus(group.date, punchIn, punchOut),
         duration: durationLabel(inDate, outDate) || first(punchOut, ['Duration', 'Total Duration']) || '-',
-        adminRemarks: first(punchOut, ['Admin Remarks']) || first(punchIn, ['Admin Remarks']) || ''
+        adminRemarks: adminRemarkItems.map((item) => item.text).join(' | '),
+        adminRemarkItems
       };
     })
     .sort((left, right) => {
       if (left.date === right.date) return left.employeeName.localeCompare(right.employeeName);
-      return right.date.localeCompare(left.date);
+      return left.date.localeCompare(right.date);
     });
 }
 
@@ -785,29 +939,44 @@ function employeeIdsQuery(values = []) {
   };
 }
 
-function userDateRangeQuery(startDate, endDate, keys = ['data.Date', 'data.date']) {
+function dateRangeFieldQuery(keys = [], startDate, endDate) {
   const start = normalizedDate(startDate || today());
   const end = normalizedDate(endDate || startDate || today());
+  const variants = [];
+
+  for (const date = new Date(`${start}T12:00:00Z`); date.toISOString().slice(0, 10) <= end; date.setUTCDate(date.getUTCDate() + 1)) {
+    const iso = date.toISOString().slice(0, 10);
+    const year = date.getUTCFullYear();
+    const year2 = String(year).slice(2);
+    const month = date.getUTCMonth() + 1;
+    const day = date.getUTCDate();
+    const monthName = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
+
+    variants.push(escapeRegex(iso));
+    variants.push(`0?${day}[/.\\-]0?${month}[/.\\-](?:${year}|${year2})`);
+    variants.push(`0?${month}[/.\\-]0?${day}[/.\\-](?:${year}|${year2})`);
+    variants.push(`0?${day}[-\\s]${monthName}[a-z]*[-\\s]${year}`);
+    variants.push(`${monthName}[a-z]*[-\\s]0?${day}[-,\\s]+${year}`);
+  }
+
+  const matching = new RegExp(`^\\s*(?:${variants.join('|')})(?:$|[T\\s])`, 'i');
+  const knownDateShape = /^\s*(?:\d{4}-\d{2}-\d{2}|\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}|\d{1,2}[-\s][a-z]{3,9}[-\s]\d{4}|[a-z]{3,9}[-\s]\d{1,2}[-,\s]+\d{4})(?:$|[T\s])/i;
+
   return {
-    $or: keys.map((key) => ({
-      [key]: {
-        $gte: start,
-        $lte: end
-      }
-    }))
+    $or: keys.flatMap((key) => [
+      { [key]: matching },
+      { [key]: { $type: 'date' } },
+      { $and: [{ [key]: { $type: 'string', $regex: /\S/ } }, { [key]: { $not: knownDateShape } }] }
+    ])
   };
 }
 
+function userDateRangeQuery(startDate, endDate, keys = ['data.Date', 'data.date']) {
+  return dateRangeFieldQuery(keys, startDate, endDate);
+}
+
 function attendanceDayQuery(date = today()) {
-  const normalized = normalizedDate(date);
-  return {
-    $or: [
-      { 'data.Date': normalized },
-      { 'data.Date': { $regex: `^${normalized}` } },
-      { 'data.date': normalized },
-      { 'data.date': { $regex: `^${normalized}` } }
-    ]
-  };
+  return dateRangeFieldQuery(['data.Date', 'data.date'], date, date);
 }
 
 function attendanceEventTime(row) {
@@ -860,6 +1029,9 @@ export async function recordAttendance(attendanceData = {}) {
   if (!safe(latitude) || !safe(longitude)) {
     return { success: false, message: 'Live GPS location required hai. Location permission allow karke dobara try karein.' };
   }
+
+  const todayHoliday = (await loadHolidayRowsForRange(today(), today()))[0];
+  if (todayHoliday) return fail(`Today is marked as a holiday (${holidayNameOf(todayHoliday)}). Attendance punch is disabled for holidays.`);
 
   const locationCheck = await canPunchAtLocation(employeeId, latitude, longitude, today());
   if (!locationCheck.allowed) {
@@ -1000,14 +1172,77 @@ export async function recordAttendance(attendanceData = {}) {
 
 export async function getAttendanceLocationPolicyForUser() {
   const key = attendanceCacheKey('location-policy');
-  return withAttendanceCache(key, async () => ok({ data: await getAttendanceLocationPolicy() }));
+  attendanceCache.delete(key); // Force clear cache
+  return withAttendanceCache(key, async () => {
+    const policy = await getAttendanceLocationPolicy();
+    
+    if (Array.isArray(policy.locations)) {
+      policy.locations = policy.locations.filter(loc => 
+        String(loc.latitude || '').trim() !== '' && 
+        String(loc.longitude || '').trim() !== ''
+      );
+    }
+
+    if (policy.updatedBy) {
+      const user = await findOneRowByFilter('User', { 'data.Employee ID': policy.updatedBy.toUpperCase() }, { projection: { 'data.Employee Name': 1, 'data.Name': 1 } });
+      if (user) {
+        policy.updatedByName = first(user, ['Employee Name', 'Name']);
+      }
+    }
+    return ok({ data: policy });
+  });
 }
 
 export async function updateAttendanceLocationPolicy(editorId, editorRole, policy = {}) {
-  if (!/^(admin|super admin|hr)$/i.test(safe(editorRole))) {
-    return fail('Only Admin, Super Admin, or HR can update the attendance location policy.');
+  if (!/^super admin$/i.test(safe(editorRole))) {
+    return fail('Only Super Admin can update the attendance location policy.');
   }
+  
+  const editorUser = await findOneRowByFilter('User', { 'data.Employee ID': safe(editorId).toUpperCase() }, { projection: { 'data.Employee Name': 1, 'data.Name': 1 } });
+  const editorName = editorUser ? first(editorUser, ['Employee Name', 'Name']) : editorId;
+
+  const currentPolicy = await getAttendanceLocationPolicy();
+  const currentLocations = currentPolicy.locations || [];
+
+  if (Array.isArray(policy.locations)) {
+    // Filter out completely empty locations before saving
+    policy.locations = policy.locations.filter(loc => 
+      String(loc.latitude || '').trim() !== '' && 
+      String(loc.longitude || '').trim() !== ''
+    );
+
+    policy.locations = policy.locations.map((loc, index) => {
+      const oldLoc = currentLocations[index];
+      const isChanged = !oldLoc || 
+        oldLoc.officeName !== loc.officeName || 
+        oldLoc.latitude !== loc.latitude || 
+        oldLoc.longitude !== loc.longitude || 
+        String(oldLoc.radiusMeters) !== String(loc.radiusMeters);
+
+      if (isChanged) {
+        return { 
+          ...loc, 
+          addedBy: editorId, 
+          addedByName: editorName,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      
+      return { 
+        ...loc, 
+        addedBy: loc.addedBy || oldLoc?.addedBy, 
+        addedByName: loc.addedByName || oldLoc?.addedByName,
+        updatedAt: loc.updatedAt || oldLoc?.updatedAt
+      };
+    });
+  }
+
   const saved = await saveAttendanceLocationPolicy(policy, editorId);
+  
+  const key = attendanceCacheKey('location-policy');
+  attendanceCache.delete(key);
+  await deleteByPrefix(key);
+
   return ok({
     message: 'Attendance location policy updated successfully.',
     item: saved,
@@ -1019,7 +1254,7 @@ export async function getAttendanceForUser(employeeId, startDate, endDate) {
   const cacheKey = attendanceCacheKey('self', safe(employeeId).toUpperCase(), normalizedDate(startDate || today()), normalizedDate(endDate || startDate || today()));
   return withAttendanceCache(cacheKey, async () => {
   const targetEmployeeId = safe(employeeId).toUpperCase();
-  const [users, attendance, leaves, intimations] = await Promise.all([
+  const [users, attendance, leaves, intimations, holidays] = await Promise.all([
     findUserRows(employeeIdQuery(targetEmployeeId), {
       legacyId: 1,
       'data.Employee ID': 1,
@@ -1059,7 +1294,8 @@ export async function getAttendanceForUser(employeeId, startDate, endDate) {
           userDateRangeQuery(startDate, endDate, ['data.Intimation Date', 'data.Date', 'data.date'])
         ]
       }
-    )
+    ),
+    loadHolidayRowsForRange(startDate, endDate)
   ]);
 
   const user = users.find((item) => eq(userId(item), targetEmployeeId));
@@ -1075,7 +1311,8 @@ export async function getAttendanceForUser(employeeId, startDate, endDate) {
                    (!joiningDate || rowDate >= joiningDate);
         })
         .map((row) => attendanceRowsForApp(row))
-        .flat(),
+        .flat()
+        .concat(holidayAttendanceRows(holidays, startDate, endDate)),
       leaves: leaves.filter((row) => {
           const rowDate = normalizedDate(first(row, ['Start Date', 'Start Date']));
           return eq(first(row, ['Employee ID', 'User ID', 'employeeId', 'EmpID']), targetEmployeeId) && 
@@ -1100,15 +1337,18 @@ export async function getTeamAttendanceForReviewer(reviewerId, startDate, endDat
   if (!reviewer) return fail('Only Admin, Super Admin, or HR can view team attendance.');
 
   const visibleIds = teamAttendanceAccessSet(reviewer, users);
-  const attendance = visibleIds.size
-    ? await findAttendanceRows({
-        $and: [
-          employeeIdsQuery(Array.from(visibleIds)),
-          userDateRangeQuery(startDate, endDate)
-        ]
-      })
-    : [];
-  const rows = buildTeamAttendanceGroups(attendance, users, visibleIds, startDate, endDate);
+  const [attendance, holidays] = await Promise.all([
+    visibleIds.size
+      ? findAttendanceRows({
+          $and: [
+            employeeIdsQuery(Array.from(visibleIds)),
+            userDateRangeQuery(startDate, endDate)
+          ]
+        })
+      : [],
+    loadHolidayRowsForRange(startDate, endDate)
+  ]);
+  const rows = buildTeamAttendanceGroups(attendance, users, visibleIds, startDate, endDate, holidays);
     return ok({
       data: rows,
       users: users
@@ -1147,7 +1387,7 @@ export async function getTeamAttendanceCalendarForReviewer(reviewerId, employeeI
     ? [normalizedStart, normalizedDate(joiningDateStr)].sort().reverse()[0]
     : normalizedStart;
 
-  const attendance = await findAttendanceRows(
+  const [attendance, holidays] = await Promise.all([findAttendanceRows(
     {
       $and: [
         {
@@ -1192,11 +1432,28 @@ export async function getTeamAttendanceCalendarForReviewer(reviewerId, employeeI
       'data.Photo URL': 1,
       'data.Latitude': 1,
       'data.Lattitude': 1,
-      'data.Longitude': 1
+      'data.Longitude': 1,
+      'data.Admin Approval': 1,
+      'data.Admin Remarks': 1,
+      'data.Admin ID': 1,
+      'data.adminId': 1,
+      'data.AdminID': 1,
+      'data.Approved By': 1,
+      'data.Approved By ID': 1,
+      'data.approvedBy': 1,
+      'data.approvedById': 1,
+      'data.Edited By': 1,
+      'data.Edited By ID': 1,
+      'data.editedBy': 1,
+      'data.editedById': 1,
+      'data.newPunchIn': 1,
+      'data.newPunchOut': 1,
+      'data.New Punch In': 1,
+      'data.New Punch Out': 1
     }
-  );
+  ), loadHolidayRowsForRange(effectiveStart, normalizedEnd)]);
 
-    const rows = buildTeamAttendanceGroups(attendance, users, new Set([targetEmployeeId]), effectiveStart, normalizedEnd);
+    const rows = buildTeamAttendanceGroups(attendance, users, new Set([targetEmployeeId]), effectiveStart, normalizedEnd, holidays);
     return ok({ data: rows });
   });
 }
@@ -1476,6 +1733,7 @@ export async function enforceAttendanceGate(employeeId) {
 }
 
 registerStoreMutationListener((modelName = '') => {
-  if (!['Attendance', 'Leave', 'Intimation', 'User', 'AttendancePolicy'].includes(String(modelName || ''))) return;
+  if (!['Attendance', 'Leave', 'Intimation', 'User', 'AttendancePolicy', 'Holiday'].includes(String(modelName || ''))) return;
   void clearAttendanceCaches();
 });
+

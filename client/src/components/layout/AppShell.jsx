@@ -35,7 +35,7 @@ export function AppShell() {
     });
   }, [location.pathname]);
 
-  const activeItems = notifications.items.filter(item => !/closed|done|completed|resolved/i.test(String(item.Status || '')));
+  const activeItems = notifications.items.filter(item => !/closed|done|completed|resolved|cancelled|canceled|paid|approved|present|active/i.test(String(item.Status || '')));
   const getRouteCount = (path) => {
     const routeLastViewed = lastViewed[path] || 0;
     return activeItems.filter(item => {
@@ -48,7 +48,7 @@ export function AppShell() {
       if (path === '/ticket-system' && type === 'Ticket') return true;
       if (path === '/approvals' && (type === 'Approval' || status.includes('approval'))) return true;
       if (path === '/fms-tracker' && type === 'FMS') return true;
-      if (path === '/todo' && type === 'Todo') return true;
+      if (path === '/todo' && (type === 'Todo' || type === 'To-Do')) return true;
       if (path === '/attendance' && ['Attendance', 'Leave', 'Intimation'].includes(type)) return true;
       if (path === '/expenses' && type === 'Expense') return true;
       return false;
@@ -56,7 +56,7 @@ export function AppShell() {
   };
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell app-shell--${activeRoute.key}`}>
       {/* Mobile Backdrop */}
       {mobileNavOpen && (
         <div 
@@ -145,6 +145,7 @@ export function AppShell() {
                     loading={notifications.loading}
                     error={notifications.error}
                     onRefresh={notifications.refresh}
+                    onClosePanel={notifications.close}
                     userRole={user?.Role || user?.role}
                   />
                 }

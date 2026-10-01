@@ -1,3 +1,4 @@
+import { BarChart3 } from '@/components/common/icons';
 import { StatusPill } from '@/components/common/StatusPill';
 import { FmsReportSection } from '@/features/reports/components/FmsReportSection';
 import { ManagementDashboardReportTab } from '@/features/reports/components/ManagementDashboardReportTab';
@@ -5,6 +6,7 @@ import { ReportsHeader } from '@/features/reports/components/ReportsHeader';
 import { ReportsSummaryCards } from '@/features/reports/components/ReportsSummaryCards';
 import { ReportsToolbar } from '@/features/reports/components/ReportsToolbar';
 import { TicketReportSection } from '@/features/reports/components/TicketReportSection';
+import { AttendanceReportSection } from '@/features/reports/components/AttendanceReportSection';
 import { useReportsData } from '@/features/reports/useReportsData';
 import './reports.css';
 
@@ -16,9 +18,6 @@ export function ReportsPage() {
     isManagerOnly,
     activeTab,
     setActiveTab,
-    range,
-    setRange,
-    rangeOptions,
     customStart,
     setCustomStart,
     customEnd,
@@ -38,6 +37,11 @@ export function ReportsPage() {
     fmsFilters,
     setFmsFilters,
     resetFmsFilters,
+    attendance,
+    attendanceUsers,
+    attendanceFilters,
+    setAttendanceFilters,
+    resetAttendanceFilters,
     refresh,
     download
   } = useReportsData();
@@ -78,6 +82,38 @@ export function ReportsPage() {
     }
   ];
 
+  const totalP = attendance.filter((item) => /present|on time/i.test(item.status)).length;
+  const totalA = attendance.filter((item) => /absent/i.test(item.status)).length;
+  const totalH = attendance.filter((item) => /half day/i.test(item.status)).length;
+  const totalL = attendance.filter((item) => /late/i.test(item.status) && !/half day/i.test(item.status)).length;
+  const totalW = attendance.filter((item) => /weekly off|w/i.test(item.status)).length;
+  const actualP = totalP + (totalH * 0.5);
+  const totalEntry = attendance.length;
+
+  const renderAttendanceKPIs = () => (
+    <div className="dashboard-kpi-grid dashboard-kpi-grid--7 dashboard-kpi-grid--compact">
+      {[
+        { label: 'Total Present', value: totalP, iconClass: 'dashboard-kpi-card__icon--blue' },
+        { label: 'Total Absent', value: totalA, iconClass: 'dashboard-kpi-card__icon--red' },
+        { label: 'Total Half Day', value: totalH, iconClass: 'dashboard-kpi-card__icon--orange' },
+        { label: 'Total Late', value: totalL, iconClass: 'dashboard-kpi-card__icon--orange' },
+        { label: 'Total Weekoff', value: totalW, iconClass: 'dashboard-kpi-card__icon--purple' },
+        { label: 'Actual Present', value: actualP, iconClass: 'dashboard-kpi-card__icon--green' },
+        { label: 'Total Entry', value: totalEntry, iconClass: 'dashboard-kpi-card__icon--teal' }
+      ].map((kpi, i) => (
+        <article key={i} className="dashboard-kpi-card">
+          <div className={`dashboard-kpi-card__icon ${kpi.iconClass}`}>
+            <BarChart3 className="dashboard-kpi-card__icon-svg" />
+          </div>
+          <div className="dashboard-kpi-card-content">
+            <p className="dashboard-kpi-card__label">{kpi.label}</p>
+            <p className="dashboard-kpi-card__value">{kpi.value}</p>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+
   return (
     <section className="page-card">
       <ReportsHeader
@@ -108,9 +144,6 @@ export function ReportsPage() {
         isManagerOnly={isManagerOnly}
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        range={range}
-        onRangeChange={setRange}
-        rangeOptions={rangeOptions}
         customStart={customStart}
         onCustomStartChange={setCustomStart}
         customEnd={customEnd}
@@ -121,9 +154,11 @@ export function ReportsPage() {
 
       {isManagerOnly ? (
         <>
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center', justifyContent: 'space-between', marginBottom: activeTab === 'attendance' ? 0 : 'auto' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <ReportsSummaryCards items={activeTab === 'fms' ? fmsSummaryItems : ticketSummaryItems} />
+              {activeTab === 'attendance' ? renderAttendanceKPIs() : (
+                <ReportsSummaryCards items={activeTab === 'fms' ? fmsSummaryItems : ticketSummaryItems} />
+              )}
             </div>
             
             {activeTab === 'fms' && (
@@ -134,28 +169,13 @@ export function ReportsPage() {
                 alignItems: 'flex-end', flexShrink: 0
               }}>
                 <label className="dashboard-control" style={{ margin: 0 }}>
-                  <span style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px', display: 'block', fontWeight: 600 }}>Date Range</span>
-                  <select value={range} onChange={(event) => setRange(event.target.value)} style={{ minWidth: '150px' }}>
-                    {rangeOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  <span style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px', display: 'block', fontWeight: 600 }}>Starting Date</span>
+                  <input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} />
                 </label>
-
-                {range === 'custom' ? (
-                  <>
-                    <label className="dashboard-control" style={{ margin: 0 }}>
-                      <span style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px', display: 'block', fontWeight: 600 }}>Start Date</span>
-                      <input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} />
-                    </label>
-                    <label className="dashboard-control" style={{ margin: 0 }}>
-                      <span style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px', display: 'block', fontWeight: 600 }}>End Date</span>
-                      <input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} />
-                    </label>
-                  </>
-                ) : null}
+                <label className="dashboard-control" style={{ margin: 0 }}>
+                  <span style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px', display: 'block', fontWeight: 600 }}>Ending Date</span>
+                  <input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} />
+                </label>
               </div>
             )}
           </div>
@@ -167,6 +187,18 @@ export function ReportsPage() {
               onFmsFiltersChange={setFmsFilters}
               onResetFilters={resetFmsFilters}
             />
+          ) : activeTab === 'attendance' ? (
+              <AttendanceReportSection
+              attendance={attendance}
+              attendanceUsers={attendanceUsers}
+              attendanceFilters={attendanceFilters}
+              onAttendanceFiltersChange={setAttendanceFilters}
+              onResetFilters={resetAttendanceFilters}
+              customStart={customStart}
+              onCustomStartChange={setCustomStart}
+              customEnd={customEnd}
+              onCustomEndChange={setCustomEnd}
+            />
           ) : (
             <TicketReportSection
               tickets={tickets}
@@ -176,9 +208,6 @@ export function ReportsPage() {
               ticketFilters={ticketFilters}
               onTicketFiltersChange={setTicketFilters}
               onResetFilters={resetTicketFilters}
-              range={range}
-              onRangeChange={setRange}
-              rangeOptions={rangeOptions}
               customStart={customStart}
               onCustomStartChange={setCustomStart}
               customEnd={customEnd}
@@ -197,9 +226,21 @@ export function ReportsPage() {
             ticketFilters={ticketFilters}
             onTicketFiltersChange={setTicketFilters}
             onResetFilters={resetTicketFilters}
-            range={range}
-            onRangeChange={setRange}
-            rangeOptions={rangeOptions}
+            customStart={customStart}
+            onCustomStartChange={setCustomStart}
+            customEnd={customEnd}
+            onCustomEndChange={setCustomEnd}
+          />
+        </>
+      ) : activeTab === 'attendance' ? (
+        <>
+          {renderAttendanceKPIs()}
+          <AttendanceReportSection
+            attendance={attendance}
+            attendanceUsers={attendanceUsers}
+            attendanceFilters={attendanceFilters}
+            onAttendanceFiltersChange={setAttendanceFilters}
+            onResetFilters={resetAttendanceFilters}
             customStart={customStart}
             onCustomStartChange={setCustomStart}
             customEnd={customEnd}

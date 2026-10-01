@@ -146,15 +146,16 @@ function isPendingIntimationStatus(status = '') {
   return /submitted|pending/i.test(safe(status));
 }
 
-function isPendingAttendanceStatus(status = '') {
-  return /need approval|pending/i.test(safe(status));
+function isPendingAttendanceStatus(status = '', adminApproval = '') {
+  return /need approval|pending/i.test(safe(status)) || /pending/i.test(safe(adminApproval));
 }
 
-function requestApprovalDecision(admin, row, users, type) {
+export function requestApprovalDecision(admin, row, users, type) {
   const role = userRole(admin);
   const employeeId = first(row, ['Employee ID', 'employeeId', 'EmpID']);
   const employee = users.find((user) => eq(userId(user), employeeId));
   const status = safe(first(row, ['Status', 'status']));
+  const adminApproval = safe(first(row, ['Admin Approval', 'adminApproval']));
   if (employee && isHigherRoleProtected(admin, employee)) {
     return { visible: false, actionable: false, canApprove: false };
   }
@@ -167,7 +168,7 @@ function requestApprovalDecision(admin, row, users, type) {
   let pending = false;
   if (/leave/i.test(type)) pending = isPendingLeaveStatus(status);
   else if (/intimation/i.test(type)) pending = isPendingIntimationStatus(status);
-  else if (/attendance/i.test(type)) pending = isPendingAttendanceStatus(status);
+  else if (/attendance/i.test(type)) pending = isPendingAttendanceStatus(status, adminApproval);
 
   if (/leave|intimation|attendance/i.test(type)) {
     if (!canSeeEmployee) {
@@ -200,7 +201,7 @@ function requestApprovalDecision(admin, row, users, type) {
   return { visible: false, actionable: false, canApprove: false };
 }
 
-function ticketApprovalDecision(admin, ticket, users) {
+export function ticketApprovalDecision(admin, ticket, users) {
   const adminId = userId(admin).toUpperCase();
   const role = userRole(admin);
   const ownerId = safe(first(ticket, ['Employee ID', 'employeeId', 'EmpID'])).toUpperCase();
@@ -647,7 +648,7 @@ function fastActionableTicketQuery(admin, users = [], filters = {}) {
 
 async function getFastPendingTicketRows(adminId, options = {}) {
   const page = Math.max(1, Number(options.page || 1) || 1);
-  const pageSize = Math.min(50, Math.max(20, Number(options.pageSize || 20) || 20));
+  const pageSize = Math.min(200, Math.max(1, Number(options.pageSize || 20) || 20));
   const filters = {
     employee: safe(options.filters?.employee),
     category: safe(options.filters?.category),
@@ -748,7 +749,7 @@ async function getFastPendingTicketRows(adminId, options = {}) {
     'data.Name': 1
   };
 
-  const users = await listDataRows('User', {}, userProjection);
+  const users = await listRows('User');
   const admin = users.find((user) => eq(userId(user), adminId));
   if (!admin || !elevatedRoles.has(userRole(admin))) return fail('Access Denied');
 
@@ -988,7 +989,23 @@ async function getApprovalQueueRows(adminId, options = {}) {
     'data.Status': 1,
     'data.status': 1,
     'data.Remarks': 1,
-    'data.Admin Remarks': 1
+    'data.Admin Remarks': 1,
+    'data.Admin Approval': 1,
+    'data.Admin ID': 1,
+    'data.adminId': 1,
+    'data.AdminID': 1,
+    'data.Approved By': 1,
+    'data.Approved By ID': 1,
+    'data.approvedBy': 1,
+    'data.approvedById': 1,
+    'data.Edited By': 1,
+    'data.Edited By ID': 1,
+    'data.editedBy': 1,
+    'data.editedById': 1,
+    'data.newPunchIn': 1,
+    'data.newPunchOut': 1,
+    'data.New Punch In': 1,
+    'data.New Punch Out': 1
   };
   const clientProjection = {
     legacyId: 1,
@@ -1238,6 +1255,46 @@ function approvalTabQuery(tab, admin, users = [], filters = {}) {
   return { $and: clauses };
 }
 
+function approvalAttendanceStatusQuery(statusFilter = '') {
+  const status = safe(statusFilter).toLowerCase();
+  if (status === 'approved') {
+    return {
+      $or: [
+        { 'data.Status': { $in: ['Present', 'Approved', 'present', 'approved'] } },
+        { 'data.status': { $in: ['Present', 'Approved', 'present', 'approved'] } },
+        { 'data.Admin Approval': { $in: ['Approved', 'Present', 'approved', 'present'] } },
+        { 'data.adminApproval': { $in: ['Approved', 'Present', 'approved', 'present'] } }
+      ]
+    };
+  }
+  if (status === 'rejected') {
+    return {
+      $or: [
+        { 'data.Status': { $in: ['Rejected', 'Reject', 'Absent', 'rejected', 'reject', 'absent'] } },
+        { 'data.status': { $in: ['Rejected', 'Reject', 'Absent', 'rejected', 'reject', 'absent'] } },
+        { 'data.Admin Approval': { $in: ['Rejected', 'Reject', 'rejected', 'reject'] } },
+        { 'data.adminApproval': { $in: ['Rejected', 'Reject', 'rejected', 'reject'] } }
+      ]
+    };
+  }
+  return {
+    $or: [
+      { 'data.Status': { $in: ['Need Approval', 'Pending', 'need approval', 'pending'] } },
+      { 'data.status': { $in: ['Need Approval', 'Pending', 'need approval', 'pending'] } },
+      { 'data.Admin Approval': { $in: ['Pending', 'Need Approval', 'pending', 'need approval'] } },
+      { 'data.adminApproval': { $in: ['Pending', 'Need Approval', 'pending', 'need approval'] } }
+    ]
+  };
+}
+
+function fastAttendanceApprovalQuery(admin, users = [], filters = {}) {
+  const visibleIds = visibleApprovalUserIds(admin, users);
+  const clauses = [employeeIdsQuery(visibleIds), approvalAttendanceStatusQuery(filters.status)];
+  const dateQuery = dateRangeFieldQuery(['data.Date', 'data.date'], safe(filters.startDate), safe(filters.endDate));
+  if (Object.keys(dateQuery).length) clauses.push(dateQuery);
+  return { $and: clauses };
+}
+
 function activeVisibleApprovalUsers(admin, users = []) {
   const role = userRole(admin);
   return users.filter((user) => {
@@ -1334,14 +1391,20 @@ function buildVisibleIntimationRows(data, admin) {
     .filter(Boolean);
 }
 
-function buildVisibleAttendanceRows(data, admin) {
+function attendanceGroupKey(row = {}) {
+  const employee = first(row, ['Employee ID', 'employeeId', 'EmpID']);
+  const date = normalizedDate(first(row, ['Date', 'date', 'DateStr']));
+  return `${safe(employee).toUpperCase()}|${date}`;
+}
+
+function attendanceGroupFromRows(rows = [], admin, users = []) {
   const attendanceGroups = new Map();
-  data.attendance
-    .filter((row) => requestApprovalDecision(admin, row, data.users, 'Attendance').visible)
+  rows
+    .filter((row) => requestApprovalDecision(admin, row, users, 'Attendance').visible)
     .forEach((row) => {
       const employee = first(row, ['Employee ID', 'employeeId', 'EmpID']);
       const date = normalizedDate(first(row, ['Date', 'date']));
-      const key = `${safe(employee).toUpperCase()}|${date}`;
+      const key = attendanceGroupKey(row);
       const group = attendanceGroups.get(key) || {
         'Employee ID': employee,
         'Employee Name': first(row, ['Employee Name', 'employeeName', 'Name'], employee),
@@ -1355,7 +1418,7 @@ function buildVisibleAttendanceRows(data, admin) {
         _canApprove: false,
         _isActionableByMe: false
       };
-      const decision = requestApprovalDecision(admin, row, data.users, 'Attendance');
+      const decision = requestApprovalDecision(admin, row, users, 'Attendance');
       group.AttendanceIDs.push(first(row, ['AttendanceID', 'ID', 'attendanceId']));
       group._canApprove = group._canApprove || decision.canApprove;
       group._isActionableByMe = group._isActionableByMe || decision.actionable;
@@ -1369,6 +1432,10 @@ function buildVisibleAttendanceRows(data, admin) {
       attendanceGroups.set(key, group);
     });
   return Array.from(attendanceGroups.values());
+}
+
+function buildVisibleAttendanceRows(data, admin) {
+  return attendanceGroupFromRows(data.attendance, admin, data.users);
 }
 
 function buildVisibleTicketRows(data, admin) {
@@ -1577,6 +1644,134 @@ async function getPendingApprovalsSummary(adminId) {
     ticketCategories: []
   });
   setCachedApprovalPayload(cacheKey, payload);
+  if (attendanceCount > 0) {
+    void getFastAttendanceRows(adminId, { page: 1, pageSize: 10, filters: {} }).catch(() => null);
+  }
+  return payload;
+}
+
+async function getFastAttendanceRows(adminId, options = {}) {
+  const page = Math.max(1, Number(options.page || 1) || 1);
+  const pageSize = Math.min(10, Math.max(1, Number(options.pageSize || 10) || 10));
+  const filters = {
+    employee: safe(options.filters?.employee),
+    category: safe(options.filters?.category),
+    startDate: safe(options.filters?.startDate),
+    endDate: safe(options.filters?.endDate),
+    search: safe(options.filters?.search),
+    status: safe(options.filters?.status)
+  };
+  const cacheKey = `${safe(adminId).toLowerCase()}::rows::attendance::fast::${JSON.stringify(filters)}::${page}::${pageSize}`;
+  const cached = await getCachedApprovalPayload(cacheKey);
+  if (cached) return cached;
+
+  const userProjection = {
+    legacyId: 1,
+    'data.Employee ID': 1,
+    'data.User ID': 1,
+    'data.EmpID': 1,
+    'data.employeeId': 1,
+    'data.Employee Name': 1,
+    'data.Name': 1,
+    'data.name': 1,
+    'data.Role': 1,
+    'data.role': 1,
+    'data.Department': 1,
+    'data.department': 1,
+    'data.Manager ID': 1,
+    'data.Manager': 1,
+    'data.managerId': 1,
+    'data.Reporting Manager': 1,
+    'data.Task Approver': 1,
+    'data.taskApprover': 1,
+    'data.Status': 1
+  };
+  const attendanceProjection = {
+    legacyId: 1,
+    'data.AttendanceID': 1,
+    'data.ID': 1,
+    'data.attendanceId': 1,
+    'data.Employee ID': 1,
+    'data.employeeId': 1,
+    'data.EmpID': 1,
+    'data.Employee Name': 1,
+    'data.employeeName': 1,
+    'data.Name': 1,
+    'data.Date': 1,
+    'data.date': 1,
+    'data.Action': 1,
+    'data.action': 1,
+    'data.Time': 1,
+    'data.Punch In': 1,
+    'data.InTime': 1,
+    'data.Punch Out': 1,
+    'data.OutTime': 1,
+    'data.Total Working Hours': 1,
+    'data.Duration': 1,
+    'data.Status': 1,
+    'data.status': 1,
+    'data.Remarks': 1,
+    'data.Admin Remarks': 1,
+    'data.Admin Approval': 1,
+    'data.adminApproval': 1
+  };
+
+  const users = await listDataRows('User', {}, userProjection);
+  const admin = users.find((user) => eq(userId(user), adminId));
+  if (!admin || !elevatedRoles.has(userRole(admin))) return fail('Access Denied');
+
+  const baseQuery = fastAttendanceApprovalQuery(admin, users, filters);
+  const targetGroups = page * pageSize + 1;
+  const batchSize = Math.max(30, pageSize * 3);
+  const maxDocsToScan = Math.max(120, targetGroups * 10);
+  const seenGroups = new Map();
+  const scannedRows = [];
+  let scanned = 0;
+  let reachedEnd = false;
+
+  while (seenGroups.size < targetGroups && scanned < maxDocsToScan) {
+    const docs = await LegacyModels.Attendance.collection
+      .find(baseQuery, { projection: attendanceProjection })
+      .sort({ 'data.Date': -1, createdAt: -1, _id: -1 })
+      .skip(scanned)
+      .limit(batchSize)
+      .toArray();
+    if (!docs.length) {
+      reachedEnd = true;
+      break;
+    }
+    scanned += docs.length;
+    const rows = fromLegacyDocs(docs);
+    scannedRows.push(...rows);
+    for (const row of rows) {
+      const groupKey = attendanceGroupKey(row);
+      if (!seenGroups.has(groupKey)) seenGroups.set(groupKey, row);
+    }
+    if (docs.length < batchSize) {
+      reachedEnd = true;
+      break;
+    }
+  }
+
+  const orderedKeys = Array.from(seenGroups.keys());
+  const startIndex = (page - 1) * pageSize;
+  const pageKeys = orderedKeys.slice(startIndex, startIndex + pageSize);
+  const rowsByKey = new Map(attendanceGroupFromRows(scannedRows, admin, users).map((row) => [attendanceGroupKey(row), row]));
+  const rows = pageKeys.map((key) => rowsByKey.get(key)).filter(Boolean);
+  const hasMore = orderedKeys.length > startIndex + rows.length || !reachedEnd;
+  const total = hasMore ? startIndex + rows.length + 1 : startIndex + rows.length;
+
+  const payload = ok({
+    tab: 'attendance',
+    rows,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      hasMore
+    }
+  });
+  setCachedApprovalPayload(cacheKey, payload);
   return payload;
 }
 
@@ -1587,8 +1782,13 @@ async function getPendingApprovalsRows(adminId, options = {}) {
   if (tab === 'tickets') {
     return getFastPendingTicketRows(adminId, options);
   }
+  if (tab === 'attendance') {
+    return getFastAttendanceRows(adminId, options);
+  }
   const page = Math.max(1, Number(options.page || 1) || 1);
-  const pageSize = Math.min(50, Math.max(20, Number(options.pageSize || 20) || 20));
+  const defaultPageSize = tab === 'attendance' ? 10 : 20;
+  const maxPageSize = tab === 'attendance' ? 10 : 200;
+  const pageSize = Math.min(maxPageSize, Math.max(1, Number(options.pageSize || defaultPageSize) || defaultPageSize));
   const filters = {
     employee: safe(options.filters?.employee),
     category: safe(options.filters?.category),
@@ -1642,6 +1842,7 @@ export async function processApprovalAction(actionData = {}) {
   const users = await listRows('User');
   const admin = users.find((user) => eq(userId(user), adminId));
   if (!admin || !elevatedRoles.has(userRole(admin))) return fail('Unauthorized: Admin/HR access required.');
+  const adminName = first(admin, ['Employee Name', 'Name'], adminId);
   const remarks = first(actionData, ['remarks', 'Remarks', 'Admin Remarks']);
   const approved = safe(status).toLowerCase() === 'approved';
   
@@ -1662,11 +1863,14 @@ export async function processApprovalAction(actionData = {}) {
   };
 
   if (/leave/i.test(type)) {
-    const leaveRows = await listRows('Leave');
-    const row = leaveRows.find((item) => eq(first(item, ['LeaveID', 'Leave ID', 'ID', 'leaveId']), id));
+    const [row] = await listDataRows('Leave', {
+      $or: [{ legacyId: id }, { 'data.LeaveID': id }, { 'data.Leave ID': id }, { 'data.ID': id }, { 'data.leaveId': id }]
+    });
     if (!row) return fail('Leave request not found.');
     const decision = requestApprovalDecision(admin, row, users, 'Leave');
     if (!decision.actionable) return fail('Access Denied: You cannot action this leave request.');
+    const leaveEmployeeId = first(row, ['Employee ID', 'employeeId', 'EmpID']);
+    const leaveRows = await listDataRowsPaginated('Leave', employeeIdsQuery([leaveEmployeeId]), { limit: 150 });
     const targetRows = findLeaveRowsForAction(leaveRows, row);
     const updatedLeaves = [];
     for (const current of (targetRows.length ? targetRows : [row])) {
@@ -1682,16 +1886,22 @@ export async function processApprovalAction(actionData = {}) {
     return ok({ message: `Leave request ${actualAction}.`, item: updatedLeaves[0], data: updatedLeaves });
   }
   if (/intimation/i.test(type)) {
-    const intimationRows = await listRows('Intimation');
-    const row = intimationRows.find((item) => eq(first(item, ['IntimationID', 'Intimation ID', 'ID', 'intimationId']), id));
+    const [row] = await listDataRows('Intimation', {
+      $or: [{ legacyId: id }, { 'data.IntimationID': id }, { 'data.Intimation ID': id }, { 'data.ID': id }, { 'data.intimationId': id }]
+    });
     if (!row) return fail('Intimation request not found.');
     const decision = requestApprovalDecision(admin, row, users, 'Intimation');
     if (!decision.actionable) return fail('Access Denied: You cannot action this intimation request.');
     return ok({ message: `Intimation request ${actualAction}.`, item: await upsertRow('Intimation', 'IntimationID', id, { ...update, IntimationID: id, 'Intimation ID': id, 'Admin Approval': actualAction }) });
   }
   if (/attendance/i.test(type)) {
-    const attendanceRows = await listRows('Attendance');
     const [targetEmployee, targetDate] = safe(id).includes('|') ? safe(id).split('|', 2) : ['', ''];
+    let attendanceRows;
+    if (targetDate) {
+      attendanceRows = await listDataRowsPaginated('Attendance', employeeIdsQuery([targetEmployee]), { limit: 150 });
+    } else {
+      attendanceRows = await listDataRows('Attendance', { $or: [{ legacyId: id }, { 'data.AttendanceID': id }, { 'data.ID': id }, { 'data.attendanceId': id }] });
+    }
     const targets = attendanceRows.filter((row) => {
       const sameDate = targetDate && normalizedDate(first(row, ['Date', 'date'])) === targetDate;
       const sameId = !targetDate && eq(first(row, ['AttendanceID', 'ID', 'attendanceId']), id);
@@ -1706,11 +1916,26 @@ export async function processApprovalAction(actionData = {}) {
     let punchIn = targets.find((row) => /punch\s*in/i.test(first(row, ['Action', 'action'])));
     let punchOut = targets.find((row) => /punch\s*out/i.test(first(row, ['Action', 'action'])));
     const correctedRows = new Map();
+    const editedDuringApproval = Boolean(actionData.newPunchIn || actionData.newPunchOut);
+    const attendanceAuditFields = {
+      'Approved By': adminName,
+      'Approved By ID': adminId,
+      approvedBy: adminName,
+      approvedById: adminId,
+      ...(editedDuringApproval
+        ? {
+            'Edited By': adminName,
+            'Edited By ID': adminId,
+            editedBy: adminName,
+            editedById: adminId
+          }
+        : {})
+    };
     if (actionData.newPunchIn && punchIn) {
       const iso = attendanceTimestamp(date, actionData.newPunchIn);
       const rowId = first(punchIn, ['AttendanceID', 'ID', 'attendanceId']);
       punchIn = await upsertRow('Attendance', 'AttendanceID', rowId, {
-        ...punchIn, Date: iso, Time: iso, 'Punch In': actionData.newPunchIn
+        ...punchIn, Date: iso, Time: iso, 'Punch In': actionData.newPunchIn, ...attendanceAuditFields
       });
       correctedRows.set(rowId, punchIn);
     }
@@ -1718,7 +1943,7 @@ export async function processApprovalAction(actionData = {}) {
       const iso = attendanceTimestamp(date, actionData.newPunchOut);
       const rowId = first(punchOut, ['AttendanceID', 'ID', 'attendanceId']);
       punchOut = await upsertRow('Attendance', 'AttendanceID', rowId, {
-        ...punchOut, Date: iso, Time: iso, 'Punch Out': actionData.newPunchOut
+        ...punchOut, Date: iso, Time: iso, 'Punch Out': actionData.newPunchOut, ...attendanceAuditFields
       });
       correctedRows.set(rowId, punchOut);
     }
@@ -1743,6 +1968,7 @@ export async function processApprovalAction(actionData = {}) {
       created.Time = iso;
       created['Admin Approval'] = actualAction;
       created['Admin Remarks'] = remarks;
+      Object.assign(created, attendanceAuditFields);
       punchIn = await insertRow('Attendance', created);
       targets.push(punchIn);
       correctedRows.set(rowId, punchIn);
@@ -1766,6 +1992,7 @@ export async function processApprovalAction(actionData = {}) {
       created.Time = iso;
       created['Admin Approval'] = actualAction;
       created['Admin Remarks'] = remarks;
+      Object.assign(created, attendanceAuditFields);
       punchOut = await insertRow('Attendance', created);
       targets.push(punchOut);
       correctedRows.set(rowId, punchOut);
@@ -1783,7 +2010,8 @@ export async function processApprovalAction(actionData = {}) {
         AttendanceID: rowId,
         Status: update.Status,
         'Admin Approval': actualAction,
-        'Admin Remarks': remarks
+        'Admin Remarks': remarks,
+        ...attendanceAuditFields
       };
       if (/punch\s*out/i.test(first(row, ['Action', 'action'])) && duration) {
         rowUpdate.Duration = duration;

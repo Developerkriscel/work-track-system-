@@ -1,3 +1,1186 @@
+8/1/2026 9:50:00
+8/1/2026 9:50:00
+SK106
+Saurabh Kumar
+Punch In
+[https://drive.google.com/file/d/1GbmZSZ2I6B2yfmfLD8emL9b96Eh17I0G/view?usp=drivesdk](https://drive.google.com/file/d/1GbmZSZ2I6B2yfmfLD8emL9b96Eh17I0G/view?usp=drivesdk)
+28.5473324
+77.0479334
+Present
+Approved
+8/1/2026 9:56:00
+8/1/2026 9:56:00
+AK119
+Ayush Kumar
+Punch In
+[https://drive.google.com/file/d/1odrgdABB32gEO2L40e_0uFwW9H6AlJXI/view?usp=drivesdk](https://drive.google.com/file/d/1odrgdABB32gEO2L40e_0uFwW9H6AlJXI/view?usp=drivesdk)
+28.54735785
+77.04787845
+Present
+Approved
+8/1/2026 10:05:00
+8/1/2026 10:05:00
+AL102
+Alka
+Punch In
+[https://drive.google.com/file/d/1YHQMvpiztsgTV8Wl6U83OlzgZnS91M9_/view?usp=drivesdk](https://drive.google.com/file/d/1YHQMvpiztsgTV8Wl6U83OlzgZnS91M9_/view?usp=drivesdk)
+28.5472824
+77.04790503
+Present
+Approved
+8/1/2026 10:07:00
+8/1/2026 10:07:00
+R0121
+Roshni
+Punch In
+[https://drive.google.com/file/d/1Xqej90TfK24b1UE5f_gyAyVrMZ4mwLUq/view?usp=drivesdk](https://drive.google.com/file/d/1Xqej90TfK24b1UE5f_gyAyVrMZ4mwLUq/view?usp=drivesdk)
+28.5472165
+77.0481057
+Present
+Approved
+8/1/2026 10:10:00
+8/1/2026 10:10:00
+MB104
+Mangal Bhadouriya
+Punch In
+[https://drive.google.com/file/d/1gG5gpCS15hc7_oQe8eWVBKAwnRPS1I7O/view?usp=drivesdk](https://drive.google.com/file/d/1gG5gpCS15hc7_oQe8eWVBKAwnRPS1I7O/view?usp=drivesdk)
+28.5489414
+77.046338
+Present
+Approved
+8/1/2026 10:15:00
+8/1/2026 10:15:00
+MB126
+Manish Singh Bhadouriya
+Punch In
+[https://drive.google.com/file/d/19Fcr0Tcy7QX_DpmerTdO4E95Uh1FxiK_/view?usp=drivesdk](https://drive.google.com/file/d/19Fcr0Tcy7QX_DpmerTdO4E95Uh1FxiK_/view?usp=drivesdk)
+28.54736144
+77.04785392
+Present
+Approved
+8/1/2026 10:16:00
+8/1/2026 10:16:00
+MS101
+Mitushi Sharma
+Punch In
+[https://drive.google.com/file/d/1nkaSYO4y5vPPTtgCXY-jTAndI8LNFmPp/view?usp=drivesdk](https://drive.google.com/file/d/1nkaSYO4y5vPPTtgCXY-jTAndI8LNFmPp/view?usp=drivesdk)
+28.54738061
+77.04783724
+Present
+Approved
+8/1/2026 10:17:00
+8/1/2026 10:17:00
+VK114
+Vikas Kushwah
+Punch In
+[https://drive.google.com/file/d/1g6_0ROKtfoSIUY4kJDy5vY20hAuLQVlU/view?usp=drivesdk](https://drive.google.com/file/d/1g6_0ROKtfoSIUY4kJDy5vY20hAuLQVlU/view?usp=drivesdk)
+28.5472183
+77.0481062
+Present
+Approved
+8/1/2026 10:17:24
+8/1/2026 10:17:24
+HR123
+HR Manager
+Punch In
+[https://drive.google.com/file/d/16KEC_WW1UdBMUDzKWA5FeTcaXm-pI7pF/view?usp=drivesdk](https://drive.google.com/file/d/16KEC_WW1UdBMUDzKWA5FeTcaXm-pI7pF/view?usp=drivesdk)
+28.5473854
+77.04794331
+Rejected
+Rejected
+8/1/2026 11:06:00
+8/1/2026 11:06:00
+S103
+Sunny
+Punch In
+[https://drive.google.com/file/d/16TtQ5lqxSsMdz1peY_WwASUAByWV6LYD/view?usp=drivesdk](https://drive.google.com/file/d/16TtQ5lqxSsMdz1peY_WwASUAByWV6LYD/view?usp=drivesdk)
+28.5473504
+77.04787237
+Present
+Approved
+8/1/2026 14:36:00
+8/1/2026 14:36:00
+NL106
+Nandlal Gupta
+Punch In
+[https://drive.google.com/file/d/1e9ibyY8Ux3y3Mmcvrq8I2uKs2RDCcjoE/view?usp=drivesdk](https://drive.google.com/file/d/1e9ibyY8Ux3y3Mmcvrq8I2uKs2RDCcjoE/view?usp=drivesdk)
+28.54733979
+77.04778797
+Present
+Approved
+8/1/2026 17:25:00
+8/1/2026 17:25:00
+MS101
+Mitushi Sharma
+Punch Out
+[https://drive.google.com/file/d/1nkaSYO4y5vPPTtgCXY-jTAndI8LNFmPp/view?usp=drivesdk](https://drive.google.com/file/d/1nkaSYO4y5vPPTtgCXY-jTAndI8LNFmPp/view?usp=drivesdk)
+28.54738061
+77.04783724
+7h 9m
+Present
+Approved
+8/1/2026 17:30:00
+8/1/2026 17:30:00
+AL102
+Alka
+Punch Out
+[https://drive.google.com/file/d/1YHQMvpiztsgTV8Wl6U83OlzgZnS91M9_/view?usp=drivesdk](https://drive.google.com/file/d/1YHQMvpiztsgTV8Wl6U83OlzgZnS91M9_/view?usp=drivesdk)
+28.5472824
+77.04790503
+7h 25m
+Present
+Approved
+8/1/2026 18:09:00
+8/1/2026 18:09:00
+AK119
+Ayush Kumar
+Punch Out
+[https://drive.google.com/file/d/1nhE35mFMx7TEu00pOAWo0gDFzuxo8CCU/view?usp=drivesdk](https://drive.google.com/file/d/1nhE35mFMx7TEu00pOAWo0gDFzuxo8CCU/view?usp=drivesdk)
+28.54736484
+77.04784134
+8h 13m
+Present
+Approved
+8/1/2026 18:13:00
+8/1/2026 18:13:00
+S103
+Sunny
+Punch Out
+[https://drive.google.com/file/d/16TtQ5lqxSsMdz1peY_WwASUAByWV6LYD/view?usp=drivesdk](https://drive.google.com/file/d/16TtQ5lqxSsMdz1peY_WwASUAByWV6LYD/view?usp=drivesdk)
+28.5473504
+77.04787237
+7h 7m
+Present
+Approved
+8/1/2026 18:13:00
+8/1/2026 18:13:00
+NL106
+Nandlal Gupta
+Punch Out
+[https://drive.google.com/file/d/1e9ibyY8Ux3y3Mmcvrq8I2uKs2RDCcjoE/view?usp=drivesdk](https://drive.google.com/file/d/1e9ibyY8Ux3y3Mmcvrq8I2uKs2RDCcjoE/view?usp=drivesdk)
+28.54733979
+77.04778797
+3h 37m
+Present
+Approved
+8/1/2026 18:16:00
+8/1/2026 18:16:00
+R0121
+Roshni
+Punch Out
+[https://drive.google.com/file/d/1g5Fi27JXS6k2H-ML_QZx7Ru9UA3dgRzC/view?usp=drivesdk](https://drive.google.com/file/d/1g5Fi27JXS6k2H-ML_QZx7Ru9UA3dgRzC/view?usp=drivesdk)
+28.5473583
+77.04785853
+8h 9m
+Present
+Approved
+8/1/2026 18:19:00
+8/1/2026 18:19:00
+SK106
+Saurabh Kumar
+Punch Out
+[https://drive.google.com/file/d/1NU02KVZk5Ppg9QhCTR4uB4o0VygxjXm-/view?usp=drivesdk](https://drive.google.com/file/d/1NU02KVZk5Ppg9QhCTR4uB4o0VygxjXm-/view?usp=drivesdk)
+28.54738146
+77.04790323
+8h 29m
+Present
+Approved
+8/1/2026 18:25:00
+8/1/2026 18:25:00
+VK114
+Vikas Kushwah
+Punch Out
+[https://drive.google.com/file/d/1uxaKrN_VhtWTZ7FVJ7u9sb1mOLh3abNR/view?usp=drivesdk](https://drive.google.com/file/d/1uxaKrN_VhtWTZ7FVJ7u9sb1mOLh3abNR/view?usp=drivesdk)
+28.5472198
+77.048105
+8h 8m
+Present
+Approved
+8/1/2026 18:30:00
+8/1/2026 18:30:00
+MB104
+Mangal Bhadouriya
+Punch Out
+[https://drive.google.com/file/d/1cU6YfYOAuAj6CKhVAUWUvh6qEZZSgWCF/view?usp=drivesdk](https://drive.google.com/file/d/1cU6YfYOAuAj6CKhVAUWUvh6qEZZSgWCF/view?usp=drivesdk)
+28.5475425
+77.0475392
+8h 20m
+Present
+Approved
+8/3/2026 9:04:12
+8/3/2026 9:04:12
+GA122
+Gauri Aggarwal
+Punch In
+[https://drive.google.com/file/d/1CRKqa1HelZySoB22y38-w7hP-X8WU4nR/view?usp=drivesdk](https://drive.google.com/file/d/1CRKqa1HelZySoB22y38-w7hP-X8WU4nR/view?usp=drivesdk)
+28.67985485
+77.05835452
+Need Approval
+Pending
+8/3/2026 9:50:00
+8/3/2026 9:50:00
+R0121
+Roshni
+Punch In
+[https://drive.google.com/file/d/1EgZaRd7s17MPQFSURI0GrqyC6Fy5JmTB/view?usp=drivesdk](https://drive.google.com/file/d/1EgZaRd7s17MPQFSURI0GrqyC6Fy5JmTB/view?usp=drivesdk)
+28.5472144
+77.0481177
+Present
+Approved
+8/3/2026 9:59:00
+8/3/2026 9:59:00
+SK106
+Saurabh Kumar
+Punch In
+[https://drive.google.com/file/d/1KoBnRdQt5sTFKC5xmT1-Mz0WAZY0awT4/view?usp=drivesdk](https://drive.google.com/file/d/1KoBnRdQt5sTFKC5xmT1-Mz0WAZY0awT4/view?usp=drivesdk)
+28.547212
+77.0481182
+Present
+Approved
+8/3/2026 10:07:00
+8/3/2026 10:07:00
+AK119
+Ayush Kumar
+Punch In
+[https://drive.google.com/file/d/1Lv91Z2EUPqqh7D_eZJs3kuy5J5umbIfY/view?usp=drivesdk](https://drive.google.com/file/d/1Lv91Z2EUPqqh7D_eZJs3kuy5J5umbIfY/view?usp=drivesdk)
+28.54730322
+77.04810091
+Present
+Approved
+8/3/2026 10:10:00
+8/3/2026 10:10:00
+MB104
+Mangal Bhadouriya
+Punch In
+[https://drive.google.com/file/d/112xUcEC2ujBRveyxCBfr6733x88At2sb/view?usp=drivesdk](https://drive.google.com/file/d/112xUcEC2ujBRveyxCBfr6733x88At2sb/view?usp=drivesdk)
+28.5516857
+77.0487641
+Present
+Approved
+8/3/2026 10:11:00
+8/3/2026 10:11:00
+MB126
+Manish Singh Bhadouriya
+Punch In
+[https://drive.google.com/file/d/1J3lZWxATSS0wYHRUALzkk6t9kXeLbs2h/view?usp=drivesdk](https://drive.google.com/file/d/1J3lZWxATSS0wYHRUALzkk6t9kXeLbs2h/view?usp=drivesdk)
+28.5486594
+77.0458322
+Present
+Approved
+8/3/2026 10:14:00
+8/3/2026 10:14:00
+VK114
+Vikas Kushwah
+Punch In
+[https://drive.google.com/file/d/1p8aPOWznz2kqIaCP2Uz5agvx4idqi-sn/view?usp=drivesdk](https://drive.google.com/file/d/1p8aPOWznz2kqIaCP2Uz5agvx4idqi-sn/view?usp=drivesdk)
+28.5472017
+77.0481238
+Present
+Approved
+8/3/2026 11:08:00
+8/3/2026 11:08:00
+NL106
+Nandlal Gupta
+Punch In
+[https://drive.google.com/file/d/1tl_jLXeottDKrd43lL5_N_RyN5y2nbE1/view?usp=drivesdk](https://drive.google.com/file/d/1tl_jLXeottDKrd43lL5_N_RyN5y2nbE1/view?usp=drivesdk)
+28.54724447
+77.04782606
+Present
+Approved
+8/3/2026 12:13:00
+8/3/2026 12:13:00
+S103
+Sunny
+Punch In
+[https://drive.google.com/file/d/1a6P-vdjCbewEEyKoVYEEdPYFQRpy71rD/view?usp=drivesdk](https://drive.google.com/file/d/1a6P-vdjCbewEEyKoVYEEdPYFQRpy71rD/view?usp=drivesdk)
+28.54733767
+77.0478317
+Present
+Approved
+8/3/2026 15:07:00
+8/3/2026 15:07:00
+AK119
+Ayush Kumar
+Punch Out
+[https://drive.google.com/file/d/1OHBBvFcb2v0NeN3wlcAKTdI3DvRLSkDY/view?usp=drivesdk](https://drive.google.com/file/d/1OHBBvFcb2v0NeN3wlcAKTdI3DvRLSkDY/view?usp=drivesdk)
+28.67150058
+77.30327984
+5h 0m
+Present
+Approved
+8/3/2026 18:05:00
+8/3/2026 18:05:00
+R0121
+Roshni
+Punch Out
+[https://drive.google.com/file/d/1PYTIKWXjjOohAPHoIrqZ-vTG-k621AUF/view?usp=drivesdk](https://drive.google.com/file/d/1PYTIKWXjjOohAPHoIrqZ-vTG-k621AUF/view?usp=drivesdk)
+28.54736678
+77.04781873
+8h 15m
+Present
+Approved
+8/3/2026 18:11:00
+8/3/2026 18:11:00
+MB126
+Manish Singh Bhadouriya
+Punch Out
+[https://drive.google.com/file/d/1meL4FWABxIdG7asKDxGQiLZJY5mpwLe8/view?usp=drivesdk](https://drive.google.com/file/d/1meL4FWABxIdG7asKDxGQiLZJY5mpwLe8/view?usp=drivesdk)
+28.54737509
+77.04786215
+8h 0m
+Present
+Approved
+8/3/2026 18:12:00
+8/3/2026 18:12:00
+MB104
+Mangal Bhadouriya
+Punch Out
+[https://drive.google.com/file/d/1vneKibUeB05gDIii2LLDp6zg7M6RwlOe/view?usp=drivesdk](https://drive.google.com/file/d/1vneKibUeB05gDIii2LLDp6zg7M6RwlOe/view?usp=drivesdk)
+28.54736659
+77.04792331
+8h 2m
+Present
+Approved
+8/3/2026 18:12:00
+8/3/2026 18:12:00
+SK106
+Saurabh Kumar
+Punch Out
+[https://drive.google.com/file/d/1doue5ZvV3t13v2sBmlpZEmj4fRbNnILh/view?usp=drivesdk](https://drive.google.com/file/d/1doue5ZvV3t13v2sBmlpZEmj4fRbNnILh/view?usp=drivesdk)
+28.54736943
+77.04788748
+8h 13m
+Present
+Approved
+8/3/2026 18:17:00
+8/3/2026 18:17:00
+VK114
+Vikas Kushwah
+Punch Out
+[https://drive.google.com/file/d/1dcaSr9aeZ5XZvei7T8pXhbtTCEwfbSx2/view?usp=drivesdk](https://drive.google.com/file/d/1dcaSr9aeZ5XZvei7T8pXhbtTCEwfbSx2/view?usp=drivesdk)
+28.5473037
+77.0480106
+8h 3m
+Present
+Approved
+8/3/2026 18:17:00
+8/3/2026 18:17:00
+S103
+Sunny
+Punch Out
+[https://drive.google.com/file/d/1a6P-vdjCbewEEyKoVYEEdPYFQRpy71rD/view?usp=drivesdk](https://drive.google.com/file/d/1a6P-vdjCbewEEyKoVYEEdPYFQRpy71rD/view?usp=drivesdk)
+28.54733767
+77.0478317
+6h 4m
+Present
+Approved
+8/3/2026 18:19:00
+8/3/2026 18:19:00
+NL106
+Nandlal Gupta
+Punch Out
+[https://drive.google.com/file/d/1tl_jLXeottDKrd43lL5_N_RyN5y2nbE1/view?usp=drivesdk](https://drive.google.com/file/d/1tl_jLXeottDKrd43lL5_N_RyN5y2nbE1/view?usp=drivesdk)
+28.54724447
+77.04782606
+7h 11m
+Present
+Approved
+8/4/2026 9:23:30
+8/4/2026 9:23:30
+GA122
+Gauri Aggarwal
+Punch In
+[https://drive.google.com/file/d/1Wi43RNbNy0oE57jOUzJSlLtq1o8ePquV/view?usp=drivesdk](https://drive.google.com/file/d/1Wi43RNbNy0oE57jOUzJSlLtq1o8ePquV/view?usp=drivesdk)
+28.67983352
+77.05846467
+Need Approval
+Pending
+8/4/2026 9:56:00
+8/4/2026 9:56:00
+R0121
+Roshni
+Punch In
+[https://drive.google.com/file/d/1H7tvFKVLaH___3Go2AoTFkyoDAfnixdy/view?usp=drivesdk](https://drive.google.com/file/d/1H7tvFKVLaH___3Go2AoTFkyoDAfnixdy/view?usp=drivesdk)
+28.5472237
+77.0481011
+Present
+Approved
+8/4/2026 10:00:00
+8/4/2026 10:00:00
+SK106
+Saurabh Kumar
+Punch In
+[https://drive.google.com/file/d/1hf_DWtSlXd_HwbJQUDPtFsSjy6YhftjA/view?usp=drivesdk](https://drive.google.com/file/d/1hf_DWtSlXd_HwbJQUDPtFsSjy6YhftjA/view?usp=drivesdk)
+28.6286346
+77.0279893
+Present
+Approved
+8/4/2026 10:07:00
+8/4/2026 10:07:00
+HK118
+Harsh Kumar
+Punch In
+[https://drive.google.com/file/d/1uPb5qhp0J-wpDcz0QDYsEZLRKTCF-Fdz/view?usp=drivesdk](https://drive.google.com/file/d/1uPb5qhp0J-wpDcz0QDYsEZLRKTCF-Fdz/view?usp=drivesdk)
+28.54736643
+77.04785944
+Present
+Approved
+8/4/2026 10:13:00
+8/4/2026 10:13:00
+MB104
+Mangal Bhadouriya
+Punch In
+[https://drive.google.com/file/d/1vot67FwpU4HmrZUKpYKSNLP09M7qioBi/view?usp=drivesdk](https://drive.google.com/file/d/1vot67FwpU4HmrZUKpYKSNLP09M7qioBi/view?usp=drivesdk)
+28.5593745
+77.0586899
+Present
+Approved
+8/4/2026 10:25:00
+8/4/2026 10:25:00
+VK114
+Vikas Kushwah
+Punch In
+[https://drive.google.com/file/d/11ZZ1vUK3QwV8-0vSAgEDo8swwI5eqrIy/view?usp=drivesdk](https://drive.google.com/file/d/11ZZ1vUK3QwV8-0vSAgEDo8swwI5eqrIy/view?usp=drivesdk)
+28.5472154
+77.0481077
+Present
+Approved
+8/4/2026 10:25:00
+8/4/2026 10:25:00
+MB126
+Manish Singh Bhadouriya
+Punch In
+[https://drive.google.com/file/d/1p_gNr5sOM2-ofiWnWjP--PDuVy52Rzlq/view?usp=drivesdk](https://drive.google.com/file/d/1p_gNr5sOM2-ofiWnWjP--PDuVy52Rzlq/view?usp=drivesdk)
+28.54733911
+77.04783143
+Present
+Approved
+8/4/2026 16:10:00
+8/4/2026 16:10:00
+S103
+Sunny
+Punch In
+[https://drive.google.com/file/d/1lPht5X8T3PQH-leNV8wDc4SAOkiKIDkv/view?usp=drivesdk](https://drive.google.com/file/d/1lPht5X8T3PQH-leNV8wDc4SAOkiKIDkv/view?usp=drivesdk)
+28.54735347
+77.04784809
+Present
+Approved
+8/4/2026 18:02:00
+8/4/2026 18:02:00
+R0121
+Roshni
+Punch Out
+[https://drive.google.com/file/d/17Jd-OSt1CjCg4xS7jKeBohilniL8TAK0/view?usp=drivesdk](https://drive.google.com/file/d/17Jd-OSt1CjCg4xS7jKeBohilniL8TAK0/view?usp=drivesdk)
+28.5473569
+77.0478598
+8h 6m
+Present
+Approved
+8/4/2026 18:07:00
+8/4/2026 18:07:00
+HK118
+Harsh Kumar
+Punch Out
+[https://drive.google.com/file/d/19fQlCyPdfso9857K3n0k0JRiztvDOZ0L/view?usp=drivesdk](https://drive.google.com/file/d/19fQlCyPdfso9857K3n0k0JRiztvDOZ0L/view?usp=drivesdk)
+28.547189
+77.0481203
+8h 0m
+Present
+Approved
+8/4/2026 18:17:00
+8/4/2026 18:17:00
+MB104
+Mangal Bhadouriya
+Punch Out
+[https://drive.google.com/file/d/1o35kuX5RPun6ViO7DWh0eL-tnYh0ZpTI/view?usp=drivesdk](https://drive.google.com/file/d/1o35kuX5RPun6ViO7DWh0eL-tnYh0ZpTI/view?usp=drivesdk)
+28.5472112
+77.0481028
+8h 4m
+Present
+Approved
+8/4/2026 18:17:00
+8/4/2026 18:17:00
+S103
+Sunny
+Punch Out
+[https://drive.google.com/file/d/1lPht5X8T3PQH-leNV8wDc4SAOkiKIDkv/view?usp=drivesdk](https://drive.google.com/file/d/1lPht5X8T3PQH-leNV8wDc4SAOkiKIDkv/view?usp=drivesdk)
+28.54735347
+77.04784809
+2h 7m
+Present
+Approved
+8/4/2026 18:33:00
+8/4/2026 18:33:00
+VK114
+Vikas Kushwah
+Punch Out
+[https://drive.google.com/file/d/1a7PgM-8YqkiEhB6gEZHa894Ph_XnhQRV/view?usp=drivesdk](https://drive.google.com/file/d/1a7PgM-8YqkiEhB6gEZHa894Ph_XnhQRV/view?usp=drivesdk)
+28.5506682
+77.0458234
+8h 8m
+Present
+Approved
+8/4/2026 19:30:00
+8/4/2026 19:30:00
+SK106
+Saurabh Kumar
+Punch Out
+[https://drive.google.com/file/d/1_3O_JrhuBApj_t_nBDF2B5CrLKAeiEpC/view?usp=drivesdk](https://drive.google.com/file/d/1_3O_JrhuBApj_t_nBDF2B5CrLKAeiEpC/view?usp=drivesdk)
+28.62851209
+77.02805481
+9h 30m
+Present
+Approved
+8/5/2026 9:22:00
+8/5/2026 9:22:00
+GA122
+Gauri Aggarwal
+Punch In
+[https://drive.google.com/file/d/117u8OMfpAaLs43-nsZm4hrL76nfY0LJL/view?usp=drivesdk](https://drive.google.com/file/d/117u8OMfpAaLs43-nsZm4hrL76nfY0LJL/view?usp=drivesdk)
+28.67983892
+77.05850506
+Present
+Approved
+8/5/2026 9:51:00
+8/5/2026 9:51:00
+SK106
+Saurabh Kumar
+Punch In
+[https://drive.google.com/file/d/1e-cnzF4i2wmjm_aJqH2hLTdFDPvisA-v/view?usp=drivesdk](https://drive.google.com/file/d/1e-cnzF4i2wmjm_aJqH2hLTdFDPvisA-v/view?usp=drivesdk)
+28.5474228
+77.0480496
+Present
+Approved
+8/5/2026 9:56:00
+8/5/2026 9:56:00
+R0121
+Roshni
+Punch In
+[https://drive.google.com/file/d/15mo57Shg7FeQ3GIFqnaX_DS9z_KArXff/view?usp=drivesdk](https://drive.google.com/file/d/15mo57Shg7FeQ3GIFqnaX_DS9z_KArXff/view?usp=drivesdk)
+28.5472417
+77.0480808
+Present
+Approved
+8/5/2026 10:07:00
+8/5/2026 10:07:00
+HK118
+Harsh Kumar
+Punch In
+[https://drive.google.com/file/d/1LKSVS7w6zi4aG9OuQOEF1Q7ByIGy8BQG/view?usp=drivesdk](https://drive.google.com/file/d/1LKSVS7w6zi4aG9OuQOEF1Q7ByIGy8BQG/view?usp=drivesdk)
+28.54737877
+77.04785171
+Present
+Approved
+8/5/2026 10:13:00
+8/5/2026 10:13:00
+VK114
+Vikas Kushwah
+Punch In
+[https://drive.google.com/file/d/1PRk1P7DBO77xLsMcIFxqAGkyjntamiQ_/view?usp=drivesdk](https://drive.google.com/file/d/1PRk1P7DBO77xLsMcIFxqAGkyjntamiQ_/view?usp=drivesdk)
+28.5472165
+77.0481174
+Present
+Approved
+8/5/2026 10:13:00
+8/5/2026 10:13:00
+AK119
+Ayush Kumar
+Punch In
+[https://drive.google.com/file/d/1LjdTgkw_z4xPqBhiohZEq3Z-9-Ymwt9n/view?usp=drivesdk](https://drive.google.com/file/d/1LjdTgkw_z4xPqBhiohZEq3Z-9-Ymwt9n/view?usp=drivesdk)
+28.54738949
+77.04797017
+Present
+Approved
+8/5/2026 10:13:00
+8/5/2026 10:13:00
+MB104
+Mangal Bhadouriya
+Punch In
+[https://drive.google.com/file/d/1tp461Fh1i_kpqufOP0GN6cPjen4aFq1X/view?usp=drivesdk](https://drive.google.com/file/d/1tp461Fh1i_kpqufOP0GN6cPjen4aFq1X/view?usp=drivesdk)
+28.5472019
+77.0480721
+Present
+Approved
+8/5/2026 10:14:00
+8/5/2026 10:14:00
+MB126
+Manish Singh Bhadouriya
+Punch In
+[https://drive.google.com/file/d/1RU_Ca-z9egzzz0HKgGjfd_L00AiHPGm6/view?usp=drivesdk](https://drive.google.com/file/d/1RU_Ca-z9egzzz0HKgGjfd_L00AiHPGm6/view?usp=drivesdk)
+28.5472012
+77.0480488
+Present
+Approved
+8/5/2026 11:42:00
+8/5/2026 11:42:00
+NL106
+Nandlal Gupta
+Punch In
+[https://drive.google.com/file/d/1R4oF_RX6wX_7YLxgY_3lrfNCc8E9NnMC/view?usp=drivesdk](https://drive.google.com/file/d/1R4oF_RX6wX_7YLxgY_3lrfNCc8E9NnMC/view?usp=drivesdk)
+28.54737013
+77.0478636
+Present
+Approved
+8/5/2026 17:04:00
+8/5/2026 17:04:00
+GA122
+Gauri Aggarwal
+Punch Out
+[https://drive.google.com/file/d/1HWyNVgaX25H39MDTkIG4IAUNmbwmIXOS/view?usp=drivesdk](https://drive.google.com/file/d/1HWyNVgaX25H39MDTkIG4IAUNmbwmIXOS/view?usp=drivesdk)
+28.67984662
+77.0584854
+7h 42m
+Present
+Approved
+8/5/2026 18:02:00
+8/5/2026 18:02:00
+R0121
+Roshni
+Punch Out
+[https://drive.google.com/file/d/1Ad_ahI-mVj_jGQY7lQWT8iHHbXpezk_G/view?usp=drivesdk](https://drive.google.com/file/d/1Ad_ahI-mVj_jGQY7lQWT8iHHbXpezk_G/view?usp=drivesdk)
+28.54735411
+77.04786739
+8h 6m
+Present
+Approved
+8/5/2026 18:06:00
+8/5/2026 18:06:00
+SK106
+Saurabh Kumar
+Punch Out
+[https://drive.google.com/file/d/16AsQZEA-RB0r_iI1XD3oNzlYJkBjPr-5/view?usp=drivesdk](https://drive.google.com/file/d/16AsQZEA-RB0r_iI1XD3oNzlYJkBjPr-5/view?usp=drivesdk)
+28.54736498
+77.04787942
+8h 15m
+Present
+Approved
+8/5/2026 18:07:00
+8/5/2026 18:07:00
+HK118
+Harsh Kumar
+Punch Out
+[https://drive.google.com/file/d/1KKKfMwI3jRmssz5RdoqL5TjZUoNRtUi7/view?usp=drivesdk](https://drive.google.com/file/d/1KKKfMwI3jRmssz5RdoqL5TjZUoNRtUi7/view?usp=drivesdk)
+28.54737353
+77.04787371
+8h 0m
+Present
+Approved
+8/5/2026 18:13:00
+8/5/2026 18:13:00
+MB104
+Mangal Bhadouriya
+Punch Out
+[https://drive.google.com/file/d/14JHsEr33TUaiyXemglYJYHjfLI4Sd99P/view?usp=drivesdk](https://drive.google.com/file/d/14JHsEr33TUaiyXemglYJYHjfLI4Sd99P/view?usp=drivesdk)
+28.54737454
+77.04793344
+8h 0m
+Present
+Approved
+8/5/2026 18:13:00
+8/5/2026 18:13:00
+AK119
+Ayush Kumar
+Punch Out
+[https://drive.google.com/file/d/1tHBV_cpHeojxYN6YcHd-eUNmG3fA-OTF/view?usp=drivesdk](https://drive.google.com/file/d/1tHBV_cpHeojxYN6YcHd-eUNmG3fA-OTF/view?usp=drivesdk)
+28.54752051
+77.04757795
+8h 0m
+Present
+Approved
+8/5/2026 18:13:00
+8/5/2026 18:13:00
+VK114
+Vikas Kushwah
+Punch Out
+[https://drive.google.com/file/d/18sjU4yLIXKUoM5hnHXwTMX10eVT2PT8S/view?usp=drivesdk](https://drive.google.com/file/d/18sjU4yLIXKUoM5hnHXwTMX10eVT2PT8S/view?usp=drivesdk)
+28.5472135
+77.0481039
+8h 0m
+Present
+Approved
+8/5/2026 18:16:00
+8/5/2026 18:16:00
+MB126
+Manish Singh Bhadouriya
+Punch Out
+[https://drive.google.com/file/d/13EOJ8iS8GUutS7yg6BUoKIFV1RFAwuOX/view?usp=drivesdk](https://drive.google.com/file/d/13EOJ8iS8GUutS7yg6BUoKIFV1RFAwuOX/view?usp=drivesdk)
+28.5472028
+77.0481164
+8h 2m
+Present
+Approved
+8/5/2026 18:19:00
+8/5/2026 18:19:00
+NL106
+Nandlal Gupta
+Punch Out
+[https://drive.google.com/file/d/1R4oF_RX6wX_7YLxgY_3lrfNCc8E9NnMC/view?usp=drivesdk](https://drive.google.com/file/d/1R4oF_RX6wX_7YLxgY_3lrfNCc8E9NnMC/view?usp=drivesdk)
+28.54737013
+77.0478636
+6h 37m
+Present
+Approved
+8/6/2026 10:12:00
+8/6/2026 10:12:00
+SK106
+Saurabh Kumar
+Punch In
+[https://drive.google.com/file/d/1vBSvn4wceTWZ6tzy2jm-1M2cPzyjwsfC/view?usp=drivesdk](https://drive.google.com/file/d/1vBSvn4wceTWZ6tzy2jm-1M2cPzyjwsfC/view?usp=drivesdk)
+28.5474448
+77.0477477
+Present
+Approved
+8/6/2026 10:12:00
+8/6/2026 10:12:00
+AK119
+Ayush Kumar
+Punch In
+[https://drive.google.com/file/d/1RjfMITIG_4kIIkyTxzHMdlGhl0nlvIIr/view?usp=drivesdk](https://drive.google.com/file/d/1RjfMITIG_4kIIkyTxzHMdlGhl0nlvIIr/view?usp=drivesdk)
+28.54859803
+77.04647032
+Present
+Approved
+8/6/2026 10:24:00
+8/6/2026 10:24:00
+R0121
+Roshni
+Punch In
+[https://drive.google.com/file/d/1XoTi4u7u_ST9419eV_JD69mU6vit6v3-/view?usp=drivesdk](https://drive.google.com/file/d/1XoTi4u7u_ST9419eV_JD69mU6vit6v3-/view?usp=drivesdk)
+28.7050963
+77.1411461
+Present
+Approved
+8/6/2026 10:54:00
+8/6/2026 10:54:00
+MB104
+Mangal Bhadouriya
+Punch In
+[https://drive.google.com/file/d/1MQTLiMQ2dd_tDjeUwsHxBx0P1rN8Qfx4/view?usp=drivesdk](https://drive.google.com/file/d/1MQTLiMQ2dd_tDjeUwsHxBx0P1rN8Qfx4/view?usp=drivesdk)
+28.5472163
+77.0481039
+Present
+Approved
+8/6/2026 10:58:00
+8/6/2026 10:58:00
+VK114
+Vikas Kushwah
+Punch In
+[https://drive.google.com/file/d/1fMGOgba9X-VFJJhQh2mwowWRhgJIS79U/view?usp=drivesdk](https://drive.google.com/file/d/1fMGOgba9X-VFJJhQh2mwowWRhgJIS79U/view?usp=drivesdk)
+28.5472169
+77.0481062
+Present
+Approved
+8/6/2026 10:58:00
+8/6/2026 10:58:00
+MB126
+Manish Singh Bhadouriya
+Punch In
+[https://drive.google.com/file/d/1VddsCQFMRuRnDJJ7WJe1eUneubvm_9c2/view?usp=drivesdk](https://drive.google.com/file/d/1VddsCQFMRuRnDJJ7WJe1eUneubvm_9c2/view?usp=drivesdk)
+28.54738961
+77.04782869
+Present
+Approved
+8/6/2026 11:24:00
+8/6/2026 11:24:00
+NL106
+Nandlal Gupta
+Punch In
+[https://drive.google.com/file/d/1CR-NE4VP0onELQ423zynH8-t4Sf8Wjzv/view?usp=drivesdk](https://drive.google.com/file/d/1CR-NE4VP0onELQ423zynH8-t4Sf8Wjzv/view?usp=drivesdk)
+28.62961277
+77.05317021
+Present
+Approved
+8/6/2026 18:06:00
+8/6/2026 18:06:00
+MB104
+Mangal Bhadouriya
+Punch Out
+[https://drive.google.com/file/d/1l6W0zfI-89yD4k4aTEN89ssz8ogEbK2u/view?usp=drivesdk](https://drive.google.com/file/d/1l6W0zfI-89yD4k4aTEN89ssz8ogEbK2u/view?usp=drivesdk)
+28.54735628
+77.04782832
+7h 12m
+Present
+Approved
+8/6/2026 18:14:00
+8/6/2026 18:14:00
+SK106
+Saurabh Kumar
+Punch Out
+[https://drive.google.com/file/d/11Y3FxAnakyY4jixQ6h4nfvsU0B7quFSP/view?usp=drivesdk](https://drive.google.com/file/d/11Y3FxAnakyY4jixQ6h4nfvsU0B7quFSP/view?usp=drivesdk)
+28.5489869
+77.0463791
+8h 2m
+Present
+Approved
+8/6/2026 18:21:00
+8/6/2026 18:21:00
+NL106
+Nandlal Gupta
+Punch Out
+[https://drive.google.com/file/d/1CR-NE4VP0onELQ423zynH8-t4Sf8Wjzv/view?usp=drivesdk](https://drive.google.com/file/d/1CR-NE4VP0onELQ423zynH8-t4Sf8Wjzv/view?usp=drivesdk)
+28.62961277
+77.05317021
+6h 57m
+Present
+Approved
+8/6/2026 18:23:00
+8/6/2026 18:23:00
+AK119
+Ayush Kumar
+Punch Out
+[https://drive.google.com/file/d/16UUzoP3xMg9JxbRtdbmCfTk2ffhPnrf3/view?usp=drivesdk](https://drive.google.com/file/d/16UUzoP3xMg9JxbRtdbmCfTk2ffhPnrf3/view?usp=drivesdk)
+28.55218908
+77.0582579
+8h 11m
+Present
+Approved
+8/6/2026 18:38:00
+8/6/2026 18:38:00
+R0121
+Roshni
+Punch Out
+[https://drive.google.com/file/d/1h6VhyY-L20MEUCN4etJSsXbipwZqk2-I/view?usp=drivesdk](https://drive.google.com/file/d/1h6VhyY-L20MEUCN4etJSsXbipwZqk2-I/view?usp=drivesdk)
+28.7979666
+77.1313786
+8h 14m
+Present
+Approved
+8/6/2026 18:53:00
+8/6/2026 18:53:00
+VK114
+Vikas Kushwah
+Punch Out
+[https://drive.google.com/file/d/1QstD2BlZbXAaviH1KeSYeBpUb686tEbr/view?usp=drivesdk](https://drive.google.com/file/d/1QstD2BlZbXAaviH1KeSYeBpUb686tEbr/view?usp=drivesdk)
+28.5721463
+77.0662276
+7h 55m
+Present
+Approved
+8/7/2026 9:18:00
+8/7/2026 9:18:00
+GA122
+Gauri Aggarwal
+Punch In
+[https://drive.google.com/file/d/1Gd_L4uqR9rZItbyFamiQN9tKiKJziZOi/view?usp=drivesdk](https://drive.google.com/file/d/1Gd_L4uqR9rZItbyFamiQN9tKiKJziZOi/view?usp=drivesdk)
+28.67983127
+77.05850386
+Present
+Approved
+8/7/2026 10:07:00
+8/7/2026 10:07:00
+NL106
+Nandlal Gupta
+Punch In
+[https://drive.google.com/file/d/1miPofLnXdWSVKxeOVTaEwUSJWhkC-w6A/view?usp=drivesdk](https://drive.google.com/file/d/1miPofLnXdWSVKxeOVTaEwUSJWhkC-w6A/view?usp=drivesdk)
+28.62965906
+77.05328592
+Present
+Approved
+8/7/2026 10:08:00
+8/7/2026 10:08:00
+R0121
+Roshni
+Punch In
+[https://drive.google.com/file/d/1xVt9yJjT4WS5OBGoYvUmDHk3ThBnbGIG/view?usp=drivesdk](https://drive.google.com/file/d/1xVt9yJjT4WS5OBGoYvUmDHk3ThBnbGIG/view?usp=drivesdk)
+28.5471903
+77.0481444
+Present
+Approved
+8/7/2026 10:12:00
+8/7/2026 10:12:00
+SK106
+Saurabh Kumar
+Punch In
+[https://drive.google.com/file/d/14Hb33FIaaS773kcg6WihEOai3Fl6ZwET/view?usp=drivesdk](https://drive.google.com/file/d/14Hb33FIaaS773kcg6WihEOai3Fl6ZwET/view?usp=drivesdk)
+28.5472143
+77.0481048
+Present
+Approved
+8/7/2026 10:13:00
+8/7/2026 10:13:00
+AK119
+Ayush Kumar
+Punch In
+[https://drive.google.com/file/d/1kRWj4362hK9EH6ImvFdSVHs3A9ZkCJCw/view?usp=drivesdk](https://drive.google.com/file/d/1kRWj4362hK9EH6ImvFdSVHs3A9ZkCJCw/view?usp=drivesdk)
+28.54738008
+77.04800488
+Present
+Approved
+8/7/2026 10:33:00
+8/7/2026 10:33:00
+MB104
+Mangal Bhadouriya
+Punch In
+[https://drive.google.com/file/d/1RKk0VP10KXyFR520cPW12IFAIhN85gzK/view?usp=drivesdk](https://drive.google.com/file/d/1RKk0VP10KXyFR520cPW12IFAIhN85gzK/view?usp=drivesdk)
+28.5472126
+77.0481069
+Present
+Approved
+8/7/2026 10:33:00
+8/7/2026 10:33:00
+MB126
+Manish Singh Bhadouriya
+Punch In
+[https://drive.google.com/file/d/11eoQzHPZg_1ZKfvpS0qzaAwL1l1kfSDI/view?usp=drivesdk](https://drive.google.com/file/d/11eoQzHPZg_1ZKfvpS0qzaAwL1l1kfSDI/view?usp=drivesdk)
+28.54723702
+77.04781698
+Present
+Approved
+8/7/2026 10:34:00
+8/7/2026 10:34:00
+VK114
+Vikas Kushwah
+Punch In
+[https://drive.google.com/file/d/1OqUFGZV5bH8D_M3wHzkdoAy5JbuFpZ7I/view?usp=drivesdk](https://drive.google.com/file/d/1OqUFGZV5bH8D_M3wHzkdoAy5JbuFpZ7I/view?usp=drivesdk)
+28.5472184
+77.0481074
+Present
+Approved
+8/7/2026 17:05:00
+8/7/2026 17:05:00
+GA122
+Gauri Aggarwal
+Punch Out
+[https://drive.google.com/file/d/1EqWZG0czEEpfY6HjfoD2_rLxSuJntUQd/view?usp=drivesdk](https://drive.google.com/file/d/1EqWZG0czEEpfY6HjfoD2_rLxSuJntUQd/view?usp=drivesdk)
+28.67985402
+77.05852158
+7h 47m
+Present
+Approved
+8/7/2026 18:13:00
+8/7/2026 18:13:00
+AK119
+Ayush Kumar
+Punch Out
+[https://drive.google.com/file/d/1r28mqbczF2OmB7bVTPcSXGcmT1py5FFL/view?usp=drivesdk](https://drive.google.com/file/d/1r28mqbczF2OmB7bVTPcSXGcmT1py5FFL/view?usp=drivesdk)
+28.54728951
+77.04784168
+8h 0m
+Present
+Approved
+8/7/2026 18:16:00
+8/7/2026 18:16:00
+SK106
+Saurabh Kumar
+Punch Out
+[https://drive.google.com/file/d/1zlJ7Twg8ByLcZNs_d7a96MrxwssTEMb0/view?usp=drivesdk](https://drive.google.com/file/d/1zlJ7Twg8ByLcZNs_d7a96MrxwssTEMb0/view?usp=drivesdk)
+28.54736811
+77.04784816
+8h 4m
+Present
+Approved
+8/7/2026 18:17:00
+8/7/2026 18:17:00
+R0121
+Roshni
+Punch Out
+[https://drive.google.com/file/d/1GmShTKdKWKt20PayMifBSF_zDTUV-ZUY/view?usp=drivesdk](https://drive.google.com/file/d/1GmShTKdKWKt20PayMifBSF_zDTUV-ZUY/view?usp=drivesdk)
+28.547378
+77.04785578
+8h 9m
+Present
+Approved
+8/7/2026 18:17:00
+8/7/2026 18:17:00
+MB126
+Manish Singh Bhadouriya
+Punch Out
+[https://drive.google.com/file/d/1TRwhFPsrgLdumwVqyEovEpqfB3cla4Zf/view?usp=drivesdk](https://drive.google.com/file/d/1TRwhFPsrgLdumwVqyEovEpqfB3cla4Zf/view?usp=drivesdk)
+28.54735377
+77.04783571
+7h 44m
+Present
+Approved
+8/7/2026 18:19:00
+8/7/2026 18:19:00
+MB104
+Mangal Bhadouriya
+Punch Out
+[https://drive.google.com/file/d/1SAfigVtAbJGnKnzbHUXDSvfmy-nMS1SE/view?usp=drivesdk](https://drive.google.com/file/d/1SAfigVtAbJGnKnzbHUXDSvfmy-nMS1SE/view?usp=drivesdk)
+28.54735767
+77.04785818
+7h 46m
+Present
+Approved
+8/7/2026 18:21:00
+8/7/2026 18:21:00
+NL106
+Nandlal Gupta
+Punch Out
+[https://drive.google.com/file/d/1miPofLnXdWSVKxeOVTaEwUSJWhkC-w6A/view?usp=drivesdk](https://drive.google.com/file/d/1miPofLnXdWSVKxeOVTaEwUSJWhkC-w6A/view?usp=drivesdk)
+28.62965906
+77.05328592
+8h 14m
+Present
+Approved
+8/8/2026 9:15:00
+8/8/2026 9:15:00
+GA122
+Gauri Aggarwal
+Punch In
+[https://drive.google.com/file/d/1TnhZ22Tim4rtZejYQ_GVWXvDte_VpfYR/view?usp=drivesdk](https://drive.google.com/file/d/1TnhZ22Tim4rtZejYQ_GVWXvDte_VpfYR/view?usp=drivesdk)
+28.67986706
+77.05849604
+Present
+Approved
+8/8/2026 9:58:00
+8/8/2026 9:58:00
+AK119
+Ayush Kumar
+Punch In
+[https://drive.google.com/file/d/17MZQuw5YrSBdFSiNSBSYMXN2rq7N18Ev/view?usp=drivesdk](https://drive.google.com/file/d/17MZQuw5YrSBdFSiNSBSYMXN2rq7N18Ev/view?usp=drivesdk)
+28.71433675
+77.26938425
+Present
+Approved
+8/8/2026 9:58:00
+8/8/2026 9:58:00
+SK106
+Saurabh Kumar
+Punch In
+[https://drive.google.com/file/d/1PXW8FZY0FP-To00dcUrQg8XnuHTy3GjV/view?usp=drivesdk](https://drive.google.com/file/d/1PXW8FZY0FP-To00dcUrQg8XnuHTy3GjV/view?usp=drivesdk)
+28.547211
+77.04811
+Present
+Approved
+8/8/2026 10:01:00
+8/8/2026 10:01:00
+MB104
+Mangal Bhadouriya
+Punch In
+[https://drive.google.com/file/d/1DVRvuf9hyQYCkeeIc9W715Py_jZzREBC/view?usp=drivesdk](https://drive.google.com/file/d/1DVRvuf9hyQYCkeeIc9W715Py_jZzREBC/view?usp=drivesdk)
+26.2449223
+78.2111198
+Present
+Approved
+8/8/2026 10:02:00
+8/8/2026 10:02:00
+VK114
+Vikas Kushwah
+Punch In
+[https://drive.google.com/file/d/1ltEGbV-mc8WjlG0Cs0xAe0AJBV2eQbgU/view?usp=drivesdk](https://drive.google.com/file/d/1ltEGbV-mc8WjlG0Cs0xAe0AJBV2eQbgU/view?usp=drivesdk)
+26.2167863
+78.161253
+Present
+Approved
+8/8/2026 10:07:00
+8/8/2026 10:07:00
+R0121
+Roshni
+Punch In
+[https://drive.google.com/file/d/1VPm1jt1Ud0ntlFOjTR5yIpFgcGyQCQRT/view?usp=drivesdk](https://drive.google.com/file/d/1VPm1jt1Ud0ntlFOjTR5yIpFgcGyQCQRT/view?usp=drivesdk)
+28.5472212
+77.0481104
+Present
+Approved
+8/8/2026 10:12:00
+8/8/2026 10:12:00
+MB126
+Manish Singh Bhadouriya
+Punch In
+[https://drive.google.com/file/d/1c2l6nVDsoNUx6nJN8DOGg-vIzL_QeVcE/view?usp=drivesdk](https://drive.google.com/file/d/1c2l6nVDsoNUx6nJN8DOGg-vIzL_QeVcE/view?usp=drivesdk)
+26.24558321
+78.21193533
+Present
+Approved
+8/8/2026 11:08:00
+8/8/2026 11:08:00
+NL106
+Nandlal Gupta
+Punch In
+[https://drive.google.com/file/d/1QmuZKR92pYekmGo_aWNWo_QgxOI1aDqw/view?usp=drivesdk](https://drive.google.com/file/d/1QmuZKR92pYekmGo_aWNWo_QgxOI1aDqw/view?usp=drivesdk)
+28.54732575
+77.04785931
+Present
+Approved
+8/8/2026 13:35:00
+8/8/2026 13:35:00
+MB104
+Mangal Bhadouriya
+Punch Out
+[https://drive.google.com/file/d/1Jem18UuDD8QKfzqTHnDKQ_q02srK6FRo/view?usp=drivesdk](https://drive.google.com/file/d/1Jem18UuDD8QKfzqTHnDKQ_q02srK6FRo/view?usp=drivesdk)
+26.2561346
+78.213117
+3h 34m
+Present
+Approved
+8/8/2026 13:50:00
+8/8/2026 13:50:00
+SK106
+Saurabh Kumar
+Punch Out
+[https://drive.google.com/file/d/1n2usjkJYM7Zunju-F7XMwAojHJ01Nvrb/view?usp=drivesdk](https://drive.google.com/file/d/1n2usjkJYM7Zunju-F7XMwAojHJ01Nvrb/view?usp=drivesdk)
+28.546865
+77.0493875
+3h 52m
+Present
+Approved
+8/8/2026 14:13:00
+8/8/2026 14:13:00
+GA122
+Gauri Aggarwal
+Punch Out
+[https://drive.google.com/file/d/1AWwiWAJpsJqdWHtoNKmUiu9gBJqcEgNu/view?usp=drivesdk](https://drive.google.com/file/d/1AWwiWAJpsJqdWHtoNKmUiu9gBJqcEgNu/view?usp=drivesdk)
+28.67986015
+77.05856035
+4h 58m
+Present
+Approved
+8/8/2026 14:27:00
+8/8/2026 14:27:00
+MB126
+Manish Singh Bhadouriya
+Punch Out
+[https://drive.google.com/file/d/1LUc7H9WA4esaLitfLyidJtjBL_YclUrm/view?usp=drivesdk](https://drive.google.com/file/d/1LUc7H9WA4esaLitfLyidJtjBL_YclUrm/view?usp=drivesdk)
+26.2530197
+78.1947376
+4h 15m
+Present
+Approved
+8/8/2026 14:43:00
+8/8/2026 14:43:00
+VK114
+Vikas Kushwah
+Punch Out
+[https://drive.google.com/file/d/1VHLuhHFGXMMT8_1-PzYOZJK_pCDxi0c-/view?usp=drivesdk](https://drive.google.com/file/d/1VHLuhHFGXMMT8_1-PzYOZJK_pCDxi0c-/view?usp=drivesdk)
+26.2165507
+78.1612725
+4h 41m
+Present
+Approved
+8/8/2026 17:52:00
+8/8/2026 17:52:00
+R0121
+Roshni
+Punch Out
+[https://drive.google.com/file/d/1Et4VxoHDJPnXbap1hk0RL3-bYS4SyQnp/view?usp=drivesdk](https://drive.google.com/file/d/1Et4VxoHDJPnXbap1hk0RL3-bYS4SyQnp/view?usp=drivesdk)
+28.54736534
+77.04785085
+7h 45m
+Present
+Approved
+8/8/2026 18:24:00
+8/8/2026 18:24:00
+NL106
+Nandlal Gupta
+Punch Out
+[https://drive.google.com/file/d/1QmuZKR92pYekmGo_aWNWo_QgxOI1aDqw/view?usp=drivesdk](https://drive.google.com/file/d/1QmuZKR92pYekmGo_aWNWo_QgxOI1aDqw/view?usp=drivesdk)
+28.54732575
+77.04785931
+7h 16m
+Present
+Approved
+8/8/2026 18:38:00
+8/8/2026 18:38:00
+AK119
+Ayush Kumar
+Punch Out
+[https://drive.google.com/file/d/1HPVP-D7fWw3i_HYkMwrIPKO6OctdSVA8/view?usp=drivesdk](https://drive.google.com/file/d/1HPVP-D7fWw3i_HYkMwrIPKO6OctdSVA8/view?usp=drivesdk)
+28.71442974
+77.26936687
+8h 40m
+Present
+Approved
 8/10/2026 9:05:00
 8/10/2026 9:05:00
 GA122
@@ -1085,5 +2268,183 @@ Punch Out
 28.5472222
 77.048109
 8h 53m
+Need Approval
+Pending
+8/20/2026 9:10:42
+8/20/2026 9:10:42
+GA122
+Gauri Aggarwal
+Punch In
+[https://drive.google.com/file/d/1Xkg5TZOfz7sV5bJbxKjbRZeG6J3Fgbsi/view?usp=drivesdk](https://drive.google.com/file/d/1Xkg5TZOfz7sV5bJbxKjbRZeG6J3Fgbsi/view?usp=drivesdk)
+28.6799983
+77.0583933
+Need Approval
+Pending
+8/20/2026 10:06:46
+8/20/2026 10:06:46
+R0121
+Roshni
+Punch In
+[https://drive.google.com/file/d/1eXf5Zi3NGVNlx56BpST5WJm3wqynZTSI/view?usp=drivesdk](https://drive.google.com/file/d/1eXf5Zi3NGVNlx56BpST5WJm3wqynZTSI/view?usp=drivesdk)
+28.547213
+77.0481135
+Need Approval
+Pending
+8/20/2026 17:12:17
+8/20/2026 17:12:17
+GA122
+Gauri Aggarwal
+Punch Out
+[https://drive.google.com/file/d/1HlBGXpvedaUnvVpZjoi_N_UhIy2KjDt6/view?usp=drivesdk](https://drive.google.com/file/d/1HlBGXpvedaUnvVpZjoi_N_UhIy2KjDt6/view?usp=drivesdk)
+28.6798859
+77.05847852
+8h 1m
+Need Approval
+Pending
+8/21/2026 9:13:04
+8/21/2026 9:13:04
+GA122
+Gauri Aggarwal
+Punch In
+[https://drive.google.com/file/d/1xvd1_NdolJ_gk98aQsYTu_kELyJcAF5e/view?usp=drivesdk](https://drive.google.com/file/d/1xvd1_NdolJ_gk98aQsYTu_kELyJcAF5e/view?usp=drivesdk)
+28.6798534
+77.058478
+Need Approval
+Pending
+8/21/2026 10:17:59
+8/21/2026 10:17:59
+R0121
+Roshni
+Punch In
+[https://drive.google.com/file/d/1ekPH3ul5pkVhIwh4xytjwXYkhEIW8oV-/view?usp=drivesdk](https://drive.google.com/file/d/1ekPH3ul5pkVhIwh4xytjwXYkhEIW8oV-/view?usp=drivesdk)
+28.5472313
+77.0481046
+Need Approval
+Pending
+8/21/2026 17:14:01
+8/21/2026 17:14:01
+GA122
+Gauri Aggarwal
+Punch Out
+[https://drive.google.com/file/d/178w3MziMy3c_JJMJqC2b8qau4iutyVbr/view?usp=drivesdk](https://drive.google.com/file/d/178w3MziMy3c_JJMJqC2b8qau4iutyVbr/view?usp=drivesdk)
+28.67987883
+77.05847446
+8h 0m
+Need Approval
+Pending
+8/21/2026 18:11:33
+8/21/2026 18:11:33
+R0121
+Roshni
+Punch Out
+[https://drive.google.com/file/d/1O7A8RFHGUq9bZcy7j9zJivuXYFjqm_Mx/view?usp=drivesdk](https://drive.google.com/file/d/1O7A8RFHGUq9bZcy7j9zJivuXYFjqm_Mx/view?usp=drivesdk)
+28.54726404
+77.0478708
+7h 53m
+Need Approval
+Pending
+8/22/2026 9:00:32
+8/22/2026 9:00:32
+GA122
+Gauri Aggarwal
+Punch In
+[https://drive.google.com/file/d/1Bn3crhNAg6jsTRcHlo3WhUo26iAE3eGE/view?usp=drivesdk](https://drive.google.com/file/d/1Bn3crhNAg6jsTRcHlo3WhUo26iAE3eGE/view?usp=drivesdk)
+28.6798669
+77.0584629
+Need Approval
+Pending
+8/22/2026 13:01:52
+8/22/2026 13:01:52
+GA122
+Gauri Aggarwal
+Punch Out
+[https://drive.google.com/file/d/13u7qWAruRE73t5zlHI0k0L413ESDJM6W/view?usp=drivesdk](https://drive.google.com/file/d/13u7qWAruRE73t5zlHI0k0L413ESDJM6W/view?usp=drivesdk)
+28.67993082
+77.05854689
+4h 1m
+Need Approval
+Pending
+8/24/2026 9:21:51
+8/24/2026 9:21:51
+GA122
+Gauri Aggarwal
+Punch In
+[https://drive.google.com/file/d/1t953s-puG3LpFvceAIEwu-tTISUHS8Ub/view?usp=drivesdk](https://drive.google.com/file/d/1t953s-puG3LpFvceAIEwu-tTISUHS8Ub/view?usp=drivesdk)
+28.6798894
+77.0584857
+Need Approval
+Pending
+8/24/2026 13:35:09
+8/24/2026 13:35:09
+GA122
+Gauri Aggarwal
+Punch Out
+[https://drive.google.com/file/d/14NWKYbj0c64S9mmKfnSqeBfZZ-Yaue-e/view?usp=drivesdk](https://drive.google.com/file/d/14NWKYbj0c64S9mmKfnSqeBfZZ-Yaue-e/view?usp=drivesdk)
+28.67990822
+77.05847751
+4h 13m
+Need Approval
+Pending
+8/26/2026 10:02:18
+8/26/2026 10:02:18
+GA122
+Gauri Aggarwal
+Punch In
+[https://drive.google.com/file/d/1hHVGt6jX3OK_vYyGT6FIAeilOo7ZDuYr/view?usp=drivesdk](https://drive.google.com/file/d/1hHVGt6jX3OK_vYyGT6FIAeilOo7ZDuYr/view?usp=drivesdk)
+28.679843
+77.0582078
+Need Approval
+Pending
+8/26/2026 14:31:30
+8/26/2026 14:31:30
+GA122
+Gauri Aggarwal
+Punch Out
+[https://drive.google.com/file/d/19lLIEL7KJQWx6Ltd-BPR2gw6M-10Vz3G/view?usp=drivesdk](https://drive.google.com/file/d/19lLIEL7KJQWx6Ltd-BPR2gw6M-10Vz3G/view?usp=drivesdk)
+28.67987276
+77.0584948
+4h 29m
+Need Approval
+Pending
+8/27/2026 9:03:45
+8/27/2026 9:03:45
+GA122
+Gauri Aggarwal
+Punch In
+[https://drive.google.com/file/d/1f9K6LDKb7VCHPBQA4urKA7FVbwqCi_yU/view?usp=drivesdk](https://drive.google.com/file/d/1f9K6LDKb7VCHPBQA4urKA7FVbwqCi_yU/view?usp=drivesdk)
+28.679955
+77.0582533
+Need Approval
+Pending
+8/27/2026 17:00:23
+8/27/2026 17:00:23
+GA122
+Gauri Aggarwal
+Punch Out
+[https://drive.google.com/file/d/1zOmrUwJL8to--wTkMBTOEOn8O8yc_IhO/view?usp=drivesdk](https://drive.google.com/file/d/1zOmrUwJL8to--wTkMBTOEOn8O8yc_IhO/view?usp=drivesdk)
+28.67988789
+77.05852064
+7h 56m
+Need Approval
+Pending
+8/29/2026 9:01:52
+8/29/2026 9:01:52
+GA122
+Gauri Aggarwal
+Punch In
+[https://drive.google.com/file/d/1v5xgnyGwIHOXHFOofL_oS5u5Z-FOOHFe/view?usp=drivesdk](https://drive.google.com/file/d/1v5xgnyGwIHOXHFOofL_oS5u5Z-FOOHFe/view?usp=drivesdk)
+28.6798673
+77.058257
+Need Approval
+Pending
+8/29/2026 17:03:10
+8/29/2026 17:03:10
+GA122
+Gauri Aggarwal
+Punch Out
+[https://drive.google.com/file/d/1pu6PMYwYlhE-9tkcclxSUL2Ke98dbr89/view?usp=drivesdk](https://drive.google.com/file/d/1pu6PMYwYlhE-9tkcclxSUL2Ke98dbr89/view?usp=drivesdk)
+28.67993767
+77.05846717
+8h 1m
 Need Approval
 Pending

@@ -34,7 +34,7 @@ export function ClientShell() {
     });
   }, [location.pathname]);
 
-  const activeItems = notifications.items.filter(item => !/closed|done|completed|resolved/i.test(String(item.Status || '')));
+  const activeItems = notifications.items.filter(item => !/closed|done|completed|resolved|cancelled|canceled|paid|approved|present|active/i.test(String(item.Status || '')));
   const getRouteCount = (path) => {
     const routeLastViewed = lastViewed[path] || 0;
     return activeItems.filter(item => {
@@ -137,6 +137,7 @@ export function ClientShell() {
                     loading={notifications.loading}
                     error={notifications.error}
                     onRefresh={notifications.refresh}
+                    onClosePanel={notifications.close}
                     isClientPanel={true}
                     userRole="Client"
                   />

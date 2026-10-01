@@ -186,6 +186,37 @@ function buildLegacyTime(parts) {
   return `${parts.hour}:${parts.minute} ${parts.period}`;
 }
 
+function attendanceRemarkItems(row = {}) {
+  if (Array.isArray(row.adminRemarkItems) && row.adminRemarkItems.length) {
+    return row.adminRemarkItems;
+  }
+  return String(row.adminRemarks || '')
+    .split('|')
+    .map((text) => text.trim())
+    .filter(Boolean)
+    .map((text) => ({
+      type: /edit|edited|correct/i.test(text) ? 'edited' : /approved/i.test(text) ? 'approved' : 'note',
+      text
+    }));
+}
+
+function AttendanceAdminRemarks({ row }) {
+  const items = attendanceRemarkItems(row);
+  if (!items.length) return null;
+  return (
+    <div className="attendance-admin-remarks">
+      {items.map((item, index) => (
+        <small
+          key={`${item.type}-${item.text}-${index}`}
+          className={`attendance-admin-remarks__item attendance-admin-remarks__item--${item.type || 'note'}`}
+        >
+          {item.text}
+        </small>
+      ))}
+    </div>
+  );
+}
+
 function ChoiceDropdownField({ value, placeholder, options, onChange }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
@@ -476,11 +507,7 @@ export function TeamAttendanceTable({ rows = [], onEdit }) {
                     <button type="button" className="attendance-cta attendance-cta--blue attendance-team-table__edit" onClick={() => onEdit(row)}>
                       Edit Times
                     </button>
-                    {row.adminRemarks && (
-                      <small style={{ fontSize: '10px', color: '#64748b', textAlign: 'center', lineHeight: '1.2' }}>
-                        {row.adminRemarks}
-                      </small>
-                    )}
+                    <AttendanceAdminRemarks row={row} />
                   </div>
                 </td>
               </tr>

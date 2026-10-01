@@ -16,6 +16,8 @@ import { AttendanceLocationPolicyCard } from '@/features/attendance/components';
 import { fetchAttendanceForUser, fetchTeamAttendanceCalendar } from '@/features/attendance/api';
 import { formatElapsed, todayYmd } from '@/features/attendance/services/attendancePresentation';
 import { useAttendanceData, toYmd } from '@/features/attendance/useAttendanceData';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export function AttendancePage() {
   const today = todayYmd();
@@ -77,6 +79,10 @@ export function AttendancePage() {
   const [teamCalendarRows, setTeamCalendarRows] = useState([]);
   const [teamCalendarLoading, setTeamCalendarLoading] = useState(false);
   const [teamCalendarRange, setTeamCalendarRange] = useState(null);
+  const [teamMonthlyUser, setTeamMonthlyUser] = useState('');
+  const [teamMonthlyRows, setTeamMonthlyRows] = useState([]);
+  const [teamMonthlyLoading, setTeamMonthlyLoading] = useState(false);
+  const [teamMonthlyRange, setTeamMonthlyRange] = useState(null);
   const [teamEditor, setTeamEditor] = useState(null);
   const [teamEditorForm, setTeamEditorForm] = useState({ punchInTime: '', punchOutTime: '' });
   const [leaveForm, setLeaveForm] = useState({
@@ -96,6 +102,7 @@ export function AttendancePage() {
   const canvasRef = useRef(null);
   const selfCalendarCacheRef = useRef(new Map());
   const teamCalendarCacheRef = useRef(new Map());
+  const teamMonthlyCacheRef = useRef(new Map());
 
   const clearMessage = () => setMessage(null);
 
@@ -185,6 +192,45 @@ export function AttendancePage() {
     loadTeamCalendar();
     return () => { active = false; };
   }, [teamCalendarUser, teamFilterDate, teamCalendarRange?.startDate, teamCalendarRange?.endDate]);
+
+  useEffect(() => {
+    if (!teamMonthlyUser) {
+      setTeamMonthlyRows([]);
+      setTeamMonthlyRange(null);
+      return undefined;
+    }
+
+    let active = true;
+    async function loadTeamMonthly() {
+      try {
+        const fallbackDate = new Date(teamFilterDate ? `${teamFilterDate}T00:00:00` : Date.now());
+        const fallbackYear = fallbackDate.getFullYear();
+        const fallbackMonth = fallbackDate.getMonth();
+        const startStr = teamMonthlyRange?.startDate || toYmd(new Date(fallbackYear, fallbackMonth, 1));
+        const endStr = teamMonthlyRange?.endDate || toYmd(new Date(fallbackYear, fallbackMonth + 1, 0));
+        const cacheKey = `${teamMonthlyUser}__${startStr}__${endStr}`;
+        const cached = teamMonthlyCacheRef.current.get(cacheKey);
+        if (cached) {
+          setTeamMonthlyRows(cached);
+          setTeamMonthlyLoading(false);
+          return;
+        }
+        
+        setTeamMonthlyLoading(true);
+        const payload = await fetchTeamAttendanceCalendar(teamMonthlyUser, startStr, endStr);
+        if (active) {
+          const nextRows = payload?.data || [];
+          teamMonthlyCacheRef.current.set(cacheKey, nextRows);
+          setTeamMonthlyRows(nextRows);
+        }
+      } catch (err) {
+        if (active) setTeamMonthlyRows([]);
+      }
+      if (active) setTeamMonthlyLoading(false);
+    }
+    loadTeamMonthly();
+    return () => { active = false; };
+  }, [teamMonthlyUser, teamFilterDate, teamMonthlyRange?.startDate, teamMonthlyRange?.endDate]);
 
   useEffect(() => {
     if (!session.isPunchedIn) {
@@ -446,6 +492,108 @@ export function AttendancePage() {
     }
   };
 
+  const exportUnifiedCSV = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    try {
+      const targetRows = visibleTeamRows;
+
+      if (!targetRows || targetRows.length === 0) {
+        setMessage({ tone: 'danger', text: 'No attendance records available to export.' });
+        return;
+      }
+
+      const tableColumn = ["Date", "Employee Name", "ID", "Punch In", "Punch Out", "Duration", "Status", "Mode"];
+      let csvContent = "data:text/csv;charset=utf-8,";
+      csvContent += tableColumn.join(",") + "\r\n";
+
+      targetRows.forEach(row => {
+        const punchIn = row.punchInTime || row.punchIn?.Time || row.punchIn?.['Punch In'] || '--';
+        const punchOut = row.punchOutTime || row.punchOut?.Time || row.punchOut?.['Punch Out'] || '--';
+        
+        // Use ="value" to force Excel to treat these as text, preventing ######## errors
+        const excelText = (val) => `="${val}"`;
+
+        const attendanceData = [
+          excelText(row.date || '--'),
+          `"${row.employeeName || '--'}"`, 
+          row.employeeId || '--',
+          excelText(punchIn),
+          excelText(punchOut),
+          `"${row.duration || '--'}"`,
+          row.status || '--',
+          row.attendanceMode || '--'
+        ];
+        csvContent += attendanceData.join(",") + "\r\n";
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      
+      link.setAttribute("download", `Team_Attendance_Report_${teamFilterDate || today}.csv`);
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error(error);
+      setMessage({ tone: 'danger', text: `Excel Export Error: ${error.message}` });
+    }
+  };
+
+  const exportUnifiedPDF = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    try {
+      const targetRows = visibleTeamRows;
+
+      if (!targetRows || targetRows.length === 0) {
+        setMessage({ tone: 'danger', text: 'No attendance records available to export.' });
+        return;
+      }
+
+      const doc = new jsPDF();
+      
+      doc.text(`Team Attendance Report: ${teamFilterDate || today}`, 14, 15);
+      
+      doc.setFontSize(10);
+      doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 22);
+
+      const tableColumn = ["Date", "Employee Name", "ID", "Punch In", "Punch Out", "Duration", "Status", "Mode"];
+      const tableRows = [];
+
+      targetRows.forEach(row => {
+        const punchIn = row.punchInTime || row.punchIn?.Time || row.punchIn?.['Punch In'] || '--';
+        const punchOut = row.punchOutTime || row.punchOut?.Time || row.punchOut?.['Punch Out'] || '--';
+        
+        const attendanceData = [
+          row.date || '--',
+          row.employeeName || '--',
+          row.employeeId || '--',
+          punchIn,
+          punchOut,
+          row.duration || '--',
+          row.status || '--',
+          row.attendanceMode || '--'
+        ];
+        tableRows.push(attendanceData);
+      });
+
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 28,
+        theme: 'grid',
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [41, 128, 185] },
+      });
+
+      doc.save(`Team_Attendance_Report_${teamFilterDate || today}.pdf`);
+    } catch (error) {
+      console.error(error);
+      setMessage({ tone: 'danger', text: `PDF Export Error: ${error.message}` });
+    }
+  };
+
   return (
     <section className="page-card attendance-page">
       <AttendanceHeader
@@ -633,6 +781,7 @@ export function AttendancePage() {
                 <option>On-site Client Visit</option>
                 <option>Late Arrival</option>
                 <option>Early Departure</option>
+                <option>Miss Punch</option>
               </select>
             </label>
             <label className="dashboard-control attendance-form-grid__full">
@@ -798,6 +947,7 @@ export function AttendancePage() {
                 />
               </label>
             </div>
+
             {teamCalendarUser && (
               <div style={{ marginBottom: '24px' }}>
                 {teamCalendarLoading ? (
@@ -807,7 +957,11 @@ export function AttendancePage() {
                 )}
               </div>
             )}
-            <TeamAttendanceTable rows={visibleTeamRows} onEdit={openTeamEditor} />
+
+            <TeamAttendanceTable 
+              rows={visibleTeamRows} 
+              onEdit={openTeamEditor} 
+            />
           </article>
         </>
       )}

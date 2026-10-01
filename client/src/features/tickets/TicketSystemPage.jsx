@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ConfirmDialog } from '@/features/tickets/components/ConfirmDialog';
 import { StatusPill } from '@/components/common/StatusPill';
 import { AppModal } from '@/components/modals';
@@ -12,7 +12,12 @@ import { TicketApprovalTransferDialog } from '@/features/tickets/components/Tick
 import { TicketDetailsDialog } from '@/features/tickets/components/TicketDetailsDialog';
 import { TicketHeader } from '@/features/tickets/components/TicketHeader';
 import { TicketTable } from '@/features/tickets/components/TicketTable';
+import { AutoTicketTable } from '@/features/tickets/components/AutoTicketTable';
+import { AutoTicketDialog } from '@/features/tickets/components/AutoTicketDialog';
 import { ticketStatusOptions, useTicketSystemData } from '@/features/tickets/useTicketSystemData';
+import { httpClient } from '@/lib/api/httpClient';
+import './ticket-loading.css';
+
 
 export function TicketSystemPage() {
   const {
@@ -28,6 +33,7 @@ export function TicketSystemPage() {
     allUsers,
     categories,
     tickets,
+    autoTickets = [],
     buddyTickets = [],
     clientOriginTickets,
     canViewClientTickets,
@@ -37,6 +43,7 @@ export function TicketSystemPage() {
     filters,
     setFilters,
     applyFilters,
+    applySpecificFilters,
     resetFilters,
     submitNewTicket,
     submitNewTickets,
@@ -54,6 +61,8 @@ export function TicketSystemPage() {
 
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [message, setMessage] = useState(null);
+  const searchDebounce = useRef(null);
+
   const [reassignTicket, setReassignTicket] = useState(null);
   const [scheduleTicket, setScheduleTicket] = useState(null);
   const [actionDialog, setActionDialog] = useState(null);
@@ -61,6 +70,7 @@ export function TicketSystemPage() {
   const [chatTicketState, setChatTicketState] = useState({ ticket: null, messages: [], loading: false, sending: false });
   const [detailsTicket, setDetailsTicket] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null); // { onConfirm }
+  const [editAutoTicket, setEditAutoTicket] = useState(null);
   const role = currentUser?.Role || currentUser?.role || 'User';
   const employeeLabel = currentUser?.['Employee Name'] && employeeId
     ? `${currentUser['Employee Name']} | ${employeeId}`
@@ -77,9 +87,11 @@ export function TicketSystemPage() {
     ? teamTickets
     : activeTab === 'client' && canViewClientTickets
       ? clientOriginTickets
-      : activeTab === 'buddy'
-        ? buddyTickets
-        : myTickets;
+      : activeTab === 'auto'
+        ? autoTickets
+        : activeTab === 'buddy'
+          ? buddyTickets
+          : myTickets;
   const visibleTicketTotal = pagination?.total ?? visibleTickets.length;
 
   const handleCreate = async (payload) => {
@@ -89,6 +101,45 @@ export function TicketSystemPage() {
       setShowCreateForm(false);
     } else {
       setMessage({ tone: 'danger', text: result.message });
+    }
+  };
+
+  const handleAutoTicketSubmit = async (payload) => {
+    const isUpdate = Boolean(payload.legacyId || payload['Ticket ID']);
+    const endpoint = '/api/tickets/auto-ticket/save';
+    const body = { ticketPayload: payload };
+    
+    try {
+      const data = await httpClient(endpoint, {
+        method: 'POST',
+        body: JSON.stringify(body)
+      });
+      if (data.success) {
+        setMessage({ tone: 'success', text: isUpdate ? 'Auto Ticket Template updated.' : 'Auto Ticket Template created.' });
+        setEditAutoTicket(null);
+        reload();
+      } else {
+        setMessage({ tone: 'danger', text: data.message });
+      }
+    } catch (err) {
+      setMessage({ tone: 'danger', text: err.message });
+    }
+  };
+
+  const handleAutoTicketDelete = async (ticket) => {
+    try {
+      const data = await httpClient('/api/tickets/auto-ticket/delete', {
+        method: 'POST',
+        body: JSON.stringify({ ticketId: ticket['Ticket ID'] || ticket.legacyId })
+      });
+      if (data.success) {
+        setMessage({ tone: 'success', text: 'Auto Ticket Template deleted.' });
+        reload();
+      } else {
+        setMessage({ tone: 'danger', text: data.message });
+      }
+    } catch (err) {
+      setMessage({ tone: 'danger', text: err.message });
     }
   };
 
@@ -263,14 +314,28 @@ export function TicketSystemPage() {
       <TicketHeader employeeLabel={employeeLabel} />
 
       <TicketFilterPanel
+        isAutoTab={activeTab === 'auto'}
+        employees={users}
         showCreateForm={showCreateForm}
+        canCreate={activeTab === 'my' || activeTab === 'team'}
         clients={clients}
         uniqueStatuses={ticketStatusOptions}
         filters={filters}
         onReset={resetFilters}
         onApply={applyFilters}
+        onApplySpecific={applySpecificFilters}
         onToggleCreateForm={handleToggleCreateForm}
-        onFiltersChange={setFilters}
+        onFiltersChange={(updater) => {
+          const next = typeof updater === 'function' ? updater(filters) : updater;
+          // For search: debounce 350ms to avoid API call on every keystroke
+          if ('search' in next && next.search !== filters.search) {
+            setFilters(next);
+            clearTimeout(searchDebounce.current);
+            searchDebounce.current = setTimeout(() => applySpecificFilters(next), 350);
+          } else {
+            applySpecificFilters(next);
+          }
+        }}
       />
 
       {message ? (
@@ -319,6 +384,22 @@ export function TicketSystemPage() {
                 Client Tickets
               </button>
             ) : null}
+            {role === 'Super Admin' ? (
+              <button type="button" className={activeTab === 'auto' ? 'view-mode-tab view-mode-tab--active' : 'view-mode-tab'} onClick={() => setActiveTab('auto')}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="view-mode-tab__icon">
+                  <path d="M12 2v3" />
+                  <path d="M12 19v3" />
+                  <path d="M4.93 4.93l2.12 2.12" />
+                  <path d="M16.95 16.95l2.12 2.12" />
+                  <path d="M2 12h3" />
+                  <path d="M19 12h3" />
+                  <path d="M4.93 19.07l2.12-2.12" />
+                  <path d="M16.95 7.05l2.12-2.12" />
+                  <circle cx="12" cy="12" r="4" />
+                </svg>
+                Auto Ticket
+              </button>
+            ) : null}
             <button type="button" className={activeTab === 'buddy' ? 'view-mode-tab view-mode-tab--active' : 'view-mode-tab'} onClick={() => setActiveTab('buddy')}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="view-mode-tab__icon">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -329,16 +410,41 @@ export function TicketSystemPage() {
               Buddy
             </button>
           </div>
-          <StatusPill tone={loading ? 'neutral' : 'info'}>
-            {loading ? 'Refreshing' : `${visibleTicketTotal} tickets`}
-          </StatusPill>
         </div>
-      <TicketTable
+
+      {loading ? (
+        <div className="ticket-workspace-loader" role="status" aria-live="polite" aria-busy="true">
+          <span className="ticket-workspace-loader__spinner" aria-hidden="true" />
+          <strong>Loading tickets…</strong>
+          <span>Please wait while your tickets are fetched.</span>
+        </div>
+      ) : activeTab === 'auto' ? (
+        <>
+          <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+            <button type="button" className="inline-action inline-action--create-ticket" style={{ padding: '6px 12px', fontSize: '14px' }} onClick={() => setEditAutoTicket('NEW')}>
+              + Design Auto Ticket
+            </button>
+          </div>
+          <AutoTicketTable
+            tickets={visibleTickets}
+            totalCount={visibleTicketTotal}
+            onEdit={setEditAutoTicket}
+            onDelete={handleAutoTicketDelete}
+            pagination={pagination}
+            onPageChange={setTicketPage}
+            onPageSizeChange={setTicketPageSize}
+          />
+        </>
+      ) : (
+        <TicketTable
           tickets={visibleTickets}
+          loading={loading}
+          totalCount={visibleTicketTotal}
           pagination={pagination}
           role={role}
           submitting={submitting}
           allUsers={allUsers}
+          activeTab={activeTab}
           onPageChange={setTicketPage}
           onPageSizeChange={setTicketPageSize}
           onStatusAction={handleStatusAction}
@@ -350,6 +456,7 @@ export function TicketSystemPage() {
           onDetails={handleDetailsOpen}
           currentUser={currentUser}
         />
+      )}
       </article>
       {reassignTicket ? <TicketReassignDialog ticket={reassignTicket.ticket || reassignTicket} mode={reassignTicket.mode || 'user'} users={users} saving={submitting} onClose={() => setReassignTicket(null)} onSubmit={handleReassign} /> : null}
       {scheduleTicket ? <TicketScheduleDialog ticket={scheduleTicket} saving={submitting} onClose={() => setScheduleTicket(null)} onSubmit={handleScheduleSubmit} /> : null}
@@ -380,6 +487,20 @@ export function TicketSystemPage() {
           onConfirm={confirmDialog.onConfirm}
           onCancel={() => setConfirmDialog(null)}
         />
+      ) : null}
+
+      {editAutoTicket ? (
+        <AppModal title={editAutoTicket === 'NEW' ? 'Design New Auto Ticket' : 'Edit Auto Ticket'} onClose={() => setEditAutoTicket(null)} width="800px">
+          <AutoTicketDialog
+            ticket={editAutoTicket === 'NEW' ? null : editAutoTicket}
+            clients={clients}
+            categories={categories}
+            users={allUsers}
+            saving={submitting}
+            onSubmit={handleAutoTicketSubmit}
+            onClose={() => setEditAutoTicket(null)}
+          />
+        </AppModal>
       ) : null}
     </section>
   );

@@ -42,6 +42,8 @@
     "verify:reports": "node server/scripts/verifyReports.js",
     "verify:my-approval-status": "node server/scripts/verifyMyApprovalStatus.js",
     "verify:notifications": "node server/scripts/verifyNotifications.js",
+    "verify:whatsapp": "node server/scripts/verifyWhatsAppContacts.js",
+    "verify:whatsapp-live": "node server/scripts/verifyWhatsAppLive.js",
     "verify:visual": "node server/scripts/captureMernParityScreens.js",
     "verify:import": "node server/scripts/verifyImportDryRun.js",
     "verify:all": "npm run build && npm run verify:independence && npm run verify:import && npm run verify:contracts && npm run verify:attendance-ui && npm run verify:user-panel && npm run verify:client-panel && npm run verify:auth-settings && npm run verify:admin && npm run verify:dashboard && npm run verify:management-dashboard && npm run verify:reports && npm run verify:notifications && npm run verify:fms && npm run verify:expenses && npm run verify:expense-approvals && npm run verify:todo"
@@ -49,6 +51,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1095.0",
     "@fortawesome/fontawesome-free": "^7.3.0",
+    "archiver": "^8.0.0",
     "bcryptjs": "^2.4.3",
     "canvas-confetti": "^1.9.4",
     "chart.js": "^4.5.1",
@@ -65,6 +68,7 @@
     "pdfkit-table": "^0.2.11",
     "redis": "^6.2.1",
     "select2": "^4.1.0",
+    "ssh2": "^1.17.0",
     "sweetalert2": "^11.26.25",
     "tailwindcss": "^4.3.2",
     "uuid": "^14.0.1",
