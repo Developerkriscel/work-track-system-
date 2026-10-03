@@ -63,14 +63,6 @@ export function formatPunchTime(value) {
   }).toLowerCase();
 }
 
-export function isSecondOrFourthSaturday(dateStr) {
-  const d = new Date(`${dateStr}T00:00:00`);
-  if (d.getDay() !== 6) return false; // 6 is Saturday
-  const dayOfMonth = d.getDate();
-  const satIndex = Math.ceil(dayOfMonth / 7);
-  return satIndex === 2 || satIndex === 4;
-}
-
 export function computeAttendanceDayStatus({ date, punchInValue, punchOutValue, rawStatus, isHoliday }) {
   const statusStr = String(rawStatus || '').trim();
   if (isHoliday || /holiday/i.test(statusStr)) return 'Holiday';
@@ -88,22 +80,7 @@ export function computeAttendanceDayStatus({ date, punchInValue, punchOutValue, 
     return isSunday ? 'Weekly Off' : (date <= todayYmd() ? 'Absent' : 'Unknown');
   }
 
-  const isHalfDaySaturday = isSecondOrFourthSaturday(date);
-
-  // 2nd & 4th Saturday: Half day for company
-  // Rule: Check only punch in (must be on time <= 10:15). Out punch can be taken anytime after 1:30 PM.
-  if (isHalfDaySaturday) {
-    if (inDate) {
-      const shiftStartGrace = new Date(`${date}T10:15:00+05:30`);
-      if (inDate.getTime() > shiftStartGrace.getTime()) {
-        return 'Half Day';
-      }
-      return 'On Time';
-    }
-    return 'Half Day';
-  }
-
-  // Normal Working Days (Monday - Friday and 1st, 3rd, 5th Saturday)
+  // Normal Working Days (Monday - Saturday)
   // Rule: 
   // 1. If punch in after 10:15 AM -> Half Day
   // 2. If punch out before completing 8 hours (480 minutes) -> Half Day

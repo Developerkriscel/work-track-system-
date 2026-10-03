@@ -31,8 +31,30 @@ function overlapsDay(row, day, startKeys, endKeys = startKeys) {
   return Boolean(start && end && start <= day && end >= day);
 }
 
+function saturdayOrdinal(day = '') {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return 0;
+  const date = new Date(`${day}T12:00:00+05:30`);
+  if (Number.isNaN(date.getTime()) || date.getDay() !== 6) return 0;
+  return Math.floor((date.getDate() - 1) / 7) + 1;
+}
+
+function isSecondOrFourthSaturday(day = '') {
+  return [2, 4].includes(saturdayOrdinal(day));
+}
+
+function isSaturdayPolicyHoliday(row = {}, day = '') {
+  if (!isSecondOrFourthSaturday(day)) return false;
+  const label = [
+    field(row, ['Name', 'Holiday Name', 'Title', 'name', 'title']),
+    field(row, ['Description', 'Remarks', 'Type', 'Category', 'Status', 'description', 'remarks', 'type', 'category', 'status'])
+  ].join(' ').toLowerCase();
+  return /sat|saturday|weekend|weekly\s*off|half\s*day|2nd|second|4th|fourth/.test(label);
+}
+
 function isHoliday(rows = {}, day = '') {
-  return (rows.Holiday || []).some((row) => validRequest(row) && overlapsDay(row, day, ['Date', 'Holiday Date', 'holidayDate', 'date']));
+  return (rows.Holiday || []).some((row) => validRequest(row)
+    && overlapsDay(row, day, ['Date', 'Holiday Date', 'holidayDate', 'date'])
+    && !isSaturdayPolicyHoliday(row, day));
 }
 function summaryMessage(rows, states, day) {
   const leaveRows = (rows.Leave || []).filter((row) => validRequest(row) && overlapsDay(row, day, ['Start Date', 'From Date', 'Date', 'Leave Date'], ['End Date', 'To Date', 'Date', 'Leave Date']));

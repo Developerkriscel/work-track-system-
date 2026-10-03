@@ -450,11 +450,42 @@ function durationLabel(start, end) {
   return `${hours}h ${minutes}m`;
 }
 
+function saturdayOrdinal(dateValue) {
+  const date = normalizedDate(dateValue);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 0;
+  const parsed = new Date(`${date}T12:00:00+05:30`);
+  if (Number.isNaN(parsed.getTime()) || parsed.getDay() !== 6) return 0;
+  return Math.floor((parsed.getDate() - 1) / 7) + 1;
+}
+
+function isSecondOrFourthSaturday(dateValue) {
+  return [2, 4].includes(saturdayOrdinal(dateValue));
+}
+
+function isSaturdayPolicyHoliday(row = {}, dateValue = '') {
+  if (!isSecondOrFourthSaturday(dateValue)) return false;
+  const label = [
+    holidayNameOf(row),
+    row.Description,
+    row.description,
+    row.Remarks,
+    row.remarks,
+    row.Type,
+    row.type,
+    row.Category,
+    row.category,
+    row.Status,
+    row.status
+  ].map((value) => safe(value).toLowerCase()).join(' ');
+  return /sat|saturday|weekend|weekly\s*off|half\s*day|2nd|second|4th|fourth/.test(label);
+}
+
 function holidayMapFromRows(rows = []) {
   const map = new Map();
   for (const row of rows || []) {
     if (!isActiveHoliday(row)) continue;
     const date = holidayDateOf(row);
+    if (isSaturdayPolicyHoliday(row, date)) continue;
     if (date) map.set(date, { date, name: holidayNameOf(row), row });
   }
   return map;
@@ -469,7 +500,7 @@ async function loadHolidayRowsForRange(startDate, endDate) {
   const end = normalizedDate(endDate || startDate || today());
   return (await listRows('Holiday')).filter((row) => {
     const holidayDate = holidayDateOf(row);
-    return isActiveHoliday(row) && Boolean(holidayDate) && dateInRange(holidayDate, start, end);
+    return isActiveHoliday(row) && Boolean(holidayDate) && dateInRange(holidayDate, start, end) && !isSaturdayPolicyHoliday(row, holidayDate);
   });
 }
 
@@ -477,7 +508,7 @@ function holidayAttendanceRows(holidayRows = [], startDate, endDate) {
   const start = normalizedDate(startDate || today());
   const end = normalizedDate(endDate || startDate || today());
   return holidayRows
-    .filter((row) => holidayDateOf(row) && dateInRange(holidayDateOf(row), start, end))
+    .filter((row) => holidayDateOf(row) && dateInRange(holidayDateOf(row), start, end) && !isSaturdayPolicyHoliday(row, holidayDateOf(row)))
     .map((row) => ({
       AttendanceID: `HOLIDAY_${holidayDateOf(row)}`,
       Date: holidayDateOf(row),
@@ -580,15 +611,22 @@ function attendanceRemarkItems(rows = [], users = []) {
   for (const row of rows.filter(Boolean)) {
     const approval = first(row, ['Admin Approval', 'adminApproval']);
     const remark = first(row, ['Admin Remarks', 'adminRemarks']);
+    const explicitApprovedBy = first(row, ['Approved By', 'approvedBy', 'Approved By Name', 'approvedByName']);
+    const explicitApprovedById = first(row, ['Approved By ID', 'approvedById']);
+    const explicitEditedBy = first(row, ['Edited By', 'editedBy', 'Edited By Name', 'editedByName']);
+    const explicitEditedById = first(row, ['Edited By ID', 'editedById']);
     const approvedBy = first(row, ['Approved By', 'approvedBy', 'Approved By Name', 'approvedByName']) ||
       personLabelFromId(users, first(row, ['Approved By ID', 'approvedById', 'Admin ID', 'adminId', 'AdminID']));
     const editedBy = first(row, ['Edited By', 'editedBy', 'Edited By Name', 'editedByName']) ||
       extractEditedName(remark) ||
       personLabelFromId(users, first(row, ['Edited By ID', 'editedById', 'Admin ID', 'adminId', 'AdminID']));
-    const hasEditSignal = /edit|edited|correct/i.test(remark) || Boolean(first(row, ['newPunchIn', 'newPunchOut', 'New Punch In', 'New Punch Out']));
-    const hasApprovalSignal = /approved/i.test(approval) || (/approved/i.test(remark) && !/edit|edited|correct/i.test(remark));
+    const remarkHasEdit = /edit|edited|correct/i.test(remark);
+    const hasExplicitApprovalActor = Boolean(explicitApprovedBy || explicitApprovedById);
+    const hasExplicitEditActor = Boolean(explicitEditedBy || explicitEditedById);
+    const hasEditSignal = remarkHasEdit || hasExplicitEditActor || Boolean(first(row, ['newPunchIn', 'newPunchOut', 'New Punch In', 'New Punch Out']));
+    const hasApprovalSignal = hasExplicitApprovalActor || /approved/i.test(remark) || (/approved|accepted|present/i.test(approval) && !remarkHasEdit);
 
-    if (hasApprovalSignal && !/edit|edited|correct/i.test(remark)) {
+    if (hasApprovalSignal) {
       push('approved', approvedBy ? `Approved by ${approvedBy}` : 'Approved');
     }
     if (hasEditSignal) {
@@ -798,8 +836,31 @@ function attendanceRowsForApp(row = {}) {
   const actionValue = safe(first(base, ['Action', 'action'], ''));
   const inferredPunchIn = /punch\s*in/i.test(actionValue) || Boolean(first(base, ['Punch In', 'InTime']));
   const inferredPunchOut = /punch\s*out/i.test(actionValue) || Boolean(first(base, ['Punch Out', 'OutTime']));
+  const auditValue = (keys, fallback = '') => first(row, keys, first(base, keys, fallback));
+  const auditFields = {
+    'Admin Approval': auditValue(['Admin Approval', 'adminApproval']),
+    adminApproval: auditValue(['adminApproval', 'Admin Approval']),
+    'Admin Remarks': auditValue(['Admin Remarks', 'adminRemarks']),
+    adminRemarks: auditValue(['adminRemarks', 'Admin Remarks']),
+    'Admin ID': auditValue(['Admin ID', 'adminId', 'AdminID']),
+    adminId: auditValue(['adminId', 'Admin ID', 'AdminID']),
+    AdminID: auditValue(['AdminID', 'Admin ID', 'adminId']),
+    'Approved By': auditValue(['Approved By', 'approvedBy', 'Approved By Name', 'approvedByName']),
+    approvedBy: auditValue(['approvedBy', 'Approved By', 'Approved By Name', 'approvedByName']),
+    'Approved By ID': auditValue(['Approved By ID', 'approvedById']),
+    approvedById: auditValue(['approvedById', 'Approved By ID']),
+    'Edited By': auditValue(['Edited By', 'editedBy', 'Edited By Name', 'editedByName']),
+    editedBy: auditValue(['editedBy', 'Edited By', 'Edited By Name', 'editedByName']),
+    'Edited By ID': auditValue(['Edited By ID', 'editedById']),
+    editedById: auditValue(['editedById', 'Edited By ID']),
+    newPunchIn: auditValue(['newPunchIn', 'New Punch In']),
+    newPunchOut: auditValue(['newPunchOut', 'New Punch Out']),
+    'New Punch In': auditValue(['New Punch In', 'newPunchIn']),
+    'New Punch Out': auditValue(['New Punch Out', 'newPunchOut'])
+  };
   const common = {
     ...base,
+    ...auditFields,
     Date: date,
     Lattitude: first(base, ['Lattitude', 'Latitude']),
     Latitude: first(base, ['Latitude', 'Lattitude']),
@@ -1544,6 +1605,14 @@ export async function updateTeamAttendanceEntry(reviewerId, payload = {}) {
   const updates = new Map();
   const employeeName = first(targetUser, ['Employee Name', 'Name'], employeeId);
   const remark = currentEditorRemark(reviewer);
+  const editorName = first(reviewer, ['Employee Name', 'Name'], userId(reviewer) || 'Admin');
+  const editorId = userId(reviewer) || first(reviewer, ['User ID', 'Employee ID', 'EmpID'], '');
+  const editAuditFields = {
+    'Edited By': editorName,
+    'Edited By ID': editorId,
+    editedBy: editorName,
+    editedById: editorId
+  };
 
   function workingRow(sourceRow, action) {
     const key = sourceRow ? getLegacyId('Attendance', sourceRow) : editKey(employeeId, date, action);
@@ -1577,7 +1646,8 @@ export async function updateTeamAttendanceEntry(reviewerId, payload = {}) {
       Time: timestampForAttendance(date, nextPunchIn, 'Punch In'),
       Status: 'Present',
       'Admin Approval': 'Approved',
-      'Admin Remarks': remark
+      'Admin Remarks': remark,
+      ...editAuditFields
     }));
   }
 
@@ -1596,7 +1666,8 @@ export async function updateTeamAttendanceEntry(reviewerId, payload = {}) {
       Time: timestampForAttendance(date, nextPunchOut, 'Punch Out'),
       Status: 'Present',
       'Admin Approval': 'Approved',
-      'Admin Remarks': remark
+      'Admin Remarks': remark,
+      ...editAuditFields
     }));
   }
 
@@ -1618,7 +1689,8 @@ export async function updateTeamAttendanceEntry(reviewerId, payload = {}) {
         'Total Working Hours': duration,
         Status: 'Present',
         'Admin Approval': 'Approved',
-        'Admin Remarks': remark
+        'Admin Remarks': remark,
+        ...editAuditFields
       }));
     }
   }
