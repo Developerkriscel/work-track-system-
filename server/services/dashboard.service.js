@@ -186,19 +186,33 @@ function durationToMinutes(value) {
   return num(raw);
 }
 
-function buildEmployeeQuery(employeeIds = []) {
+function buildEmployeeQuery(employeeIds = [], userRows = []) {
   const ids = employeeIds.map((value) => safe(value)).filter(Boolean);
-  if (!ids.length) return { $or: [{ legacyId: '__no_match__' }] };
-  return {
-    $or: [
+  const names = (userRows || []).map((user) => safe(userName(user))).filter(Boolean);
+  if (!ids.length && !names.length) return { $or: [{ legacyId: '__no_match__' }] };
+  
+  const orArray = [];
+  if (ids.length) {
+    orArray.push(
       { 'data.Employee ID': { $in: ids } },
       { 'data.User ID': { $in: ids } },
       { 'data.EMP Code': { $in: ids } },
       { 'data.employeeId': { $in: ids } },
       { 'data.EmpID': { $in: ids } },
       { legacyId: { $in: ids } }
-    ]
-  };
+    );
+  }
+  if (names.length) {
+    const regexes = names.map(name => new RegExp(`(^|[^a-z0-9_])${escapeRegex(name)}([^a-z0-9_]|$)`, 'i'));
+    orArray.push(
+      { 'data.Employee Name': { $in: regexes } },
+      { 'data.who': { $in: regexes } },
+      { 'data.User': { $in: regexes } },
+      { 'data.Assigned To': { $in: regexes } },
+      { 'data.Task Approver': { $in: regexes } }
+    );
+  }
+  return { $or: orArray };
 }
 
 function selfTicketQuery(employeeId = '') {
@@ -402,8 +416,8 @@ function buildDashboardScope(employeeId, normalizedViewMode, user, initialTeamMe
   };
 }
 
-function buildDashboardDataQueries({ employeeId, scopedEmployeeIds, ticketHistoryBaseQuery, start, end }) {
-  const employeeQuery = buildEmployeeQuery(scopedEmployeeIds);
+function buildDashboardDataQueries({ employeeId, scopedEmployeeIds, scopedUserRows, ticketHistoryBaseQuery, start, end }) {
+  const employeeQuery = buildEmployeeQuery(scopedEmployeeIds, scopedUserRows);
   const ticketBaseQuery = scopedEmployeeIds.length === 1 && eq(scopedEmployeeIds[0], employeeId) ? selfTicketQuery(employeeId) : employeeQuery;
   const ticketDates = ['Plan Date', 'planDate', 'Date', 'date', 'Due Date', 'dueDate', 'Timestamp', 'timestamp', 'Created At', 'createdAt', 'Last Update Date', 'lastUpdateDate'].map((key) => `data.${key}`);
   const fmsDates = ['Plan Date', 'planDate', 'Date', 'date', 'Created At', 'createdAt', 'Last Update Date', 'lastUpdateDate'].map((key) => `data.${key}`);

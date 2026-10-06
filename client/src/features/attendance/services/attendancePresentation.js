@@ -97,7 +97,10 @@ export function computeAttendanceDayStatus({ date, punchInValue, punchOutValue, 
     // Punch in is on time (<= 10:15). Check punch out if present.
     if (outDate) {
       const workedMinutes = (outDate.getTime() - inDate.getTime()) / 60000;
-      if (workedMinutes < 480) { // Left before 8 hours
+      const d = new Date(`${date}T12:00:00+05:30`);
+      const isSecondOrFourthSat = d.getDay() === 6 && [2, 4].includes(Math.floor((d.getDate() - 1) / 7) + 1);
+      const requiredMinutes = isSecondOrFourthSat ? 240 : 480;
+      if (workedMinutes < requiredMinutes) { // Left before required hours
         return 'Half Day';
       }
     }

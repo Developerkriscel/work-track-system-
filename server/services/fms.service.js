@@ -130,6 +130,15 @@ function normalizedDate(value) {
       return `${named[3]}-${String(monthIndex + 1).padStart(2, '0')}-${String(Number(named[1])).padStart(2, '0')}`;
     }
   }
+  const noYearNamed = raw.match(/^(\d{1,2})[-\s]([A-Za-z]{3,9})(?:\s+\d{1,2}:\d{1,2})?$/);
+  if (noYearNamed) {
+    const monthIndex = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+      .findIndex((monthName) => noYearNamed[2].toLowerCase().startsWith(monthName));
+    if (monthIndex >= 0) {
+      const year = referenceNow().getFullYear();
+      return `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(Number(noYearNamed[1])).padStart(2, '0')}`;
+    }
+  }
   const parsed = new Date(raw);
   return Number.isNaN(parsed.getTime()) ? raw : parsed.toISOString().slice(0, 10);
 }
@@ -257,7 +266,7 @@ function parseFmsSheetCsv(csvText = '') {
 
 async function fetchFmsSheetRows() {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), Number(process.env.FMS_GOOGLE_SHEET_FETCH_TIMEOUT_MS || 5000));
+  const timeout = setTimeout(() => controller.abort(), Number(process.env.FMS_GOOGLE_SHEET_FETCH_TIMEOUT_MS || 25000));
   const response = await fetch(googleSheetCsvUrl(), {
     headers: { Accept: 'text/csv,*/*' },
     signal: controller.signal
@@ -794,32 +803,56 @@ function fmsCompletedQuery() {
   };
 }
 
-function fmsOwnerQuery(ids = []) {
-  const cleanIds = ids.map((id) => safe(id)).filter(Boolean);
-  if (!cleanIds.length) return { _id: { $exists: false } };
-  return {
-    $or: [
-      { 'data.Employee ID': { $in: cleanIds } },
-      { 'data.EmpID': { $in: cleanIds } },
-      { 'data.empId': { $in: cleanIds } },
-      { 'data.employeeId': { $in: cleanIds } },
-      { 'data.EMP Code': { $in: cleanIds } }
-    ]
-  };
+function fmsOwnerQuery(users = []) {
+  const ids = [];
+  const regexes = [];
+  users.forEach((user) => {
+    if (!user) return;
+    const isString = typeof user === 'string';
+    const id = isString ? safe(user) : safe(employeeIdOf(user));
+    const name = isString ? '' : safe(employeeNameOf(user));
+    if (id) ids.push(id);
+    if (name && name.toLowerCase() !== id.toLowerCase()) {
+       regexes.push(new RegExp(`(^|[^a-z0-9_])${escapeRegex(name)}([^a-z0-9_]|$)`, 'i'));
+       const firstName = name.split(/\s+/)[0];
+       if (firstName) {
+         regexes.push(new RegExp(`(^|[^a-z0-9_])${escapeRegex(firstName)}([^a-z0-9_]|$)`, 'i'));
+       }
+    }
+  });
+
+  const orArray = [];
+  if (ids.length) {
+    orArray.push(
+      { 'data.Employee ID': { $in: ids } },
+      { 'data.EmpID': { $in: ids } },
+      { 'data.empId': { $in: ids } },
+      { 'data.employeeId': { $in: ids } },
+      { 'data.EMP Code': { $in: ids } }
+    );
+  }
+  if (regexes.length) {
+    orArray.push(
+      { 'data.Employee Name': { $in: regexes } },
+      { 'data.who': { $in: regexes } },
+      { 'data.User': { $in: regexes } }
+    );
+  }
+  
+  if (!orArray.length) return { _id: { $exists: false } };
+  return { $or: orArray };
 }
 
 function fmsScopeQuery(tab, context) {
-  const currentId = employeeIdOf(context.currentUser);
-  const teamIds = context.teamMembers.map((member) => employeeIdOf(member)).filter(Boolean);
-  if (tab.startsWith('my-')) return fmsOwnerQuery([currentId]);
+  if (tab.startsWith('my-')) return fmsOwnerQuery([context.currentUser]);
   if (['Super Admin', 'HR'].includes(context.role)) {
     return {
       $and: [
-        { $nor: [{ 'data.Employee ID': currentId }, { 'data.EmpID': currentId }, { 'data.empId': currentId }, { 'data.employeeId': currentId }, { 'data.EMP Code': currentId }] }
+        { $nor: [fmsOwnerQuery([context.currentUser])] }
       ]
     };
   }
-  return fmsOwnerQuery(teamIds);
+  return fmsOwnerQuery(context.teamMembers);
 }
 
 function fmsDateQuery(tab) {

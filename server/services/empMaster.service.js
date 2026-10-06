@@ -138,17 +138,22 @@ function nextAvailableCodeFromRows(category = 'EMP', records = [], users = []) {
   }
 
   const [min, max] = range;
-  const used = new Set();
+  let highestUsed = min - 1;
+
   [...records, ...users].forEach((row) => {
     const value = krisCodeNumber(row);
-    if (Number.isFinite(value) && value >= min && value <= max) used.add(value);
+    if (Number.isFinite(value) && value >= min && value <= max) {
+      if (value > highestUsed) {
+        highestUsed = value;
+      }
+    }
   });
 
-  for (let next = min; next <= max; next += 1) {
-    if (!used.has(next)) {
-      const code = `KRIS_${String(next).padStart(3, '0')}`;
-      return ok({ code, nextCode: code });
-    }
+  const next = highestUsed + 1;
+
+  if (next <= max) {
+    const code = `KRIS_${String(next).padStart(3, '0')}`;
+    return ok({ code, nextCode: code });
   }
 
   return { success: false, message: `Limit reached for ${targetCategory} (max KRIS_${max}).` };

@@ -59,14 +59,14 @@ function StatusPieChart({ title, dataArray }) {
       <h2 style={{ fontSize: '15px', fontWeight: '700', marginBottom: '8px', color: '#1e293b', textAlign: 'center' }}>
         {title}
       </h2>
-      <div style={{ height: '360px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ height: '420px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={chartData}
                 cx="50%"
-                cy="50%"
+                cy="35%"
                 innerRadius={50}
                 outerRadius={70}
                 paddingAngle={5}

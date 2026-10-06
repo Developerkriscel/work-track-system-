@@ -543,7 +543,8 @@ function computeAttendanceStatus(dateValue, punchInRow, holidayMap = new Map(), 
 
     if (outTime && !Number.isNaN(outTime.getTime())) {
       const workedMinutes = (outTime.getTime() - inTime.getTime()) / 60000;
-      if (workedMinutes < 480) { // < 8 hours
+      const requiredMinutes = isSecondOrFourthSaturday(dateValue) ? 240 : 480;
+      if (workedMinutes < requiredMinutes) {
         return 'Half Day';
       }
     }
@@ -566,17 +567,21 @@ function computeDepartureStatus(dateValue, punchInRow, punchOutRow) {
   if (Number.isNaN(punchTime.getTime())) return null;
 
   let completedFullShift = false;
+  const isHalfDaySaturday = isSecondOrFourthSaturday(dateValue);
+  const requiredMinutes = isHalfDaySaturday ? 240 : 480;
+
   if (punchInRow) {
     const inTime = new Date(timestampForAttendance(dateValue, first(punchInRow, ['Punch In', 'Time']), 'Punch In'));
     if (!Number.isNaN(inTime.getTime())) {
       const shiftDurationMinutes = (punchTime.getTime() - inTime.getTime()) / 60000;
-      if (shiftDurationMinutes >= 480) { // 8 hours
+      if (shiftDurationMinutes >= requiredMinutes) {
         completedFullShift = true;
       }
     }
   }
 
-  const shiftEnd = new Date(`${normalizedDate(dateValue)}T19:00:00+05:30`);
+  const shiftEndTime = isHalfDaySaturday ? '14:00:00' : '19:00:00';
+  const shiftEnd = new Date(`${normalizedDate(dateValue)}T${shiftEndTime}+05:30`);
   const difference = (punchTime.getTime() - shiftEnd.getTime()) / 60000;
   if (difference < -15 && !completedFullShift) return 'Early Departure';
   if (difference <= 60) return 'On Time Departure';
