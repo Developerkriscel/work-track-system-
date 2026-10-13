@@ -27,7 +27,9 @@ export const legacyModuleSpecs = {
   SocialHistory: { collection: 'social_history_legacy', label: 'Social History', aliases: ['SocialHistory', 'Social History'] },
   FormsPortal: { collection: 'forms_portal_legacy', label: 'Forms Portal', aliases: ['Forms', 'Forms Portal'] },
   TicketHistory: { collection: 'ticket_history_legacy', label: 'Ticket History', aliases: ['TicketHistory', 'Ticket History'] },
-  WhatsAppLog: { collection: 'whatsapp_logs_legacy', label: 'WhatsApp Logs', aliases: ['WhatsApp', 'WA', 'WhatsApp Logs'] }
+  WhatsAppLog: { collection: 'whatsapp_logs_legacy', label: 'WhatsApp Logs', aliases: ['WhatsApp', 'WA', 'WhatsApp Logs'] },
+  Asset: { collection: 'assets_legacy', label: 'Assets', aliases: ['Assets', 'Asset', 'Inventory'] },
+  AssetRequest: { collection: 'asset_requests_legacy', label: 'Asset Requests', aliases: ['AssetRequests', 'Asset Request'] }
 };
 
 const modelDefs = Object.fromEntries(

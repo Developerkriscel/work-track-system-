@@ -312,6 +312,10 @@ const OVERVIEW_TICKET_FIELDS = [
   'empId',
   'TAT',
   'When',
+  'TAT Minutes',
+  'Total Duration',
+  'Duration',
+  'Actual Duration',
   'Task Description',
   'Description',
   'Task'
@@ -345,6 +349,8 @@ const OVERVIEW_FMS_FIELDS = [
   'empId',
   'TAT',
   'When',
+  'Duration',
+  'Actual Duration',
   'Task Description',
   'Description',
   'Task',
@@ -393,13 +399,79 @@ const TODO_FIELDS = [
 
 const ATTENDANCE_FIELDS = [
   'AttendanceID',
+  'ID',
+  'attendanceId',
   'Employee ID',
   'EmpID',
+  'employeeId',
   'Employee Name',
   'Name',
+  'User',
   'Date',
+  'Time',
+  'Punch In',
+  'Punch Out',
+  'InTime',
+  'OutTime',
   'Action',
-  'Status'
+  'Photo Url',
+  'Photo URL',
+  'Photo',
+  'Latitude',
+  'Lattitude',
+  'Longitude',
+  'Total Working Hours',
+  'Duration',
+  'Total Duration',
+  'Status',
+  'status',
+  'Admin Approval',
+  'Admin Remarks'
+];
+
+const LEAVE_FIELDS = [
+  'Leave ID',
+  'LeaveID',
+  'leaveId',
+  'ID',
+  'Employee ID',
+  'EmpID',
+  'employeeId',
+  'Employee Name',
+  'User',
+  'Leave Type',
+  'leaveType',
+  'Day Type',
+  'dayType',
+  'Start Date',
+  'startDate',
+  'End Date',
+  'endDate',
+  'Reason',
+  'reason',
+  'Status',
+  'status'
+];
+
+const INTIMATION_FIELDS = [
+  'Intimation ID',
+  'IntimationID',
+  'intimationId',
+  'ID',
+  'Employee ID',
+  'EmpID',
+  'employeeId',
+  'Employee Name',
+  'User',
+  'Intimation Date',
+  'Date',
+  'date',
+  'Intimation Type',
+  'IntimationType',
+  'Reason',
+  'reason',
+  'Status',
+  'status'
 ];
 
 const INVOICE_FIELDS = [
@@ -413,7 +485,18 @@ const INVOICE_FIELDS = [
   'Status',
   'Outstanding',
   'Balance',
-  'Due Amount'
+  'Due Amount',
+  'DueDate',
+  'DueDateFmt',
+  'Due Date',
+  'Date',
+  'AssignedCollector',
+  'Assigned Collector',
+  'Collector',
+  'Bucket',
+  'Aging Bucket',
+  'AgingBucket',
+  'Aging'
 ];
 
 async function getCached(scope, parts, loader) {
@@ -678,35 +761,62 @@ async function getOverviewScopedCollections(version, startDate, endDate) {
     getCached('overview-fms', [version, startDate, endDate], () => queryRows('FmsTask', fmsRangeQuery(startDate, endDate), projectionFromFields(OVERVIEW_FMS_FIELDS))),
     getCached('overview-todos', [version, startDate, endDate], () => queryRows('Todo', rangeQuery('Due Date', startDate, endDate, ['Date']), projectionFromFields(OVERVIEW_TODO_FIELDS))),
     getCached('attendance-today', [version, attendanceToday], () => queryRows('Attendance', { 'data.Date': attendanceToday }, projectionFromFields(ATTENDANCE_FIELDS))),
-    getCached('overview-invoices', [version], () => queryRows('Invoice', {}, projectionFromFields(['Outstanding', 'Balance', 'Due Amount'])))
+    getCached('overview-invoices', [version], () => queryRows('Invoice', {}, projectionFromFields(INVOICE_FIELDS)))
   ]);
   return { tickets, fms, todos, attendanceTodayRows, invoices };
 }
 
-function employeeScopedQuery(employeeId = '') {
-  const value = safe(employeeId);
-  if (!value) return { legacyId: '__no_match__' };
-  return {
-    $or: [
-      { 'data.Employee ID': value },
-      { 'data.EmpID': value },
-      { 'data.empId': value },
-      { 'data.User ID': value },
-      { 'data.employeeId': value }
-    ]
-  };
+function employeeScopedQuery(employeeId = '', employeeName = '') {
+  const idVal = safe(employeeId);
+  const nameVal = safe(employeeName);
+  const orClauses = [];
+  if (idVal) {
+    const idRegex = new RegExp(`^${idVal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+    orClauses.push(
+      { 'data.Employee ID': idRegex },
+      { 'data.EmpID': idRegex },
+      { 'data.empId': idRegex },
+      { 'data.User ID': idRegex },
+      { 'data.employeeId': idRegex },
+      { 'data.Employee Id': idRegex }
+    );
+  }
+  if (nameVal) {
+    const escapedName = nameVal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    orClauses.push(
+      { 'data.Employee Name': { $regex: new RegExp(`^${escapedName}$`, 'i') } },
+      { 'data.User': { $regex: new RegExp(`^${escapedName}$`, 'i') } },
+      { 'data.Who': { $regex: new RegExp(`^${escapedName}$`, 'i') } },
+      { 'data.Assigned To': { $regex: new RegExp(`^${escapedName}$`, 'i') } },
+      { 'data.Name': { $regex: new RegExp(`^${escapedName}$`, 'i') } }
+    );
+  }
+  if (!orClauses.length) return { legacyId: '__no_match__' };
+  return { $or: orClauses };
 }
 
-function clientScopedQuery(clientId = '') {
-  const value = safe(clientId);
-  if (!value) return { legacyId: '__no_match__' };
-  return {
-    $or: [
-      { 'data.Client_Id': value },
-      { 'data.Client ID': value },
-      { 'data.CustomerID': value }
-    ]
-  };
+function clientScopedQuery(clientId = '', clientName = '') {
+  const idVal = safe(clientId);
+  const nameVal = safe(clientName);
+  const orClauses = [];
+  if (idVal) {
+    const idRegex = new RegExp(`^${idVal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+    orClauses.push(
+      { 'data.Client_Id': idRegex },
+      { 'data.Client ID': idRegex },
+      { 'data.CustomerID': idRegex }
+    );
+  }
+  if (nameVal) {
+    const escapedName = nameVal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    orClauses.push(
+      { 'data.Client': { $regex: new RegExp(`^${escapedName}$`, 'i') } },
+      { 'data.Client Name': { $regex: new RegExp(`^${escapedName}$`, 'i') } },
+      { 'data.CustomerName': { $regex: new RegExp(`^${escapedName}$`, 'i') } }
+    );
+  }
+  if (!orClauses.length) return { legacyId: '__no_match__' };
+  return { $or: orClauses };
 }
 
 function combineQueries(...clauses) {
@@ -729,40 +839,53 @@ function buildBandwidth(rows = []) {
 }
 
 async function buildUserExplorerPayload(version, startDate, endDate, selectedUserId) {
-  const { users } = await getUsersAndClients(version);
+  const [{ users, clients }] = await Promise.all([
+    getUsersAndClients(version)
+  ]);
   const activeUsers = users.filter((user) => eq(user.Status || user.status || 'Active', 'Active'));
-  const selectedUser = activeUsers.find((user) => eq(user['Employee ID'] || user.id, selectedUserId)) || activeUsers[0] || null;
+  const activeClients = clients.filter((client) => !eq(client.Status || client.status || 'Active', 'Inactive'));
+
+  const isAllUsers = selectedUserId === 'ALL_USERS';
+  const selectedUser = isAllUsers
+    ? { 'Employee ID': 'ALL_USERS', 'Employee Name': 'All Employees / Users' }
+    : activeUsers.find((user) => eq(user['Employee ID'] || user.id, selectedUserId)) || activeUsers[0] || null;
+
   if (!selectedUser) {
-    return ok({ data: { users: [], attendance: [], tickets: [], fms: [], todo: [] } });
+    return ok({ data: { users: activeUsers, clients: activeClients, attendance: [], tickets: [], fms: [], todo: [], leaves: [], intimations: [] } });
   }
 
-  const selectedId = first(selectedUser, ['Employee ID', 'id']);
-  const [attendance, ticketRows, fmsRows, todoRows] = await Promise.all([
-    queryRows('Attendance', combineQueries(
-      employeeScopedQuery(selectedId),
-      {
-        $or: enumerateDates(startDate, endDate).map((date) => ({ 'data.Date': { $regex: `^${date}` } }))
+  const selectedId = isAllUsers ? '' : first(selectedUser, ['Employee ID', 'id']);
+  const selectedName = isAllUsers ? '' : first(selectedUser, ['Employee Name', 'Name', 'name']);
+  const userScopeFilter = isAllUsers ? {} : employeeScopedQuery(selectedId, selectedName);
+
+  const attendanceDates = enumerateDates(startDate, endDate);
+  const attendanceDateQuery = attendanceDates.length
+    ? {
+        $or: attendanceDates.flatMap((date) => {
+          const [y, m, d] = date.split('-');
+          return [
+            { 'data.Date': { $regex: `^${date}` } },
+            { 'data.Date': `${d}/${m}/${y}` },
+            { 'data.Date': `${m}/${d}/${y}` }
+          ];
+        })
       }
-    ), projectionFromFields(ATTENDANCE_FIELDS)),
-    queryRows('Ticket', combineQueries(
-      employeeScopedQuery(selectedId),
-      rangeQuery('Plan Date', startDate, endDate, ['Date'])
-    ), projectionFromFields(TICKET_FIELDS)),
-    queryRows('FmsTask', combineQueries(
-      employeeScopedQuery(selectedId),
-      fmsRangeQuery(startDate, endDate)
-    ), projectionFromFields(FMS_FIELDS)),
-    queryRows('Todo', combineQueries(
-      employeeScopedQuery(selectedId),
-      rangeQuery('Due Date', startDate, endDate, ['Date'])
-    ), projectionFromFields(TODO_FIELDS))
+    : {};
+
+  const [attendance, ticketRows, fmsRows, todoRows, leaves, intimations] = await Promise.all([
+    queryRows('Attendance', combineQueries(userScopeFilter, attendanceDateQuery), projectionFromFields(ATTENDANCE_FIELDS)),
+    queryRows('Ticket', combineQueries(userScopeFilter, rangeQuery('Plan Date', startDate, endDate, ['Date'])), projectionFromFields(TICKET_FIELDS)),
+    queryRows('FmsTask', combineQueries(userScopeFilter, fmsRangeQuery(startDate, endDate)), projectionFromFields(FMS_FIELDS)),
+    queryRows('Todo', combineQueries(userScopeFilter, rangeQuery('Due Date', startDate, endDate, ['Date'])), projectionFromFields(TODO_FIELDS)),
+    queryRows('Leave', userScopeFilter, projectionFromFields(LEAVE_FIELDS)),
+    queryRows('Intimation', userScopeFilter, projectionFromFields(INTIMATION_FIELDS))
   ]);
 
   const tickets = ticketRows
-    .map((ticket) => normalizeTicketForDashboard(ticket, activeUsers))
+    .map((ticket) => normalizeTicketForDashboard(ticket, activeUsers, activeClients))
     .filter((ticket) => dateInRange(ticket.Date, startDate, endDate));
   const fms = fmsRows
-    .map((task) => normalizeFmsForDashboard(task, activeUsers))
+    .map((task) => normalizeFmsForDashboard(task, activeUsers, activeClients))
     .filter((task) => dateInRange(task.Date, startDate, endDate));
   const todo = todoRows
     .map((task) => normalizeTodoForDashboard(task, activeUsers))
@@ -771,12 +894,14 @@ async function buildUserExplorerPayload(version, startDate, endDate, selectedUse
   return ok({
     data: {
       users: activeUsers,
+      clients: activeClients,
       attendance,
       tickets,
       fms,
       todo,
+      leaves,
+      intimations,
       kpis: {},
-      clients: [],
       invoices: []
     }
   });
@@ -792,25 +917,35 @@ async function buildClientExplorerPayload(version, startDate, endDate, selectedC
   }
 
   const selectedId = first(selectedClient, ['Client_Id', 'id']);
-  const [ticketRows, fmsRows, invoices] = await Promise.all([
+  const selectedName = first(selectedClient, ['Client Name', 'name', 'Client']);
+  const clientFilter = clientScopedQuery(selectedId, selectedName);
+
+  const [ticketRows, fmsRows, todoRows, invoices] = await Promise.all([
     queryRows('Ticket', combineQueries(
-      clientScopedQuery(selectedId),
+      clientFilter,
       rangeQuery('Plan Date', startDate, endDate, ['Date'])
     ), projectionFromFields(TICKET_FIELDS)),
     queryRows('FmsTask', combineQueries(
-      clientScopedQuery(selectedId),
+      clientFilter,
       fmsRangeQuery(startDate, endDate)
     ), projectionFromFields(FMS_FIELDS)),
-    queryRows('Invoice', clientScopedQuery(selectedId), projectionFromFields(INVOICE_FIELDS))
+    queryRows('Todo', combineQueries(
+      clientFilter,
+      rangeQuery('Due Date', startDate, endDate, ['Date'])
+    ), projectionFromFields(TODO_FIELDS)),
+    queryRows('Invoice', clientFilter, projectionFromFields(INVOICE_FIELDS))
   ]);
 
   const tickets = ticketRows
-    .map((ticket) => normalizeTicketForDashboard(ticket, activeUsers))
+    .map((ticket) => normalizeTicketForDashboard(ticket, activeUsers, activeClients))
     .filter((ticket) => dateInRange(ticket.Date, startDate, endDate));
   const fms = fmsRows
-    .map((task) => normalizeFmsForDashboard(task, activeUsers))
+    .map((task) => normalizeFmsForDashboard(task, activeUsers, activeClients))
     .filter((task) => dateInRange(task.Date, startDate, endDate));
-  const tasks = [...tickets, ...fms];
+  const todo = todoRows
+    .map((task) => normalizeTodoForDashboard(task, activeUsers))
+    .filter((task) => dateInRange(task.Date, startDate, endDate));
+  const tasks = [...tickets, ...fms, ...todo];
 
   return ok({
     data: {
@@ -818,7 +953,7 @@ async function buildClientExplorerPayload(version, startDate, endDate, selectedC
       clients: activeClients,
       tickets,
       fms,
-      todo: [],
+      todo,
       attendance: [],
       invoices,
       explorer: {
@@ -867,13 +1002,13 @@ async function buildManagementOverviewPayload(version, startDate, endDate) {
       activeClients: activeClients.map((client) => ({ id: client.Client_Id, name: client['Client Name'] })),
       users: activeUsers,
       clients: activeClients,
-      tickets: sortByDateDesc(tickets).slice(0, 8),
-      fms: sortByDateDesc(fms).slice(0, 8),
-      todo: sortByDateDesc(todo).slice(0, 10),
-      attendance: [],
+      tickets: sortByDateDesc(tickets),
+      fms: sortByDateDesc(fms),
+      todo: sortByDateDesc(todo),
+      attendance: scoped.attendanceTodayRows,
       leaves: [],
       intimations: [],
-      invoices: [],
+      invoices: scoped.invoices,
       charts: {
         ticketData: buildStatusChart(tickets),
         fmsData: buildStatusChart(fms),

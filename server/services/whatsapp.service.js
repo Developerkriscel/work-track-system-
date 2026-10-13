@@ -2,10 +2,7 @@
  * WhatsApp Service via AKNexus
  * Endpoint: POST https://app.aknexus.in/api/send
  */
-
-const AKNEXUS_BASE_URL  = 'https://app.aknexus.in';
-const INSTANCE_ID       = process.env.AKNEXUS_INSTANCE_ID;
-const ACCESS_TOKEN      = process.env.AKNEXUS_ACCESS_TOKEN;
+import { effectiveIntegration } from './whatsappIntegration.service.js';
 
 /**
  * Send a plain text WhatsApp message.
@@ -13,7 +10,12 @@ const ACCESS_TOKEN      = process.env.AKNEXUS_ACCESS_TOKEN;
  * @param {string} message - Text message to send
  */
 export async function sendWhatsAppMessage(toPhone, message) {
-  if (!INSTANCE_ID || !ACCESS_TOKEN) {
+  const config = await effectiveIntegration().catch(() => null);
+  const instanceId = config?.instanceId || process.env.AKNEXUS_INSTANCE_ID;
+  const accessToken = config?.accessToken || process.env.AKNEXUS_ACCESS_TOKEN;
+  const baseUrl = (config?.apiBaseUrl || 'https://app.aknexus.in/api').replace(/\/+$/, '');
+
+  if (!instanceId || !accessToken) {
     console.warn('[WhatsApp] AKNEXUS_INSTANCE_ID or AKNEXUS_ACCESS_TOKEN not set — skipping.');
     return null;
   }
@@ -29,12 +31,13 @@ export async function sendWhatsAppMessage(toPhone, message) {
     number:       phone,
     type:         'text',
     message:      String(message || ''),
-    instance_id:  INSTANCE_ID,
-    access_token: ACCESS_TOKEN
+    instance_id:  instanceId,
+    access_token: accessToken
   };
 
   try {
-    const response = await fetch(`${AKNEXUS_BASE_URL}/api/send`, {
+    const sendEndpoint = baseUrl.endsWith('/send') ? baseUrl : `${baseUrl}/send`;
+    const response = await fetch(sendEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)

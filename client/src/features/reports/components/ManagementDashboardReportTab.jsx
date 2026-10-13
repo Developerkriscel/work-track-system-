@@ -23,6 +23,8 @@ export function ManagementDashboardReportTab() {
     tickets,
     fms,
     todo,
+    invoices,
+    attendance,
     selectedUserId,
     setSelectedUserId,
     selectedUser,
@@ -56,36 +58,47 @@ export function ManagementDashboardReportTab() {
         </div>
       </ManagementDashboardTabs>
 
-      {activeTab === 'overview' ? (
-        <OverviewDashboardSection
-          kpis={kpis}
-          charts={charts}
-          tickets={tickets}
-          fms={fms}
-          todo={todo}
-          users={users}
-          clients={clients}
-        />
-      ) : null}
+      {activeTab !== 'batch-planner' ? (
+        <div className="management-dashboard-content-zoom" style={{ zoom: 1.1, width: '100%' }}>
+          {activeTab === 'overview' ? (
+            <OverviewDashboardSection
+              kpis={kpis}
+              charts={charts}
+              tickets={tickets}
+              fms={fms}
+              todo={todo}
+              users={users}
+              clients={clients}
+              invoices={invoices}
+              attendance={attendance}
+              onOpenBatchModal={(type) => setActiveTab('batch-planner')}
+            />
+          ) : null}
 
-      {activeTab === 'user-explorer' ? (
-        <UserExplorerSection
-          users={users}
-          selectedUserId={selectedUserId}
-          onUserChange={setSelectedUserId}
-          selectedUser={selectedUser}
-          explorer={userExplorer}
-        />
-      ) : null}
+          {activeTab === 'user-explorer' ? (
+            <UserExplorerSection
+              users={users}
+              selectedUserId={selectedUserId}
+              onUserChange={setSelectedUserId}
+              selectedUser={selectedUser}
+              explorer={userExplorer}
+            />
+          ) : null}
 
-      {activeTab === 'client-explorer' ? (
-        <ClientExplorerSection
-          clients={clients}
-          selectedClientId={selectedClientId}
-          onClientChange={setSelectedClientId}
-          selectedClient={selectedClient}
-          explorer={clientExplorer}
-        />
+          {activeTab === 'client-explorer' ? (
+            <ClientExplorerSection
+              clients={clients}
+              selectedClientId={selectedClientId}
+              onClientChange={setSelectedClientId}
+              selectedClient={selectedClient}
+              explorer={clientExplorer}
+              tickets={tickets}
+              fms={fms}
+              todo={todo}
+              invoices={invoices}
+            />
+          ) : null}
+        </div>
       ) : null}
 
       {activeTab === 'batch-planner' ? (

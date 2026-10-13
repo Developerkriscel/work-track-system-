@@ -15,6 +15,7 @@ export function ManagementDashboardTabs({ activeTab, onTabChange, children = nul
             type="button"
             className={`reports-sub-tab-btn${activeTab === tab.id ? ' reports-sub-tab-btn--active' : ''}`}
             onClick={() => onTabChange(tab.id)}
+            style={{ fontSize: '15.5px', padding: '12px 8px', fontWeight: activeTab === tab.id ? '700' : '600' }}
           >
             {tab.label}
           </button>

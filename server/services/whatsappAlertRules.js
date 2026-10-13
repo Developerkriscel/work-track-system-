@@ -1,5 +1,5 @@
 import { attendanceSchedule, attendanceSnapshot } from './whatsappAttendanceSchedule.js';
-import { requestApprovalDecision } from './approvals.service.js';
+import { requestApprovalDecision, ticketApprovalDecision } from './approvals.service.js';
 import { rowMessage, dailyMessage, noTicketAfterPresentMessage } from './whatsappTemplateRenderer.js';
 const text = (value) => String(value ?? '').trim();
 export const field = (row, keys) => keys.map((key) => text(row?.[key])).find(Boolean) || '';
@@ -7,11 +7,26 @@ export const employeeIdOf = (row) => field(row, ['Employee ID', 'User ID', 'EMP 
 export const isActive = (user) => Boolean(user) && !/^(inactive|disabled|terminated|deleted)$/i.test(field(user, ['Status', 'status']));
 export const statusOf = (row) => field(row, ['Status', 'status']);
 export const isFinished = (row) => /^(completed|closed|done|approved|rejected|cancelled|canceled|resolved|inactive)$/i.test(statusOf(row)) || Boolean(field(row, ['Done Date', 'doneDate']));
-export const entityOf = (row) => field(row, ['Ticket ID', 'Task ID', 'ExpenseID', 'AttendanceID', 'LeaveID', 'IntimationID', 'TodoID', 'ID', 'rowId']);
+export const entityOf = (row) => field(row, ['Ticket ID', 'TicketID', 'Task ID', 'ExpenseID', 'Expense ID', 'AttendanceID', 'Attendance ID', 'LeaveID', 'Leave ID', 'leaveId', 'IntimationID', 'Intimation ID', 'intimationId', 'TodoID', 'Todo ID', 'ID', 'rowId', 'id']);
 export function approversFor(row, users, model) {
-  if (model === 'Ticket') return [employeeIdOf(row)].filter(Boolean);
   const owner = users.find((user) => employeeIdOf(user) === employeeIdOf(row));
   const eligible = users.filter((user) => isActive(user) && /^(admin|hr|super admin|manager)$/i.test(field(user, ['Role', 'role'])));
+  if (model === 'Ticket') {
+    const approvers = eligible.filter((user) => {
+      if (employeeIdOf(user) === employeeIdOf(row)) return false;
+      return ticketApprovalDecision(user, row, users).actionable;
+    }).map(employeeIdOf);
+    if (approvers.length) return approvers;
+
+    const designated = [
+      ...field(row, ['Reassigned To', 'Task Approver', 'Manager ID', 'Approver']).split(','),
+      ...field(owner, ['Task Approver', 'Manager ID']).split(',')
+    ].map((s) => s.trim().toUpperCase()).filter(Boolean);
+    const fallback = eligible.filter((u) => designated.includes(employeeIdOf(u).toUpperCase()) && employeeIdOf(u) !== employeeIdOf(row)).map(employeeIdOf);
+    if (fallback.length) return fallback;
+
+    return eligible.filter((u) => /^super admin$/i.test(field(u, ['Role', 'role'])) && employeeIdOf(u) !== employeeIdOf(row)).map(employeeIdOf);
+  }
   // Expense approval is restricted to Admin/HR/Super Admin in the existing module.
   return eligible.filter((user) => model !== 'Expense' || !/^manager$/i.test(field(user, ['Role', 'role'])))
     .filter((user) => {
@@ -33,7 +48,10 @@ export function buildRowAlerts({ model, before, after }, users = []) {
   const changed = before && statusOf(before) !== statusOf(after);
   if (model === 'Ticket') {
     if (!before || employeeIdOf(before) !== employeeId) emit('ticket', 'Ticket assigned');
-    else if (changed) emit('ticket', `Ticket status: ${statusOf(before)} → ${statusOf(after)}`);
+    else if (changed) {
+      if (/^pending approval$/i.test(statusOf(after))) emit('ticket', 'Ticket submitted for approval');
+      else emit('ticket', `Ticket status: ${statusOf(after)}`);
+    }
   }
   if (model === 'FmsTask') {
     if (!before || employeeIdOf(before) !== employeeId) emit('fms', 'FMS task assigned');
@@ -47,8 +65,13 @@ export function buildRowAlerts({ model, before, after }, users = []) {
   const approval = (row) => model === 'Attendance' ? field(row, ['Admin Approval']) : statusOf(row);
   const pending = (row) => model === 'Ticket' ? /^(pending approval|hr approved)$/i.test(approval(row)) : /^(pending|submitted|need approval)$/i.test(approval(row));
   const supportsApproval = ['Ticket', 'Attendance', 'Expense', 'Leave', 'Intimation'].includes(model);
-  if (supportsApproval && pending(after) && (!before || !pending(before) || approval(before) !== approval(after) || field(before, ['Reassigned To', 'Task Approver']) !== field(after, ['Reassigned To', 'Task Approver']))) {
-    for (const id of approversFor(after, users, model)) emit('approval', `${model} approval requested`, id);
+  if (supportsApproval && model !== 'Attendance' && pending(after) && (!before || !pending(before) || approval(before) !== approval(after) || field(before, ['Reassigned To', 'Task Approver']) !== field(after, ['Reassigned To', 'Task Approver']))) {
+    if (['Leave', 'Intimation'].includes(model)) {
+      emit('attendance', `${model} submitted`, employeeId);
+      for (const id of approversFor(after, users, model)) emit('approval', `${model} approval requested`, id);
+    } else {
+      for (const id of approversFor(after, users, model)) emit('approval', `${model} approval requested`, id);
+    }
   }
   if (supportsApproval && before && approval(before) !== approval(after) && /^(approved|hr approved|rejected|rework|closed)$/i.test(approval(after))) emit('approval', `${model} ${approval(after)}`);
   return events;

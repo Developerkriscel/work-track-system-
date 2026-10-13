@@ -23,6 +23,8 @@ export function ManagementDashboardPage() {
     tickets,
     fms,
     todo,
+    invoices,
+    attendance,
     selectedUserId,
     setSelectedUserId,
     selectedUser,
@@ -31,7 +33,11 @@ export function ManagementDashboardPage() {
     setSelectedClientId,
     selectedClient,
     clientExplorer,
-    refresh
+    refresh,
+    customStart,
+    setCustomStart,
+    customEnd,
+    setCustomEnd
   } = useManagementDashboardData();
 
   return (
@@ -42,6 +48,10 @@ export function ManagementDashboardPage() {
         rangeOptions={rangeOptions}
         onRangeChange={setRange}
         onRefresh={refresh}
+        customStart={customStart}
+        onCustomStartChange={setCustomStart}
+        customEnd={customEnd}
+        onCustomEndChange={setCustomEnd}
       />
 
       {error ? (
@@ -52,36 +62,47 @@ export function ManagementDashboardPage() {
       ) : null}
 
       <ManagementDashboardTabs activeTab={activeTab} onTabChange={setActiveTab} />
+ 
+      {activeTab !== 'batch-planner' ? (
+        <div className="management-dashboard-content-zoom" style={{ zoom: 1.1, width: '100%' }}>
+          {activeTab === 'overview' ? (
+            <OverviewDashboardSection
+              kpis={kpis}
+              tickets={tickets}
+              fms={fms}
+              todo={todo}
+              users={users}
+              clients={clients}
+              invoices={invoices}
+              attendance={attendance}
+              onOpenBatchModal={(type) => setActiveTab('batch-planner')}
+            />
+          ) : null}
 
-      {activeTab === 'overview' ? (
-        <OverviewDashboardSection
-          kpis={kpis}
-          tickets={tickets}
-          fms={fms}
-          todo={todo}
-          users={users}
-          clients={clients}
-        />
-      ) : null}
+          {activeTab === 'user-explorer' ? (
+            <UserExplorerSection
+              users={users}
+              selectedUserId={selectedUserId}
+              onUserChange={setSelectedUserId}
+              selectedUser={selectedUser}
+              explorer={userExplorer}
+            />
+          ) : null}
 
-      {activeTab === 'user-explorer' ? (
-        <UserExplorerSection
-          users={users}
-          selectedUserId={selectedUserId}
-          onUserChange={setSelectedUserId}
-          selectedUser={selectedUser}
-          explorer={userExplorer}
-        />
-      ) : null}
-
-      {activeTab === 'client-explorer' ? (
-        <ClientExplorerSection
-          clients={clients}
-          selectedClientId={selectedClientId}
-          onClientChange={setSelectedClientId}
-          selectedClient={selectedClient}
-          explorer={clientExplorer}
-        />
+          {activeTab === 'client-explorer' ? (
+            <ClientExplorerSection
+              clients={clients}
+              selectedClientId={selectedClientId}
+              onClientChange={setSelectedClientId}
+              selectedClient={selectedClient}
+              explorer={clientExplorer}
+              tickets={tickets}
+              fms={fms}
+              todo={todo}
+              invoices={invoices}
+            />
+          ) : null}
+        </div>
       ) : null}
 
       {activeTab === 'batch-planner' ? (

@@ -7,19 +7,31 @@ import {
 } from '@/features/management-dashboard/services/managementDashboardPresentation';
 
 function matchesUser(task, userId, userName) {
+  if (!task) return false;
   const normalizedId = String(userId || '').trim().toUpperCase();
   const normalizedName = String(userName || '').trim().toLowerCase();
-  const ownerId = String(task['Employee ID'] || task.EmpID || task.empId || '').trim().toUpperCase();
-  const ownerName = String(task.User || task['Employee Name'] || task.Who || '').trim().toLowerCase();
-  return ownerId === normalizedId || ownerName === normalizedName;
+  const ownerId = String(task['Employee ID'] || task.EmpID || task.empId || task['User ID'] || task.employeeId || task['Employee Id'] || task.id || '').trim().toUpperCase();
+  const ownerName = String(task.User || task['Employee Name'] || task.Who || task.Name || task.name || task['Assigned To'] || '').trim().toLowerCase();
+  if (normalizedId && ownerId && normalizedId === ownerId) return true;
+  if (normalizedName && ownerName) {
+    if (normalizedName === ownerName) return true;
+    if (normalizedName.length >= 3 && ownerName.length >= 3 && (normalizedName.includes(ownerName) || ownerName.includes(normalizedName))) return true;
+  }
+  return false;
 }
 
 function matchesClient(task, clientId, clientName) {
+  if (!task) return false;
   const normalizedId = String(clientId || '').trim().toUpperCase();
   const normalizedName = String(clientName || '').trim().toLowerCase();
-  const rowId = String(task.Client_Id || task['Client ID'] || '').trim().toUpperCase();
-  const rowName = String(task.Client || task['Client Name'] || '').trim().toLowerCase();
-  return rowId === normalizedId || rowName === normalizedName;
+  const rowId = String(task.Client_Id || task['Client ID'] || task.CustomerID || '').trim().toUpperCase();
+  const rowName = String(task.Client || task['Client Name'] || task.CustomerName || '').trim().toLowerCase();
+  if (normalizedId && rowId && normalizedId === rowId) return true;
+  if (normalizedName && rowName) {
+    if (normalizedName === rowName) return true;
+    if (normalizedName.length >= 3 && rowName.length >= 3 && (normalizedName.includes(rowName) || rowName.includes(normalizedName))) return true;
+  }
+  return false;
 }
 
 export function useManagementDashboardData() {
@@ -28,6 +40,14 @@ export function useManagementDashboardData() {
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedUserId, setSelectedUserId] = useState('');
   const [selectedClientId, setSelectedClientId] = useState('');
+  
+  const [customStart, setCustomStart] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d.toISOString().split('T')[0];
+  });
+  const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split('T')[0]);
+
   const [overviewState, setOverviewState] = useState({
     loading: true,
     error: null,
@@ -41,7 +61,7 @@ export function useManagementDashboardData() {
   });
   const refreshRef = useRef(0);
 
-  const bounds = useMemo(() => managementRangeBounds(range), [range]);
+  const bounds = useMemo(() => managementRangeBounds(range, customStart, customEnd), [range, customStart, customEnd]);
   const rangeKey = `${bounds.startDate || ''}:${bounds.endDate || ''}`;
 
   useEffect(() => {
@@ -138,6 +158,9 @@ export function useManagementDashboardData() {
   const invoices = Array.isArray(sourceData.invoices) ? sourceData.invoices : [];
   const charts = overviewData.charts || sourceData.charts || {};
 
+  const leaves = Array.isArray(sourceData.leaves) ? sourceData.leaves : [];
+  const intimations = Array.isArray(sourceData.intimations) ? sourceData.intimations : [];
+
   useEffect(() => {
     if (!selectedUserId && users.length) {
       setSelectedUserId(users[0]['Employee ID'] || users[0].id || '');
@@ -150,10 +173,23 @@ export function useManagementDashboardData() {
     }
   }, [clients, selectedClientId]);
 
-  const selectedUser = useMemo(
-    () => users.find((row) => String(row['Employee ID'] || row.id || '').trim().toUpperCase() === String(selectedUserId || '').trim().toUpperCase()) || null,
-    [users, selectedUserId]
-  );
+  const selectedUser = useMemo(() => {
+    if (selectedUserId === 'ALL_USERS') {
+      return {
+        'Employee ID': 'ALL_USERS',
+        'Employee Name': 'All Employees / Users',
+        name: 'All Employees / Users',
+        id: 'ALL_USERS'
+      };
+    }
+    return (
+      users.find(
+        (row) =>
+          String(row['Employee ID'] || row.id || '').trim().toUpperCase() ===
+          String(selectedUserId || '').trim().toUpperCase()
+      ) || null
+    );
+  }, [users, selectedUserId]);
 
   const selectedClient = useMemo(
     () => clients.find((row) => String(row.Client_Id || row.id || '').trim().toUpperCase() === String(selectedClientId || '').trim().toUpperCase()) || null,
@@ -162,23 +198,53 @@ export function useManagementDashboardData() {
 
   const userExplorer = useMemo(() => {
     if (!selectedUser) {
-      return { attendance: [], tickets: [], fms: [], todo: [] };
+      return { attendance: [], tickets: [], fms: [], todo: [], leaves: [], intimations: [], startDate: bounds.startDate, endDate: bounds.endDate };
     }
 
+    const isAllUsers = selectedUserId === 'ALL_USERS';
+
     return {
-      attendance: attendance.filter((row) => String(row['Employee ID'] || row.EmpID || '').trim().toUpperCase() === String(selectedUser['Employee ID'] || selectedUser.id || '').trim().toUpperCase()),
-      tickets: tickets.filter((row) => matchesUser(row, selectedUser['Employee ID'] || selectedUser.id, selectedUser['Employee Name'] || selectedUser.name)),
-      fms: fms.filter((row) => matchesUser(row, selectedUser['Employee ID'] || selectedUser.id, selectedUser['Employee Name'] || selectedUser.name)),
-      todo: todo.filter((row) => matchesUser(row, selectedUser['Employee ID'] || selectedUser.id, selectedUser['Employee Name'] || selectedUser.name))
+      attendance: isAllUsers
+        ? attendance
+        : attendance.filter((row) =>
+            matchesUser(row, selectedUser['Employee ID'] || selectedUser.id, selectedUser['Employee Name'] || selectedUser.name)
+          ),
+      tickets: isAllUsers
+        ? tickets
+        : tickets.filter((row) =>
+            matchesUser(row, selectedUser['Employee ID'] || selectedUser.id, selectedUser['Employee Name'] || selectedUser.name)
+          ),
+      fms: isAllUsers
+        ? fms
+        : fms.filter((row) =>
+            matchesUser(row, selectedUser['Employee ID'] || selectedUser.id, selectedUser['Employee Name'] || selectedUser.name)
+          ),
+      todo: isAllUsers
+        ? todo
+        : todo.filter((row) =>
+            matchesUser(row, selectedUser['Employee ID'] || selectedUser.id, selectedUser['Employee Name'] || selectedUser.name)
+          ),
+      leaves: isAllUsers
+        ? leaves
+        : leaves.filter((row) =>
+            matchesUser(row, selectedUser['Employee ID'] || selectedUser.id, selectedUser['Employee Name'] || selectedUser.name)
+          ),
+      intimations: isAllUsers
+        ? intimations
+        : intimations.filter((row) =>
+            matchesUser(row, selectedUser['Employee ID'] || selectedUser.id, selectedUser['Employee Name'] || selectedUser.name)
+          ),
+      startDate: bounds.startDate,
+      endDate: bounds.endDate
     };
-  }, [attendance, tickets, fms, todo, selectedUser]);
+  }, [attendance, tickets, fms, todo, leaves, intimations, selectedUser, selectedUserId, bounds.startDate, bounds.endDate]);
 
   const clientExplorer = useMemo(() => {
     if (!selectedClient) {
-      return { tasks: [], bandwidth: [], invoices: [] };
+      return { tasks: [], bandwidth: [], invoices: [], startDate: bounds.startDate, endDate: bounds.endDate };
     }
 
-    const taskRows = [...tickets, ...fms].filter((row) =>
+    const taskRows = [...tickets, ...fms, ...todo].filter((row) =>
       matchesClient(row, selectedClient.Client_Id || selectedClient.id, selectedClient['Client Name'] || selectedClient.name)
     );
 
@@ -194,9 +260,11 @@ export function useManagementDashboardData() {
     return {
       tasks: taskRows,
       bandwidth: Array.from(bandwidthMap.values()),
-      invoices: invoices.filter((row) => matchesClient(row, selectedClient.Client_Id || selectedClient.id, selectedClient['Client Name'] || selectedClient.name))
+      invoices: invoices.filter((row) => matchesClient(row, selectedClient.Client_Id || selectedClient.id, selectedClient['Client Name'] || selectedClient.name)),
+      startDate: bounds.startDate,
+      endDate: bounds.endDate
     };
-  }, [tickets, fms, invoices, selectedClient]);
+  }, [tickets, fms, todo, invoices, selectedClient, bounds.startDate, bounds.endDate]);
 
   function refresh() {
     refreshRef.current += 1;
@@ -232,6 +300,8 @@ export function useManagementDashboardData() {
     tickets,
     fms,
     todo,
+    invoices,
+    attendance,
     selectedUserId,
     setSelectedUserId,
     selectedUser,
@@ -240,6 +310,10 @@ export function useManagementDashboardData() {
     setSelectedClientId,
     selectedClient,
     clientExplorer,
-    refresh
+    refresh,
+    customStart,
+    setCustomStart,
+    customEnd,
+    setCustomEnd
   };
 }

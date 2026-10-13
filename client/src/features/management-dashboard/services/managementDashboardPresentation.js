@@ -4,7 +4,8 @@ export const managementRangeOptions = [
   { value: 'last_week', label: 'Last Week' },
   { value: 'month', label: 'This Month' },
   { value: 'last_month', label: 'Last Month' },
-  { value: 'all', label: 'All Time' }
+  { value: 'all', label: 'All Time' },
+  { value: 'custom', label: 'Custom Range' }
 ];
 
 function toYmd(date) {
@@ -14,7 +15,11 @@ function toYmd(date) {
   return `${year}-${month}-${day}`;
 }
 
-export function managementRangeBounds(range) {
+export function managementRangeBounds(range, customStart = '', customEnd = '') {
+  if (range === 'custom') {
+    return { startDate: customStart, endDate: customEnd };
+  }
+  
   const current = new Date();
   current.setHours(12, 0, 0, 0);
 

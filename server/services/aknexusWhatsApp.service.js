@@ -72,8 +72,35 @@ async function writeLog({ contact, message, attachment, alertType, entityId, sta
   return record.toObject();
 }
 
+export function sanitizeMojibake(input) {
+  if (!input || typeof input !== 'string') return input;
+  let s = input;
+  return s
+    .replace(/ðŸŒ†/g, '🌆')
+    .replace(/ðŸŒ…/g, '🌅')
+    .replace(/â˜€ï¸\x8f?/g, '☀️')
+    .replace(/ðŸ“…/g, '📅')
+    .replace(/ðŸ“Œ/g, '📌')
+    .replace(/ðŸŽ«/g, '🎫')
+    .replace(/ðŸ”—/g, '🔗')
+    .replace(/ðŸ””/g, '🔔')
+    .replace(/âœ…/g, '✅')
+    .replace(/â\s*Œ/g, '❌')
+    .replace(/âš™ï¸\x8f?/g, '⚙️')
+    .replace(/ðŸ“\s*/g, '📝')
+    .replace(/ðŸ“‹/g, '📑')
+    .replace(/â ±ï¸\x8f?/g, '⏱️')
+    .replace(/ðŸš¨/g, '🚨')
+    .replace(/ðŸ’°/g, '💰')
+    .replace(/ðŸ“Š/g, '📊')
+    .replace(/ðŸ’¼/g, '💼')
+    .replace(/ðŸ’¥/g, '💥')
+    .replace(/ðŸ‘¤/g, '👤')
+    .replace(/âœ¨/g, '✨');
+}
+
 export async function sendWhatsAppText({ contactId, phone, name, clientId, message, pdfAttachment = null, alertType = 'manual', entityId = '', auth } = {}) {
-  let content = text(message);
+  let content = sanitizeMojibake(text(message));
   const normalizedPdf = normalizePdfAttachment(pdfAttachment);
   if (normalizedPdf && !content) content = `Document: ${normalizedPdf.fileName}`;
   if (!content || content.length > 4000) reject('Enter a WhatsApp message up to 4000 characters.');
@@ -143,7 +170,7 @@ export async function sendWhatsAppText({ contactId, phone, name, clientId, messa
     const response = await fetch(`${config.apiBaseUrl.replace(/\/+$/, '')}/send`, {
       method: 'POST',
       redirect: 'error',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(Number(process.env.AKNEXUS_TIMEOUT_MS || 20000))
     });

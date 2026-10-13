@@ -376,6 +376,14 @@ export async function ensurePerformanceIndexes() {
     Expense: [
       [{ 'data.Employee ID': 1, createdAt: -1 }, { background: true }]
     ],
+    Asset: [
+      [{ 'data.Status': 1, 'data.Category': 1 }, { background: true }],
+      [{ 'data.Assigned To ID': 1, 'data.Status': 1 }, { background: true }],
+      [{ 'data.Serial Number': 1 }, { background: true }]
+    ],
+    AssetRequest: [
+      [{ 'data.Employee ID': 1, 'data.Status': 1 }, { background: true }]
+    ],
     Message: [
       [{ 'data.TaskID': 1, 'data.Timestamp': 1, createdAt: 1 }, { background: true }]
     ],
@@ -452,8 +460,9 @@ const legacyIdKeyMap = {
     SocialMedia: ['Post ID', 'ID', 'postId'],
     SocialHistory: ['History ID', 'ID', 'historyId'],
     FormsPortal: ['Form ID', 'Sheet name', 'ID', 'formId', 'sheetName'],
-    TicketHistory: ['History ID', 'Ticket ID', 'ID', 'historyId', 'ticketId'],
-    WhatsAppLog: ['Log ID', 'ID', 'logId']
+    WhatsAppLog: ['Log ID', 'ID', 'logId'],
+    Asset: ['AssetID', 'Asset ID', 'ID', 'assetId'],
+    AssetRequest: ['RequestID', 'Request ID', 'ID', 'requestId', 'AssetRequestID']
   };
 
 export function legacyIdCandidates(modelName) {

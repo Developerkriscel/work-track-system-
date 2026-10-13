@@ -19,6 +19,7 @@ import attendanceRoutes from './server/routes/attendance.routes.js';
 import approvalsRoutes from './server/routes/approvals.routes.js';
 import dashboardRoutes from './server/routes/dashboard.routes.js';
 import expensesRoutes from './server/routes/expenses.routes.js';
+import assetsRoutes from './server/routes/assets.routes.js';
 import fmsRoutes from './server/routes/fms.routes.js';
 import formsPortalRoutes from './server/routes/formsPortal.routes.js';
 import managementDashboardRoutes from './server/routes/managementDashboard.routes.js';
@@ -30,7 +31,6 @@ import filesRoutes from './server/routes/files.routes.js';
 import ticketRoutes from './server/routes/ticket.routes.js';
 import todoRoutes from './server/routes/todo.routes.js';
 import whatsappContactsRoutes from './server/routes/whatsappContacts.routes.js';
-import candidateAiRoutes from './server/routes/candidateAi.routes.js';
 import { assertAuthConfiguration, requireAuth } from './server/middleware/auth.middleware.js';
 import { ensurePerformanceIndexes, listRows } from './server/services/legacyStore.service.js';
 import { getManagementDashboardData } from './server/services/managementDashboard.service.js';
@@ -282,11 +282,11 @@ app.use('/api/client-portal', requireAuth({ kind: 'client' }), clientPortalRoute
 app.use('/api/clients-portal', requireAuth({ kind: 'employee', roles: ['Admin', 'Super Admin'] }), clientsPortalRoutes);
 app.use('/api/client-social', requireAuth({ kind: 'client' }), clientSocialRoutes);
 app.use('/api/analytics', requireAuth({ kind: 'employee', roles: ['Admin', 'HR', 'Manager', 'Super Admin'] }), analyticsRoutes);
-app.use('/api/candidate-ai', requireAuth({ kind: 'employee', roles: ['Admin', 'HR', 'Super Admin'] }), candidateAiRoutes);
 app.use('/api/approvals', requireAuth({ kind: 'employee' }), approvalsRoutes);
 app.use('/api/attendance', requireAuth({ kind: 'employee' }), attendanceRoutes);
 app.use('/api/dashboard', requireAuth({ kind: 'employee' }), dashboardRoutes);
 app.use('/api/expenses', requireAuth({ kind: 'employee' }), expensesRoutes);
+app.use('/api/assets', requireAuth({ kind: 'employee' }), assetsRoutes);
 app.use('/api/fms', requireAuth({ kind: 'employee' }), fmsRoutes);
 // Every employee may read forms assigned to them. The service layer keeps
 // create, edit, delete, and access-management actions Super Admin-only.

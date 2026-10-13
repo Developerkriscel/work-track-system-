@@ -28,20 +28,21 @@ export function buildClientTicketAlerts(change, ticket, users, clients) {
   const recipients = users.filter((user) => isActive(user) && (admin(user) || (chat && employeeIdOf(user) === employeeIdOf(ticket))))
     .filter((user) => !(chat && senderType === 'employee' && employeeIdOf(user) === senderId))
     .map((user) => ({ employeeId: employeeIdOf(user), name: field(user, ['Employee Name', 'Name']) }));
-  if (client && isActive(client) && !(chat && senderType === 'client')) recipients.push({ clientId, name: clientNameOf(client) });
+  // Clients must NEVER receive WhatsApp notifications under any circumstances
   const event = created ? `client-created:${entityId}` : `client-chat:${field(change.after, ['MessageID', 'ID'])}`;
   return recipients.map((recipient) => ({ ...recipient, alertType: 'ticket', entityId, event,
     message: chat ? finishMessage(legacyWhatsAppTemplates.chatMessage({
       recipientObj: { 'Employee Name': recipient.name }, senderName: field(change.after, ['Sender']), taskId: entityId,
       messageText: `${field(change.after, ['Message'])}${field(change.after, ['Attachment']) ? '\n📎 Attachment shared — open the portal to view.' : ''}`.slice(0, 2600),
       clientName: clientNameOf(client || ticket)
-    })) : finishMessage(`🎫 *NEW CLIENT TICKET*\n---------------------------------\nHello *${recipient.name}*,\n\n${recipient.clientId ? 'Your ticket has been created successfully.' : 'A client has created a new ticket.'}\n\n🎫 *Ticket ID:* ${entityId}\n🏢 *Client:* ${clientNameOf(client || ticket)}\n📋 *Category:* ${field(ticket, ['Task Category'])}\n⚡ *Priority:* ${field(ticket, ['Priority'])}\n📅 *Expected Date:* ${field(ticket, ['Plan Date']) || 'Not specified'}\n📝 *Description:* ${field(ticket, ['Task Description', 'Description']).slice(0, 2200)}\n\n~ Work Track System`)
+    })) : finishMessage(`🎫 *NEW CLIENT TICKET*\n---------------------------------\nHello *${recipient.name}*,\n\nA client has created a new ticket.\n\n🎫 *Ticket ID:* ${entityId}\n🏢 *Client:* ${clientNameOf(client || ticket)}\n📋 *Category:* ${field(ticket, ['Task Category'])}\n⚡ *Priority:* ${field(ticket, ['Priority'])}\n📅 *Expected Date:* ${field(ticket, ['Plan Date']) || 'Not specified'}\n📝 *Description:* ${field(ticket, ['Task Description', 'Description']).slice(0, 2200)}\n\n~ Work Track System`)
   }));
 }
 
 export function clientAlertRecipientStillAllowed(job, ticket, users, clients) {
   if (!ticket || !clientTicket(ticket)) return false;
-  if (job.clientId) return clientIdOf(ticket) === job.clientId && clients.some((row) => clientIdOf(row) === job.clientId && isActive(row));
+  // Permanent rule: Client WhatsApp alerts are strictly forbidden
+  if (job.clientId) return false;
   const user = users.find((row) => employeeIdOf(row) === job.employeeId);
   return isActive(user) && (admin(user) || (job.event?.startsWith('client-chat:') && employeeIdOf(ticket) === job.employeeId));
 }

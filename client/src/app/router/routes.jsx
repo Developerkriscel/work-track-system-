@@ -8,15 +8,16 @@ import {
   Receipt,
   BarChart3,
   BadgeCheck,
+  Laptop,
   Settings as SettingsIcon
 } from '@/components/common/icons';
 import { AttendancePage } from '@/features/attendance/AttendancePage';
 import { ClientsPortalPage } from '@/features/clients-portal/ClientsPortalPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { ExpensesPage } from '@/features/expenses/ExpensesPage';
+import { AssetsPage } from '@/features/assets/AssetsPage';
 import { FmsPage } from '@/features/fms/FmsPage';
 import { FormsPortalPage } from '@/features/forms-portal/FormsPortalPage';
-import { CandidateAiPage } from '@/features/candidate-ai/CandidateAiPage';
 import { ApprovalsPage } from '@/features/approvals/ApprovalsPage';
 import { MyApprovalStatusPage } from '@/features/my-approval-status/MyApprovalStatusPage';
 import { ManagementDashboardPage } from '@/features/management-dashboard/ManagementDashboardPage';
@@ -119,16 +120,6 @@ export const appRoutes = [
     element: <FormsPortalPage />
   },
   {
-    path: '/candidate-ai',
-    key: 'candidateAi',
-    title: 'AI Hiring',
-    icon: Users,
-    iconColor: '#22c55e',
-    accessCheck: (user) => hasRole(user, ['HR', 'Admin', 'Company Admin', 'Super Admin']),
-    page: placeholder('Analyze resumes and candidate details with AI to shortlist the best fit.'),
-    element: <CandidateAiPage />
-  },
-  {
     path: '/todo',
     key: 'todo',
     title: 'To-Do',
@@ -155,6 +146,15 @@ export const appRoutes = [
     iconColor: '#f87171',
     page: { ...placeholder('Submit expenses, attach receipts, and review approval status from one screen.'), ...migrationModules.expenses },
     element: <ExpensesPage />
+  },
+  {
+    path: '/assets',
+    key: 'assets',
+    title: 'Assets',
+    icon: Laptop,
+    iconColor: '#38bdf8',
+    page: { ...placeholder('Track, allocate, return, and approve company hardware, peripherals, and equipment.') },
+    element: <AssetsPage />
   },
   {
     path: '/reports',
@@ -215,6 +215,7 @@ export const appRoutes = [
     title: 'WhatsApp Center',
     icon: FileText,
     iconColor: '#34d399',
+    hiddenInNav: true,
     accessCheck: (user) => /^(admin|hr|super admin)$/i.test(String(user?.Role || user?.role || '').trim()),
     page: placeholder('Manage WhatsApp contacts and review employee alert history.'),
     element: <WhatsAppPage />

@@ -1909,8 +1909,8 @@ export async function processApprovalAction(actionData = {}) {
     });
     if (!targets.length) return fail('Error: Could not match attendance date in database.');
 
-    const attendanceDecision = requestApprovalDecision(admin, targets[0], users, 'Attendance');
-    if (!attendanceDecision.actionable) return fail('Unauthorized: You cannot approve this employee attendance.');
+    const isActionable = targets.some(target => requestApprovalDecision(admin, target, users, 'Attendance').actionable);
+    if (!isActionable) return fail('Unauthorized: You cannot approve this employee attendance.');
 
     const date = targetDate || normalizedDate(first(targets[0], ['Date', 'date']));
     let punchIn = targets.find((row) => /punch\s*in/i.test(first(row, ['Action', 'action'])));

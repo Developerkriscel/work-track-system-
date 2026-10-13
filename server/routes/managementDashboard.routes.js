@@ -3,14 +3,23 @@ import { createManagementBatch, getManagementDashboardData } from '../services/m
 
 const router = express.Router();
 
-router.post('/data', async (req, res) => {
+const handleData = async (req, res) => {
   try {
-    const result = await getManagementDashboardData(req.body.startDate, req.body.endDate, req.body.scope, req.body);
+    const startDate = req.body?.startDate || req.query?.startDate;
+    const endDate = req.body?.endDate || req.query?.endDate;
+    const scope = req.body?.scope || req.query?.scope;
+    const options = { ...req.query, ...(req.body || {}) };
+    const result = await getManagementDashboardData(startDate, endDate, scope, options);
     res.json(result);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
-});
+};
+
+router.get('/', handleData);
+router.post('/', handleData);
+router.get('/data', handleData);
+router.post('/data', handleData);
 
 router.post('/batch', async (req, res) => {
   try {

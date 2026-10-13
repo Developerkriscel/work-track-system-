@@ -4,7 +4,7 @@ import { WhatsAppContact } from '../models/whatsappContact.model.js';
 import { listRows } from './legacyStore.service.js';
 import { onRowSaved } from './rowEvents.service.js';
 import { getAknexusStatus, sendWhatsAppText } from './aknexusWhatsApp.service.js';
-import { buildRowAlerts, buildDailyAlerts, employeeIdOf, isActive, istClock } from './whatsappAlertRules.js';
+import { buildRowAlerts, buildDailyAlerts, employeeIdOf, isActive, istClock, field } from './whatsappAlertRules.js';
 import { buildClientTicketAlerts, clientAlertRecipientStillAllowed, clientIdOf, clientNameOf, clientPhoneOf } from './whatsappClientAlerts.js';
 import { normalizeWhatsAppPhone } from './whatsappContacts.service.js';
 import { findOneRowByFilter } from './legacyStore.service.js';
@@ -23,17 +23,85 @@ const readTicket = (id) => findOneRowByFilter('Ticket', { $or: [{ 'data.Ticket I
 
 const hash = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const mandatoryDailyReminder = (event = '') => /^(pending-tasks|no-ticket-after-present):/.test(String(event));
+
+export function isAllowedRecipientAlert(event, users = []) {
+  if (!event?.employeeId) return false;
+  const user = (users || []).find((u) => employeeIdOf(u) === event.employeeId);
+  if (!user) return true;
+  const role = String(field(user, ['Role', 'role']) || '').toLowerCase();
+  const isAdminOrHr = /^(admin|super admin|hr)$/.test(role);
+  if (!isAdminOrHr) return true;
+
+  const eventName = String(event.event || '');
+
+  // 1. Attendance approval requested must NEVER reach Admin, Super Admin, or HR:
+  if (/^attendance\s+approval\s+requested/i.test(eventName)) return false;
+
+  // 2. Only Leave & Intimation approval requests from employees are allowed for Admin, Super Admin, HR:
+  if (event.alertType === 'approval' && /^(leave|intimation)\s+approval\s+requested/i.test(eventName)) {
+    return true;
+  }
+
+  // 3. Any other approval requests from employees (Ticket, Expense, Attendance, etc.) are blocked for Admin/HR:
+  if (event.alertType === 'approval' && /approval\s+requested/i.test(eventName)) {
+    return false;
+  }
+
+  // 4. Their OWN messages are strictly permitted:
+  if (/^(pending-tasks|no-ticket-after-present):/.test(eventName)) return true;
+  if (/^(daily-admin-report|weekly-super-admin-report|attendance-summary):/.test(eventName)) return true;
+  if (/^(missed-in|missed-out):/.test(eventName)) return true;
+  if (event.alertType === 'attendance' && /^punch\s*(in|out)/i.test(eventName)) return true;
+  if (event.alertType === 'ticket') return true;
+  if (event.alertType === 'fms') return true;
+  if (event.alertType === 'expense') return true;
+  if (/^(leave|intimation)\s*(submitted|approved|rejected)/i.test(eventName)) return true;
+
+  // By default, if it's an unsolicited approval broadcast, block it for Admin/Super Admin/HR:
+  if (event.alertType === 'approval') return false;
+
+  return true;
+}
+
 let stop = null;
 export async function enqueueAlerts(events, users, revision = '') {
   if (!events.length) return;
-  const contacts = await WhatsAppContact.find({ enabled: true, employeeId: { $in: events.map((e) => e.employeeId) } }).lean();
-  const queuedMessages = new Set();
-  for (const event of events) {
-    if (event.clientId) {
-      const key = hash(JSON.stringify(['client', event.clientId, event.event]));
-      await WhatsAppAlertJob.updateOne({ key }, { $setOnInsert: { key, clientId: event.clientId, employeeId: '', alertType: event.alertType, entityId: event.entityId, event: event.event, message: event.message, state: 'pending' } }, { upsert: true });
-      continue;
+  // Strictly prohibit client alerts: Only active employees can receive WhatsApp alerts
+  // and enforce Admin/Super Admin/HR recipient restrictions (only own alerts & Leave/Intimation approvals)
+  const validEvents = events.filter((e) => !e.clientId && e.employeeId && isAllowedRecipientAlert(e, users));
+  if (!validEvents.length) return;
+
+  const employeeIds = [...new Set(validEvents.map((e) => e.employeeId))];
+  const contacts = await WhatsAppContact.find({ enabled: true, employeeId: { $in: employeeIds } }).lean();
+
+  // If any active employee in events lacks a contact, auto-provision from their active User record
+  const missingIds = employeeIds.filter((id) => !contacts.some((c) => c.employeeId === id));
+  if (missingIds.length && Array.isArray(users)) {
+    for (const id of missingIds) {
+      const user = users.find((u) => employeeIdOf(u) === id);
+      if (user && isActive(user)) {
+        const rawPhone = field(user, ['Mobile Number', 'Mobile', 'Phone No', 'Phone', 'phone', 'mobile']);
+        const phone = normalizeWhatsAppPhone(rawPhone);
+        if (phone) {
+          try {
+            const name = field(user, ['Employee Name', 'User Name', 'Name', 'name']) || id;
+            const dept = field(user, ['Department', 'department']);
+            const newContact = await WhatsAppContact.findOneAndUpdate(
+              { employeeId: id },
+              { $set: { employeeId: id, clientId: '', name, phone, department: dept, enabled: true, alertTypes: ['ticket', 'approval', 'reminder', 'attendance', 'expense', 'fms'], updatedBy: 'system' } },
+              { upsert: true, new: true }
+            ).lean();
+            if (newContact) contacts.push(newContact);
+          } catch (err) {
+            console.warn(`[WhatsApp] Auto-contact failed for ${id}: ${err.message}`);
+          }
+        }
+      }
     }
+  }
+
+  const queuedMessages = new Set();
+  for (const event of validEvents) {
     const requiredReminder = mandatoryDailyReminder(event.event);
     const contact = contacts.find((c) => c.employeeId === event.employeeId && (requiredReminder || c.alertTypes.includes(event.alertType)));
     if (!contact || !isActive(users.find((u) => employeeIdOf(u) === event.employeeId))) continue;
@@ -58,21 +126,14 @@ export async function processNextAlert({ readUsers = () => listRows('User'), rea
   let error = '';
   try {
     if (job.clientId) {
-      const [clients, ticket] = await Promise.all([readRows('Client'), findTicket(job.entityId)]);
-      const client = clients.find((row) => clientIdOf(row) === job.clientId);
-      const linkedContact = await WhatsAppContact.findOne({ clientId: job.clientId }).lean();
-      const phone = normalizeWhatsAppPhone(linkedContact?.phone || clientPhoneOf(client));
-      const preference = linkedContact || (phone ? await WhatsAppContact.findOne({ phone }).lean() : null);
-      if (!clientAlertRecipientStillAllowed(job, ticket, [], clients)) error = 'Client inactive or ticket no longer belongs to this client.';
-      else if (!phone) error = 'Client has no valid WhatsApp/mobile number in Client Master.';
-      else if (preference && (!preference.enabled || !preference.alertTypes.includes('ticket'))) error = 'Ticket alerts disabled for the client number.';
-      else {
-        const result = await send({ ...(linkedContact ? { contactId: String(linkedContact._id) } : { phone, name: clientNameOf(client), clientId: job.clientId }), message: job.message, alertType: 'ticket', entityId: job.entityId });
-        state = result.success ? 'sent' : 'failed';
-        error = result.success ? '' : result.message;
-      }
+      // Client WhatsApp alerts are strictly forbidden
+      state = 'skipped';
+      error = 'Client WhatsApp alerts are permanently disabled.';
     } else {
-      const contact = await WhatsAppContact.findById(job.contactId).lean();
+      let contact = job.contactId ? await WhatsAppContact.findById(job.contactId).lean() : null;
+      if (!contact && job.employeeId) {
+        contact = await WhatsAppContact.findOne({ employeeId: job.employeeId, enabled: true }).lean();
+      }
       const users = await readUsers();
       const special = /^client-(created|chat):/.test(job.event || '');
       const weeklyReport = isWeeklySuperAdminReportJob(job);
@@ -80,8 +141,11 @@ export async function processNextAlert({ readUsers = () => listRows('User'), rea
       const requiredReminder = mandatoryDailyReminder(job.event);
       const active = isActive(users.find((user) => employeeIdOf(user) === job.employeeId))
         && (!special || clientAlertRecipientStillAllowed(job, await findTicket(job.entityId), users, []));
-      // Resolve the current saved number and preferences at send time, never a stale phone snapshot.
-      if (contact?.enabled && contact.employeeId === job.employeeId && (requiredReminder || contact.alertTypes.includes(job.alertType)) && active) {
+      // Enforce recipient restrictions: Admin/Super Admin/HR only receive their own alerts and Leave/Intimation approvals.
+      if (!isAllowedRecipientAlert(job, users)) {
+        state = 'skipped';
+        error = 'Blocked: Admin, Super Admin, and HR only receive their own alerts and Leave/Intimation approvals.';
+      } else if (contact?.enabled && contact.employeeId === job.employeeId && (requiredReminder || contact.alertTypes.includes(job.alertType)) && active) {
         let message = job.message;
         let pdfAttachment = null;
         const daily = !weeklyReport && !dailyAdminReport && ['reminder', 'fms', 'attendance'].includes(job.alertType) && /^\d{4}-\d{2}-\d{2}$/.test(job.entityId);
@@ -124,8 +188,15 @@ export async function startWhatsAppAlerts() {
   if (stop) return stop;
   const regularAlertsPaused = process.env.WHATSAPP_AUTOMATIC_ALERTS === 'false';
   await WhatsAppAlertJob.init();
+  await WhatsAppAlertJob.updateMany(
+    { clientId: { $exists: true, $ne: '' }, state: 'pending' },
+    { $set: { state: 'skipped', error: 'Client WhatsApp alerts are permanently disabled.' } }
+  ).catch(() => {});
+  await WhatsAppAlertJob.updateMany(
+    { event: { $regex: '^attendance approval requested', $options: 'i' }, state: 'pending' },
+    { $set: { state: 'skipped', error: 'Attendance approval broadcasts permanently disabled by user request.' } }
+  ).catch(() => {});
   const unsubscribe = regularAlertsPaused ? () => {} : onRowSaved(async (change) => {
-    if (!['Ticket', 'Message', 'Attendance', 'Expense', 'FmsTask', 'Leave', 'Intimation'].includes(change.model)) return;
     const users = await listRows('User');
     const isClientEvent = (change.model === 'Ticket' || change.model === 'Message') && !change.before;
     const ticket = isClientEvent ? (change.model === 'Ticket' ? change.after : await readTicket(change.after.TaskID)) : null;
